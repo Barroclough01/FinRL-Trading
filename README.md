@@ -6,7 +6,7 @@
 
 ![Visitors](https://api.visitorbadge.io/api/VisitorHit?user=AI4Finance-Foundation&repo=FinRL-Trading&countColor=%23B17A)
 
-**A modern, modular quantitative trading platform built with Python, featuring machine learning strategies, comprehensive backtesting, and live trading capabilities.**
+**A modern, modular quantitative trading platform built with Python, featuring machine learning strategies, professional backtesting, and live trading capabilities.**
 
 ## 🚀 Key Features
 
@@ -15,8 +15,6 @@
 - **🤖 Strategy Framework**: Multiple quantitative strategies including ML-based stock selection
 - **📈 Risk Management**: Comprehensive risk controls and position limits
 - **💰 Live Trading**: Alpaca integration with paper and live trading support
-- **🌐 Interactive Dashboard**: Streamlit-based web interface for monitoring and control
-- **🐳 Production Ready**: Docker containerization for easy deployment
 - **🔧 Modular Design**: Clean, extensible architecture following best practices
 
 ## 🏗️ Project Architecture
@@ -27,25 +25,24 @@ finrl-trading/
 │   ├── config/           # Centralized configuration management
 │   │   └── settings.py   # Pydantic-based settings with environment variables
 │   ├── data/            # Data acquisition and processing
-│   │   ├── wrds_fetcher.py     # WRDS database integration
+│   │   ├── data_fetcher.py     # Multi-source data integration (Yahoo/FMP/WRDS)
 │   │   ├── data_processor.py   # Data cleaning and feature engineering
 │   │   └── data_store.py       # SQLite-based data persistence
-│   ├── backtest/      # backtesting
-│   │   └── backtest_engine.py  # backtesting engine
+│   ├── backtest/      # Backtesting system
+│   │   └── backtest_engine.py  # Professional backtesting engine powered by bt library
 │   ├── strategies/      # Trading strategies
 │   │   ├── base_strategy.py    # Abstract strategy framework
 │   │   └── ml_strategy.py      # ML-based stock selection
 │   ├── trading/         # Live trading execution
-│   │   ├── alpaca_manager.py   # Alpaca API integration
-│   │   └── trade_executor.py   # Order execution and risk management
-│   ├── web/            # Web interface
-│   │   ├── app.py              # Main Streamlit application
-│   │   └── components.py       # Reusable UI components
+│   │   ├── alpaca_manager.py     # Alpaca API integration
+│   │   ├── trade_executor.py     # Order execution and risk management
+│   │   └── performance_analyzer.py  # Performance analysis
 │   └── main.py         # CLI entry point
+├── examples/           # Examples and tutorials
+│   ├── FinRL_Full_Workflow.ipynb  # Complete workflow tutorial (recommended)
+│   └── README.md       # Examples documentation
 ├── data/               # Runtime data storage (gitignored)
 ├── logs/               # Application logs (gitignored)
-├── Dockerfile          # Container configuration
-├── docker-compose.yml  # Multi-container setup
 ├── requirements.txt    # Python dependencies
 └── setup.py           # Package installation
 ```
@@ -55,9 +52,11 @@ finrl-trading/
 ### Prerequisites
 
 - **Python 3.11+**
-- **Docker** (optional, for containerized deployment)
 - **Alpaca Account** (for live trading)
-- **WRDS Access** (optional, for academic data)
+- **Data Source APIs** (optional):
+  - FMP API Key (high-quality data, recommended)
+  - WRDS Account (academic database)
+  - Yahoo Finance (free, no configuration needed)
 
 ### Quick Start
 
@@ -67,90 +66,73 @@ finrl-trading/
    cd FinRL-Trading
    ```
 
-2. **Install Python dependencies**
+2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
 3. **Configure environment variables**
    ```bash
-   # Copy template and edit
+   # Copy configuration template
    cp .env.example .env
-   # Edit .env with your API keys and settings
-   nano .env  # or your preferred editor
+   
+   # Edit .env file with your API keys
+   # Windows: notepad .env
+   # Linux/Mac: nano .env
    ```
 
-4. **Launch the web dashboard**
+4. **Run example tutorial**
    ```bash
-   streamlit run src/web/app.py
+   # Launch Jupyter Notebook (recommended starting point)
+   jupyter notebook examples/FinRL_Full_Workflow.ipynb
    ```
 
-### Docker Deployment
+### Complete Example Tutorial
+
+The project includes a comprehensive interactive tutorial covering the entire workflow from data acquisition to live trading:
 
 ```bash
-# Build and run with Docker Compose
-docker-compose up --build
-
-# Or run with Docker directly
-docker build -t finrl-trading .
-docker run -p 8501:8501 finrl-trading
-```
-
-### Examples & Tutorials
-
-Check out the `examples/` folder for comprehensive tutorials:
-
-```bash
-# Complete interactive tutorial (recommended)
-jupyter notebook examples/complete_trading_workflow.ipynb
-
-# Quick start examples
-python examples/simple_example.py
-python examples/data_fetching_demo.py
-
-# View all examples
+# View examples documentation
 cat examples/README.md
+
+# Run complete workflow tutorial (recommended)
+jupyter notebook examples/FinRL_Full_Workflow.ipynb
 ```
 
-### CLI Usage
+**Tutorial Contents:**
+- ✅ S&P 500 components data acquisition
+- ✅ Fundamental and historical price data fetching
+- ✅ Machine learning stock selection strategy implementation
+- ✅ Professional backtesting (with VOO/QQQ benchmark comparison)
+- ✅ Alpaca Paper Trading execution
 
-```bash
-# Use the main CLI entry point
-python src/main.py --help
-
-# Available commands:
-python src/main.py dashboard    # Start web dashboard
-python src/main.py backtest     # Run strategy backtest
-python src/main.py trade        # Execute live trading
-python src/main.py data         # Manage data operations
-
-# Or use installed package commands:
-finrl dashboard                 # Start dashboard
-finrl-backtest                  # Run backtest
-finrl-trade                     # Execute trades
-```
 
 ## 📖 Usage Examples
 
 ### Data Acquisition
 
 ```python
-from src.data.wrds_fetcher import WRDSFetcher
+from src.data.data_fetcher import get_data_manager
 
-# Initialize WRDS fetcher
-fetcher = WRDSFetcher()
+# Initialize data manager (automatically selects best available source)
+manager = get_data_manager()
+
+# Check current data source
+info = manager.get_source_info()
+print(f"Current data source: {info['current_source']}")
+print(f"Available sources: {info['available_sources']}")
 
 # Get S&P 500 components
-components = fetcher.get_sp500_components()
+components = manager.get_sp500_components()
 
 # Fetch fundamental data
 tickers = ['AAPL', 'MSFT', 'GOOGL']
-fundamentals = fetcher.get_fundamental_data(
+fundamentals = manager.get_fundamental_data(
     tickers, '2020-01-01', '2023-12-31'
 )
 
-# Fetch price data
-prices = fetcher.get_price_data(
+# Fetch historical price data
+prices = manager.get_price_data(
     tickers, '2020-01-01', '2023-12-31'
 )
 ```
@@ -158,63 +140,71 @@ prices = fetcher.get_price_data(
 ### Strategy Development
 
 ```python
-from src.strategies.base_strategy import create_strategy, StrategyConfig
-from src.strategies.backtest_engine import BacktestEngine, BacktestConfig
+from src.strategies.ml_strategy import MLStockSelectorStrategy
+from src.strategies.base_strategy import StrategyConfig
 
 # Create ML-based stock selection strategy
 config = StrategyConfig(
     name="ML Stock Selector",
-    parameters={'model_type': 'random_forest'},
+    parameters={
+        'model_type': 'random_forest',
+        'top_n': 30,
+        'sector_neutral': True
+    },
     risk_limits={'max_weight': 0.1}
 )
 
-strategy = create_strategy("ml_strategy", config)
+strategy = MLStockSelectorStrategy(config)
 
-# Run backtest
+# Generate portfolio weights
+data = {
+    'fundamentals': fundamentals,
+    'prices': prices
+}
+result = strategy.generate_weights(data)
+print(result.weights.head())
+```
+
+### Strategy Backtesting
+
+```python
+from src.backtest.backtest_engine import BacktestEngine, BacktestConfig
+
+# Configure backtest parameters
 backtest_config = BacktestConfig(
     start_date='2020-01-01',
     end_date='2023-12-31',
-    initial_capital=1000000
+    initial_capital=1000000,
+    rebalance_freq='Q',  # Quarterly rebalancing
+    transaction_cost=0.001,  # 0.1% transaction cost
+    benchmark_tickers=['VOO', 'QQQ']  # Benchmark comparison
 )
 
+# Run backtest
 engine = BacktestEngine(backtest_config)
-result = engine.run_backtest(strategy, price_data, weight_signals)
+result = engine.run_backtest(
+    strategy_name="ML Stock Selector",
+    weight_signals=ml_weights,
+    price_data=prices
+)
 
-# View results
+# View backtest results
 print(f"Total Return: {result.metrics['total_return']:.2%}")
+print(f"Annualized Return: {result.annualized_return:.2%}")
 print(f"Sharpe Ratio: {result.metrics['sharpe_ratio']:.2f}")
-```
+print(f"Max Drawdown: {result.metrics['max_drawdown']:.2%}")
 
-### Data Source Usage
-
-```python
-from src.data.wrds_fetcher import get_data_manager
-
-# Initialize data manager (automatically selects best available source)
-manager = get_data_manager()
-
-# Check which data source is being used
-info = manager.get_source_info()
-print(f"Using data source: {info['current_source']}")
-print(f"Available sources: {info['available_sources']}")
-
-# Fetch data (automatically uses best available source)
-tickers = manager.get_unique_tickers(manager.get_sp500_components())
-fundamentals = manager.get_fundamental_data(
-    tickers[:50], '2020-01-01', '2023-12-31'
-)
-prices = manager.get_price_data(
-    tickers[:50], '2020-01-01', '2023-12-31'
-)
+# Generate visualization report
+engine.plot_results(result)
 ```
 
 ### Live Trading
 
 ```python
-from src.trading.alpaca_manager import create_alpaca_account_from_env
+from src.trading.alpaca_manager import create_alpaca_account_from_env, AlpacaManager
 from src.trading.trade_executor import TradeExecutor, ExecutionConfig
 
-# Setup Alpaca connection
+# Connect to Alpaca
 account = create_alpaca_account_from_env()
 alpaca_manager = AlpacaManager([account])
 
@@ -231,51 +221,53 @@ target_weights = {'AAPL': 0.3, 'MSFT': 0.3, 'GOOGL': 0.4}
 result = executor.execute_portfolio_rebalance(target_weights)
 
 print(f"Orders placed: {len(result.orders_placed)}")
+print(f"Execution success: {result.success}")
 ```
 
 ## 🎯 Core Components
 
 ### Data Layer (`src/data/`)
-- **Multi-Source Data Manager** (`wrds_fetcher.py`): Intelligent data source selection and management
-- **Yahoo Finance Fetcher**: Free financial data from Yahoo Finance
-- **FMP Fetcher**: Premium data from Financial Modeling Prep (API required)
-- **WRDS Fetcher**: Academic database access (credentials required)
-- **Data Processing** (`data_processor.py`): Feature engineering, cleaning, and quality checks
-- **Data Persistence** (`data_store.py`): SQLite-based storage with caching and versioning
+- **Multi-Source Data Manager** (`data_fetcher.py`): Intelligent data source selection and management
+  - Yahoo Finance: Free financial data (default)
+  - FMP (Financial Modeling Prep): High-quality paid data (requires API Key)
+  - WRDS: Academic database (requires credentials)
+- **Data Processor** (`data_processor.py`): Feature engineering, data cleaning, and quality checks
+- **Data Storage** (`data_store.py`): SQLite-based data persistence with caching and version control
 
 ### Strategy Framework (`src/strategies/`)
 - **Base Strategy** (`base_strategy.py`): Abstract framework for custom strategies
-- **ML Strategies** (`ml_strategy.py`): Random Forest, Gradient Boosting for stock selection
-- **Backtesting Engine** (`backtest_engine.py`): Comprehensive performance and risk analysis
+- **ML Strategy** (`ml_strategy.py`): Random Forest-based stock selection
 
-**Available Strategies:**
+**Implemented Strategies:**
 - Equal Weight Strategy
 - Market Cap Weighted Strategy
 - ML-based Stock Selection
 - Sector Neutral ML Strategy
 
-### Trading System (`src/trading/`)
-- **Alpaca Integration** (`alpaca_manager.py`): API client with multi-account support
-- **Trade Execution** (`trade_executor.py`): Order management with risk controls
-- **Real-time Monitoring**: Position tracking and P&L calculation
+### Backtesting System (`src/backtest/`)
+- **Professional Backtesting Engine** (`backtest_engine.py`): Powered by `bt` library
+  - Comprehensive performance and risk analysis
+  - Multiple benchmark comparison (SPY, VOO, QQQ, etc.)
+  - Transaction cost simulation
+  - Visualization report generation
 
-### Web Dashboard (`src/web/`)
-- **Streamlit Interface** (`app.py`): Interactive web application
-- **Data Visualization** (`components.py`): Reusable charting components
-- **Live Monitoring**: Real-time portfolio and strategy performance
+### Trading System (`src/trading/`)
+- **Alpaca Integration** (`alpaca_manager.py`): Alpaca API client with multi-account support
+- **Trade Executor** (`trade_executor.py`): Order management and risk controls
+- **Performance Analyzer** (`performance_analyzer.py`): Real-time position tracking and P&L calculation
 
 ### Configuration System (`src/config/`)
 - **Pydantic Settings** (`settings.py`): Type-safe configuration with environment variables
-- **Multi-environment Support**: Development, testing, staging, production
+- **Multi-environment Support**: Development, testing, production configurations
 - **Centralized Management**: All settings in one place
 
 ## 🔄 Data Source Management
 
-The platform intelligently selects the best available data source based on your credentials:
+The platform intelligently selects the best available data source based on your API configuration:
 
-### Source Priority Order
+### Data Source Priority
 1. **FMP (Financial Modeling Prep)** - Highest quality, most comprehensive data
-2. **WRDS (Wharton Research Data Services)** - Academic database with historical data
+2. **WRDS (Wharton Research Data Services)** - Academic database with extensive historical data
 3. **Yahoo Finance** - Free, always available fallback
 
 ### Automatic Selection Logic
@@ -305,6 +297,8 @@ The platform uses **Pydantic-based settings** with environment variable support:
 
 ### Environment Variables
 
+Create a `.env` file and configure the following variables:
+
 ```bash
 # Application
 ENVIRONMENT=development
@@ -313,24 +307,24 @@ APP_NAME="FinRL Trading"
 # Alpaca API (Required for live trading)
 APCA_API_KEY=your_alpaca_key
 APCA_API_SECRET=your_alpaca_secret
-APCA_BASE_URL=https://paper-api.alpaca.markets
+APCA_BASE_URL=https://paper-api.alpaca.markets  # Paper Trading
 
 # Data Sources (Optional, prioritized: FMP > WRDS > Yahoo)
-FMP_API_KEY=your_fmp_api_key                    # Financial Modeling Prep
-WRDS_USERNAME=your_wrds_username               # WRDS Database
+FMP_API_KEY=your_fmp_api_key           # Financial Modeling Prep
+WRDS_USERNAME=your_wrds_username       # WRDS Database
 WRDS_PASSWORD=your_wrds_password
 
 # Risk Management
-TRADING_MAX_ORDER_VALUE=100000
-TRADING_MAX_PORTFOLIO_TURNOVER=0.5
-STRATEGY_MAX_WEIGHT_PER_STOCK=0.1
+TRADING_MAX_ORDER_VALUE=100000         # Maximum order value
+TRADING_MAX_PORTFOLIO_TURNOVER=0.5     # Maximum portfolio turnover
+STRATEGY_MAX_WEIGHT_PER_STOCK=0.1      # Maximum weight per stock
 
 # Data Management
-DATA_CACHE_TTL_HOURS=24
-DATA_MAX_CACHE_SIZE_MB=1000
+DATA_CACHE_TTL_HOURS=24                # Cache TTL in hours
+DATA_MAX_CACHE_SIZE_MB=1000            # Maximum cache size in MB
 ```
 
-### Configuration Structure
+### Configuration Usage
 
 ```python
 from src.config.settings import get_config
@@ -366,80 +360,6 @@ The backtesting engine provides comprehensive quantitative analysis:
 - **Information Ratio**: Active return ÷ Tracking error
 - **Beta**: Portfolio sensitivity to market
 - **Tracking Error**: Standard deviation of active returns
-
-## 🧪 Testing & Development
-
-```bash
-# Install development dependencies
-pip install -r requirements.txt
-pip install pytest pytest-cov black flake8 mypy
-
-# Run unit tests
-pytest tests/
-
-# Run with coverage report
-pytest --cov=src --cov-report=html tests/
-
-# Run specific test categories
-pytest tests/test_strategies.py -v
-pytest tests/test_trading.py -v
-
-# Code quality checks
-black src/                      # Format code
-flake8 src/                     # Lint code
-mypy src/                       # Type checking
-```
-
-### Test Coverage
-
-The platform includes comprehensive tests for:
-- Strategy implementations
-- Backtesting engine
-- Risk management
-- Data processing pipeline
-- API integrations
-
-## 🛠️ Technology Stack
-
-### Core Dependencies
-- **Python 3.11+**: Modern Python with full type hints support
-- **Pandas 2.0+**: High-performance data manipulation and analysis
-- **NumPy 1.24+**: Advanced numerical computing
-- **Scikit-learn 1.3+**: Comprehensive machine learning library
-- **SciPy 1.11+**: Scientific computing and statistics
-
-### Data Visualization & Web
-- **Streamlit 1.28+**: Interactive web applications
-- **Plotly 5.15+**: Advanced charting and visualization
-- **Matplotlib 3.7+**: Publication-quality plotting
-- **Seaborn 0.12+**: Statistical data visualization
-
-### Financial APIs & Data
-- **Alpaca-py 0.13+**: Live trading and market data API
-- **WRDS Integration**: Academic financial database access
-- **Requests 2.31+**: HTTP library for API calls
-
-### Configuration & Validation
-- **Pydantic v2.5+**: Data validation and settings management
-- **Pydantic-settings 2.1+**: Environment-based configuration
-- **Python-dotenv 1.0+**: Environment file support
-
-### Database & Storage
-- **SQLAlchemy 2.0+**: Modern ORM for database operations
-- **SQLite**: Built-in database for data persistence
-
-### Development & Testing
-- **pytest 7.4+**: Comprehensive testing framework
-- **pytest-cov 4.1+**: Code coverage reporting
-- **Black 23.0+**: Code formatting
-- **Flake8 6.1+**: Code linting
-- **MyPy 1.7+**: Static type checking
-
-### Optional: Advanced ML
-- **TensorFlow 2.13+**: Deep learning framework
-- **PyTorch 2.0+**: Research-grade deep learning
-- **XGBoost 2.0+**: Gradient boosting framework
-- **LightGBM 4.1+**: High-performance gradient boosting
 
 ## 🤝 Contributing
 
@@ -492,21 +412,23 @@ class MyCustomStrategy(BaseStrategy):
 
 ## 📋 Roadmap
 
-### Current Features ✅
+### Completed Features ✅
 - ✅ Modular strategy framework
-- ✅ ML-based stock selection
-- ✅ Comprehensive backtesting
+- ✅ ML-based stock selection strategies
+- ✅ Professional backtesting system (powered by bt library)
 - ✅ Alpaca live trading integration
-- ✅ Interactive web dashboard
-- ✅ Docker containerization
+- ✅ Multi-source data support (Yahoo/FMP/WRDS)
+- ✅ Comprehensive risk management system
+- ✅ Performance analysis and reporting
 
 ### Planned Enhancements 🚧
 - 🔄 Deep reinforcement learning strategies
 - 🔄 Alternative data integration
 - 🔄 Multi-asset support (crypto, futures)
-- 🔄 Advanced risk management
-- 🔄 Portfolio optimization algorithms
+- 🔄 Advanced portfolio optimization algorithms
 - 🔄 Real-time alerting system
+- 🔄 Web visualization interface
+- 🔄 Docker containerization
 
 ## 📝 License
 
@@ -528,18 +450,20 @@ This software is for **educational and research purposes only**. The algorithms,
 ## 📚 References & Acknowledgments
 
 ### Academic Papers
-- [Machine Learning for Stock Recommendation](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3302088)
-- [FinRL: Deep Reinforcement Learning Framework](https://arxiv.org/abs/2011.09607)
-- [Portfolio Allocation with Deep Reinforcement Learning](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3690996)
+- [Machine Learning for Stock Recommendation](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3302088) - Machine learning approaches to stock selection
+- [FinRL: Deep Reinforcement Learning Framework](https://arxiv.org/abs/2011.09607) - Deep RL framework for quantitative trading
+- [Portfolio Allocation with Deep Reinforcement Learning](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3690996) - Portfolio optimization research
 
 ### Open Source Projects
-- [FinRL](https://github.com/AI4Finance-Foundation/FinRL)
-- [Alpaca-py](https://github.com/alpacahq/alpaca-py)
-- [Streamlit](https://github.com/streamlit/streamlit)
+- [FinRL](https://github.com/AI4Finance-Foundation/FinRL) - Deep reinforcement learning framework for quantitative trading
+- [Alpaca-py](https://github.com/alpacahq/alpaca-py) - Alpaca trading API
+- [bt](https://github.com/pmorissette/bt) - Flexible backtesting framework for Python
 
 ### Data Sources
-- [WRDS (Wharton Research Data Services)](https://wrds.wharton.upenn.edu/)
-- [Alpaca Markets](https://alpaca.markets/)
+- [Yahoo Finance](https://finance.yahoo.com/) - Free financial data
+- [Financial Modeling Prep](https://financialmodelingprep.com/) - Professional financial data API
+- [WRDS (Wharton Research Data Services)](https://wrds.wharton.upenn.edu/) - Academic financial database
+- [Alpaca Markets](https://alpaca.markets/) - Brokerage API and market data
 
 ---
 
