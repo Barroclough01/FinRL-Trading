@@ -60,7 +60,18 @@ class FMPSettings(BaseSettings):
 
 
 class DataSettings(BaseSettings):
-    """Data management configuration settings."""
+    """
+    Data management configuration settings.
+    
+    Attributes:
+        base_dir: Main directory for all data storage (including SQLite database).
+                  Set via DATA_BASE_DIR environment variable.
+        cache_dir: Directory for cached data files
+        processed_dir: Directory for processed data files
+        raw_dir: Directory for raw data files
+        cache_ttl_hours: Time-to-live for cache entries in hours
+        max_cache_size_mb: Maximum cache size in megabytes
+    """
     base_dir: str = "./data"
     cache_dir: str = "./data/cache"
     processed_dir: str = "./data/processed"
@@ -70,6 +81,10 @@ class DataSettings(BaseSettings):
 
     class Config:
         env_prefix = "DATA_"
+    
+    def get_database_path(self) -> Path:
+        """Get the path to the SQLite database file."""
+        return Path(self.base_dir) / "finrl_trading.db"
 
 
 class StrategySettings(BaseSettings):
@@ -174,6 +189,10 @@ class FinRLSettings(BaseSettings):
         if self.logging.file_path:
             return Path(self.logging.file_path).parent
         return Path("./logs")
+    
+    def get_database_path(self) -> Path:
+        """Get the path to the SQLite database file."""
+        return self.data.get_database_path()
 
 
 # Global settings instance
@@ -235,7 +254,12 @@ WRDS_HOSTNAME=wrds.wharton.upenn.edu
 WRDS_PORT=9737
 WRDS_DATABASE=wrds
 
+# Financial Modeling Prep API Settings
+FMP_API_KEY=your_fmp_api_key_here
+
 # Data Management Settings
+# DATA_BASE_DIR: Directory where the SQLite database and all data files are stored
+# This is the main data directory used by DataStore for persistent storage
 DATA_BASE_DIR=./data
 DATA_CACHE_DIR=./data/cache
 DATA_PROCESSED_DIR=./data/processed

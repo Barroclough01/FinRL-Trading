@@ -20,6 +20,10 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 alpaca-py>=0.13.0
 
+# Trading calendar (market holidays and trading days)
+pandas-market-calendars>=4.3.0
+# Alternative: exchange-calendars>=4.2.0  # Uncomment if you prefer exchange-calendars
+
 # Professional backtesting
 bt>=1.1.0
 

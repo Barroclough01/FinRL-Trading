@@ -423,16 +423,35 @@ class AlpacaManager:
             market_value = float(position['market_value'])
             current_weights[symbol] = (market_value / portfolio_value) if portfolio_value > 0 else 0.0
 
-        # Filter target weights to tradable active assets; symbols not in target get 0
+        # Filter与规范化: 仅保留可交易标的；负权重视为0；必要时归一化到<=1
         filtered_targets: Dict[str, float] = {}
-        for s, w in (target_weights or {}).items():
+        raw_targets = target_weights or {}
+        for s, w in raw_targets.items():
+            try:
+                w_float = float(w)
+            except Exception:
+                self.logger.warning(f"Invalid weight for {s}: {w}; treating as 0")
+                w_float = 0.0
+            if w_float < 0:
+                self.logger.info(f"Negative weight for {s} -> clamped to 0")
+                w_float = 0.0
             if self._is_symbol_tradable(s):
-                filtered_targets[s] = float(w)
+                filtered_targets[s] = w_float
             else:
                 self.logger.info(f"Skipping non-tradable or inactive asset: {s}")
 
-        all_symbols = set(current_weights.keys()) | set(filtered_targets.keys())
-        full_target_weights: Dict[str, float] = {s: float(filtered_targets.get(s, 0.0)) for s in all_symbols}
+        sum_w = sum(filtered_targets.values())
+        used_target_weights: Dict[str, float]
+        if sum_w > 1.0001:
+            # 若权重和>1，按总和进行缩放归一化
+            used_target_weights = {s: (w / sum_w) for s, w in filtered_targets.items()}
+            self.logger.info(f"Target weights sum {sum_w:.6f} > 1; normalized to 1.0 proportionally")
+        else:
+            # 和<=1则保留，允许剩余现金
+            used_target_weights = dict(filtered_targets)
+
+        all_symbols = set(current_weights.keys()) | set(used_target_weights.keys())
+        full_target_weights: Dict[str, float] = {s: float(used_target_weights.get(s, 0.0)) for s in all_symbols}
 
         # Phase 1: build SELL orders first (reduce positions to free cash)
         sell_orders = []
@@ -456,11 +475,22 @@ class AlpacaManager:
                 current_value = portfolio_value * current_weight
                 value_to_trade = target_value - current_value  # negative
 
+                price = None
                 try:
-                    quote = self._api_request("GET", f"/v2/stocks/{symbol}/quotes", account=account)
-                    price = float(quote.get('bidprice') or quote.get('askprice') or 100.0)
-                except:
-                    price = float(positions[0]['avg_entry_price']) if positions else 100.0
+                    price = self._get_latest_price(symbol, account=account)
+                except Exception:
+                    print(f"Failed to get latest price for {symbol}: {e}")
+                    price = None
+                if price is None:
+                    try:
+                        # fallback to position avg price if available
+                        pos_map = {p['symbol']: p for p in positions}
+                        if symbol in pos_map and pos_map[symbol].get('avg_entry_price'):
+                            price = float(pos_map[symbol]['avg_entry_price'])
+                    except Exception:
+                        price = None
+                if price is None:
+                    price = 100.0
 
                 shares_to_trade = value_to_trade / price  # negative
                 shares_abs = abs(shares_to_trade)
@@ -515,11 +545,20 @@ class AlpacaManager:
                 target_value = portfolio_value * target_weight
                 current_value = portfolio_value * current_weight
                 value_to_trade = max(0.0, target_value - current_value)
+                price = None
                 try:
-                    quote = self._api_request("GET", f"/v2/stocks/{symbol}/quotes", account=account)
-                    price = float(quote.get('askprice') or quote.get('bidprice') or 100.0)
-                except:
-                    price = float(positions[0]['avg_entry_price']) if positions else 100.0
+                    price = self._get_latest_price(symbol, account=account)
+                except Exception:
+                    price = None
+                if price is None:
+                    try:
+                        pos_map = {p['symbol']: p for p in positions}
+                        if symbol in pos_map and pos_map[symbol].get('avg_entry_price'):
+                            price = float(pos_map[symbol]['avg_entry_price'])
+                    except Exception:
+                        price = None
+                if price is None:
+                    price = 100.0
 
                 if value_to_trade > 0 and price > 0:
                     buy_candidates.append((symbol, price, value_to_trade))
@@ -581,7 +620,7 @@ class AlpacaManager:
                 },
                 'market_open': is_open,
                 'used_time_in_force': default_tif,
-                'target_weights': target_weights
+                'target_weights': used_target_weights
             }
 
         all_results = results_sell + results_buy
@@ -589,7 +628,7 @@ class AlpacaManager:
             return {
                 'orders_placed': len(all_results),
                 'orders': [r.__dict__ for r in all_results],
-                'target_weights': target_weights,
+                'target_weights': used_target_weights,
                 'market_open': is_open,
                 'used_time_in_force': default_tif
             }
@@ -598,7 +637,7 @@ class AlpacaManager:
             return {
                 'orders_placed': 0,
                 'orders': [],
-                'target_weights': target_weights,
+                'target_weights': used_target_weights,
                 'market_open': is_open,
                 'used_time_in_force': default_tif
             }
@@ -717,6 +756,98 @@ class AlpacaManager:
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Request failed: {e}")
+
+    def _api_data_request(self, method: str, path: str, account: AlpacaAccount = None,
+                          json_body: Optional[Dict] = None, params: Optional[Dict] = None,
+                          timeout: int = 10) -> Any:
+        """Make API request to Alpaca Market Data endpoint.
+
+        Uses https://data.alpaca.markets/v2 regardless of trading base_url.
+        """
+        if account is None:
+            account = self._get_account()
+
+        data_base = "https://data.alpaca.markets"
+        # Ensure we always call v2 endpoints
+        if not path.startswith("/v2/"):
+            if path.startswith("/"):
+                path = "/v2" + path
+            else:
+                path = "/v2/" + path
+
+        url = f"{data_base}{path}"
+        headers = {
+            'APCA-API-KEY-ID': account.api_key,
+            'APCA-API-SECRET-KEY': account.api_secret,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        try:
+            response = requests.request(
+                method, url, headers=headers, json=json_body, params=params, timeout=timeout
+            )
+
+            if response.status_code >= 400:
+                error_info = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'message': response.text}
+                raise RuntimeError(f"Alpaca DATA API error {response.status_code}: {error_info}")
+
+            if response.status_code == 204:
+                return {}
+
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Data request failed: {e}")
+
+    def _get_latest_price(self, symbol: str, account: AlpacaAccount = None) -> Optional[float]:
+        """Get latest trade/quote-derived price for a symbol from Alpaca Market Data.
+
+        Tries trades/latest, then quotes/latest (mid), then bars/latest (close).
+        """
+        sym = (symbol or "").upper()
+        # 1) Latest trade price
+        try:
+            resp = self._api_data_request("GET", f"/stocks/{sym}/trades/latest", account=account)
+            # v2 format: {"symbol":"AAPL","trade":{"p":123.45,...}}
+            trade = resp.get('trade') if isinstance(resp, dict) else None
+            if isinstance(trade, dict):
+                p = trade.get('p') or trade.get('price')
+                if p is not None:
+                    return float(p)
+            # Some responses may be flattened
+            p = resp.get('p') if isinstance(resp, dict) else None
+            if p is not None:
+                return float(p)
+        except Exception:
+            pass
+
+        # 2) Latest quote mid
+        try:
+            resp = self._api_data_request("GET", f"/stocks/{sym}/quotes/latest", account=account)
+            quote = resp.get('quote') if isinstance(resp, dict) else None
+            if isinstance(quote, dict):
+                ap = quote.get('ap') or quote.get('ask_price')
+                bp = quote.get('bp') or quote.get('bid_price')
+                if ap is not None and bp is not None:
+                    apf = float(ap)
+                    bpf = float(bp)
+                    if apf > 0 and bpf > 0:
+                        return (apf + bpf) / 2.0
+        except Exception:
+            pass
+
+        # 3) Latest bar close
+        try:
+            resp = self._api_data_request("GET", f"/stocks/{sym}/bars/latest", account=account)
+            bar = resp.get('bar') if isinstance(resp, dict) else None
+            if isinstance(bar, dict):
+                c = bar.get('c') or bar.get('close')
+                if c is not None:
+                    return float(c)
+        except Exception:
+            pass
+
+        return None
 
     def get_available_accounts(self) -> List[str]:
         """Get list of available account names."""

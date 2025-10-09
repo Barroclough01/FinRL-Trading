@@ -68,7 +68,7 @@ from src.data.data_fetcher import fetch_sp500_tickers, fetch_fundamental_data
 
 logger = logging.getLogger(__name__)
 
-
+# TODO: trade_date is not necessary to be the last quarter date, we should use the next quarter date instead of the last quarter date
 class MLStockSelectionStrategy(BaseStrategy):
     """Machine learning based stock selection strategy."""
 
@@ -373,6 +373,153 @@ class MLStockSelectionStrategy(BaseStrategy):
 
         return candidates
 
+    def _infer_price_schema(self, price_data: pd.DataFrame) -> Tuple[str, str, str]:
+        """
+        根据传入的日度价格数据推断(date_col, ticker_col, px_col)。
+        优先使用 adj_close，其次 close/prccd。
+        """
+        df = price_data
+        date_col = 'date' if 'date' in df.columns else ('datadate' if 'datadate' in df.columns else None)
+        if date_col is None:
+            raise ValueError("price_data 缺少日期列 ['date' 或 'datadate']")
+
+        ticker_col = 'gvkey' if 'gvkey' in df.columns else ('tic' if 'tic' in df.columns else None)
+        if ticker_col is None:
+            raise ValueError("price_data 缺少股票列 ['gvkey' 或 'tic']")
+
+        if 'adj_close' in df.columns:
+            px_col = 'adj_close'
+        elif 'close' in df.columns:
+            px_col = 'close'
+        elif 'prccd' in df.columns:
+            px_col = 'prccd'
+        else:
+            raise ValueError("price_data 缺少价格列 ['adj_close' 或 'close' 或 'prccd']")
+
+        return date_col, ticker_col, px_col
+
+    def _adjust_predictions_by_same_day_gap(
+        self,
+        pred_df: pd.DataFrame,
+        price_data: Optional[pd.DataFrame],
+        execution_date: Optional[Any]
+    ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        当日确认模式：用执行日相对前一交易日的已实现收益，来修正 predicted_return。
+
+        new_predicted = predicted_return_raw - realized_return_since_prev
+
+        Args:
+            pred_df: 含 ['gvkey','predicted_return'] 的 DataFrame
+            price_data: 日度价格数据（需含日期、股票、价格列）
+            execution_date: 下单日期（可为 str/datetime）；若为空则不调整
+
+        Returns:
+            (adjusted_pred_df, meta)
+        """
+        meta: Dict[str, Any] = {}
+        if price_data is None or len(price_data) == 0:
+            self.logger.info("当日模式：无 price_data，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        if execution_date is None:
+            self.logger.info("当日模式：未提供 execution_date，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        try:
+            date_col, ticker_col, px_col = self._infer_price_schema(price_data)
+        except Exception as e:
+            self.logger.warning(f"当日模式：价格数据结构无效，跳过调整: {e}")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        # 规范化日期
+        prices = price_data[[date_col, ticker_col, px_col]].copy()
+        prices[date_col] = pd.to_datetime(prices[date_col])
+        exec_dt = pd.to_datetime(execution_date)
+
+        # 找到执行日（或最近不晚于执行日的交易日）与其前一交易日
+        all_trade_dates = np.array(sorted(prices[date_col].unique()))
+        if len(all_trade_dates) < 2:
+            self.logger.info("当日模式：价格日期不足，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        # 最近不晚于执行日的交易日索引
+        idx = np.searchsorted(all_trade_dates, exec_dt, side='right') - 1
+        if idx < 0:
+            # 全部价格都晚于执行日
+            self.logger.info("当日模式：执行日前无历史价格，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+        exec_trade_dt = all_trade_dates[idx]
+        prev_idx = max(idx - 1, -1)
+        if prev_idx < 0:
+            self.logger.info("当日模式：无上一个交易日，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+        prev_trade_dt = all_trade_dates[prev_idx]
+
+        # 仅取目标两日与候选股票
+        gvkeys = pred_df['gvkey'].astype(str).unique().tolist()
+        sub = prices[prices[ticker_col].astype(str).isin(gvkeys)]
+        sub = sub[sub[date_col].isin([prev_trade_dt, exec_trade_dt])]
+
+        if sub.empty:
+            self.logger.info("当日模式：目标股票在两日内无价格，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        # 透视两日价格，计算当日相对前一交易日收益
+        pivot = sub.pivot_table(index=date_col, columns=ticker_col, values=px_col, aggfunc='last')
+        # 确保两行齐备
+        missing_rows = [d for d in [prev_trade_dt, exec_trade_dt] if d not in pivot.index]
+        if missing_rows:
+            # 缺任一日则无法计算 gap，跳过
+            self.logger.info(f"当日模式：缺少价格日期 {missing_rows}，跳过调整")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        try:
+            prev_prices = pivot.loc[prev_trade_dt]
+            exec_prices = pivot.loc[exec_trade_dt]
+            realized = (exec_prices / prev_prices - 1.0).replace([np.inf, -np.inf], np.nan)
+        except Exception as e:
+            self.logger.info(f"当日模式：计算当日收益失败，跳过调整: {e}")
+            meta['confirm_mode'] = 'none'
+            return pred_df, meta
+
+        # 合并回预测，并做差得到 gap
+        out = pred_df.copy()
+        out['predicted_return_raw'] = out['predicted_return']
+        # map realized return by gvkey/tic
+        realized_by_gvkey = realized
+        if 'gvkey' not in pivot.columns.names:
+            # columns 是 ticker_col；若 ticker_col 不是 gvkey，需要映射名称
+            pass  # 我们直接用 ticker_col 名称
+        # 无论 ticker_col 为何，都转成字典映射
+        realized_map = {str(k): float(v) if pd.notna(v) else np.nan for k, v in realized.items()}
+        out['realized_return_since_prev'] = out['gvkey'].astype(str).map(realized_map)
+        out['realized_return_since_prev'] = out['realized_return_since_prev'].fillna(0.0)
+        out['predicted_return'] = out['predicted_return_raw'] - out['realized_return_since_prev']
+
+        meta.update({
+            'confirm_mode': 'today',
+            'execution_date_input': str(pd.to_datetime(execution_date).date()),
+            'execution_trade_date': str(pd.to_datetime(exec_trade_dt).date()),
+            'prev_trade_date': str(pd.to_datetime(prev_trade_dt).date()),
+            'price_field_used': px_col,
+            'n_adjusted': int(out['realized_return_since_prev'].ne(0.0).sum()),
+        })
+
+        self.logger.info(
+            f"当日模式：以 {exec_trade_dt.date()} 对比 {prev_trade_dt.date()} 调整预测，修正 {meta['n_adjusted']} 只"
+        )
+
+        return out, meta
+
     def _prepare_supervised_dataset(self, fundamentals: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
         """Prepare X, y, and date index using real fundamentals with forward returns.
 
@@ -383,7 +530,7 @@ class MLStockSelectionStrategy(BaseStrategy):
             raise ValueError("'y_return' 缺失，请使用 data_fetcher 获取的真实基本面数据")
 
         # Select numeric feature columns (exclude ids and label/date)
-        exclude_cols = {'gvkey', 'tic', 'gsector', 'datadate', 'y_return'}
+        exclude_cols = {'gvkey', 'tic', 'gsector', 'datadate', 'y_return', 'prccd', 'ajexdi'}
         numeric_cols: List[str] = []
         for col in fundamentals.columns:
             if col in exclude_cols:
@@ -645,6 +792,9 @@ class MLStockSelectionStrategy(BaseStrategy):
         test_quarters = int(kwargs.get('test_quarters', 4))
         train_quarters = int(kwargs.get('train_quarters', 16))
 
+        # 提前获取日度价格数据（供当日模式使用）
+        price_data = data.get('prices', None)
+
         try:
             if prediction_mode == 'rolling':
                 preds_all = self._rolling_train_all_date(
@@ -661,6 +811,19 @@ class MLStockSelectionStrategy(BaseStrategy):
                     test_quarters=test_quarters,
                 )
                 meta['mode'] = 'single'
+                # 当日模式：在选股阈值之前，基于当日/最近交易日价格对 predicted_return 做 gap 调整
+                confirm_mode = str(kwargs.get('confirm_mode', 'none')).lower()
+                execution_date = kwargs.get('execution_date', None)
+                if confirm_mode in ('today', 'same_day'):
+                    try:
+                        pred_df, confirm_meta = self._adjust_predictions_by_same_day_gap(
+                            pred_df=pred_df,
+                            price_data=price_data,
+                            execution_date=execution_date,
+                        )
+                        meta.update(confirm_meta)
+                    except Exception as e:
+                        self.logger.warning(f"当日模式调整失败，将使用原始预测: {e}")
         except Exception as e:
             self.logger.error(f"预测失败: {e}")
             return StrategyResult(
@@ -672,7 +835,6 @@ class MLStockSelectionStrategy(BaseStrategy):
         # 4) 选股与权重分配
         top_quantile = float(kwargs.get('top_quantile', 0.75))
         weight_method = str(kwargs.get('weight_method', 'equal')).lower()
-        price_data = data.get('prices', None)  # 获取日度价格数据（用于 min_variance，可选）
 
         if prediction_mode == 'rolling':
             # 对每个 trade date 独立选股与组内归一化，输出所有日期
@@ -813,7 +975,7 @@ class SectorNeutralMLStrategy(MLStockSelectionStrategy):
         train_quarters = int(kwargs.get('train_quarters', 16))
         top_quantile = float(kwargs.get('top_quantile', 0.75))
         weight_method = str(kwargs.get('weight_method', 'equal')).lower()
-        price_data = data.get('prices', None)  # 获取日度价格数据（用于 min_variance，可选）
+        price_data = data.get('prices', None)  # 获取日度价格数据（用于 min_variance与当日模式）
 
         selected_all = []
         per_sector_meta: Dict[str, Any] = {}
@@ -846,6 +1008,20 @@ class SectorNeutralMLStrategy(MLStockSelectionStrategy):
                         test_quarters=test_quarters,
                     )
                     meta['mode'] = 'single'
+                    # 当日模式（行业单次）：在阈值筛选之前调整 predicted_return
+                    confirm_mode = str(kwargs.get('confirm_mode', 'none')).lower()
+                    execution_date = kwargs.get('execution_date', None)
+                    if confirm_mode in ('today', 'same_day'):
+                        try:
+                            pred_df, confirm_meta = self._adjust_predictions_by_same_day_gap(
+                                pred_df=pred_df,
+                                price_data=price_data,
+                                execution_date=execution_date,
+                            )
+                            # 记录至 meta（注意：此 meta 为行业内局部，可用于汇总）
+                            meta.update(confirm_meta)
+                        except Exception as e:
+                            self.logger.warning(f"当日模式（行业）调整失败，使用原始预测: {e}")
             except Exception as e:
                 self.logger.warning(f"Sector {s}: rolling training failed: {e}")
                 continue

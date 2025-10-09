@@ -57,25 +57,16 @@ class DataSource(Protocol):
 class BaseDataFetcher(ABC):
     """Base class for data fetchers with common functionality."""
 
-    def __init__(self, cache_dir: str = "./data/cache"):
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-    def _get_cache_path(self, data_type: str, date: Optional[str] = None) -> Path:
-        """Get cache file path for given data type."""
-        if date:
-            filename = f"{data_type}_{date}.csv"
-        else:
-            filename = f"{data_type}.csv"
-        return self.cache_dir / filename
-
-    def _is_cache_valid(self, cache_path: Path, max_age_days: int = 7) -> bool:
-        """Check if cache file is still valid."""
-        if not cache_path.exists():
-            return False
-
-        file_age = datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)
-        return file_age.days < max_age_days
+    def __init__(self, cache_dir: str = None):
+        """
+        Initialize base data fetcher.
+        
+        Args:
+            cache_dir: Deprecated, kept for backward compatibility. Uses DATA_BASE_DIR env var instead.
+        """
+        # Import here to avoid circular dependency
+        from src.data.data_store import get_data_store
+        self.data_store = get_data_store(base_dir=cache_dir)
 
     def _standardize_fundamental_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize fundamental data format."""
@@ -166,11 +157,14 @@ class YahooFinanceFetcher(BaseDataFetcher, DataSource):
 
     def get_sp500_components(self, date: str = None) -> pd.DataFrame:
         """Get S&P 500 components from Wikipedia."""
-        cache_path = self._get_cache_path("sp500_components", date or "latest")
-
-        if self._is_cache_valid(cache_path):
-            logger.info(f"Loading S&P 500 components from cache: {cache_path}")
-            return pd.read_csv(cache_path, index_col='date')
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Check database first
+        cached_tickers = self.data_store.get_sp500_components(date)
+        if cached_tickers:
+            logger.info(f"Loading S&P 500 components from database for {date}")
+            return pd.DataFrame({'tickers': [cached_tickers]}, index=[date])
 
         try:
             # Get S&P 500 components from Wikipedia
@@ -232,13 +226,13 @@ class YahooFinanceFetcher(BaseDataFetcher, DataSource):
 
             # Create DataFrame
             df = pd.DataFrame({
-                'date': [date or datetime.now().strftime("%Y-%m-%d")],
+                'date': [date],
                 'tickers': [tickers_str]
             })
 
-            # Cache result
-            df.to_csv(cache_path, index=False)
-            logger.info(f"Cached S&P 500 components to {cache_path}")
+            # Save to database
+            self.data_store.save_sp500_components(date, tickers_str)
+            logger.info(f"Saved S&P 500 components to database for {date}")
 
             return df.set_index('date')
 
@@ -278,11 +272,14 @@ class YahooFinanceFetcher(BaseDataFetcher, DataSource):
                         tickers_str = ','.join(tickers[:500])  # Limit to 500
 
                         df = pd.DataFrame({
-                            'date': [date or datetime.now().strftime("%Y-%m-%d")],
+                            'date': [date],
                             'tickers': [tickers_str]
                         })
 
-                        df.to_csv(cache_path, index=False)
+                        # Save to database
+                        self.data_store.save_sp500_components(date, tickers_str)
+                        logger.info(f"Saved S&P 500 components to database for {date}")
+                        
                         return df.set_index('date')
 
             except Exception as alt_e:
@@ -308,248 +305,240 @@ class YahooFinanceFetcher(BaseDataFetcher, DataSource):
 
     def get_fundamental_data(self, tickers: List[str],
                            start_date: str, end_date: str, align_quarter_dates: bool = False) -> pd.DataFrame:
-        """Get fundamental data from Yahoo Finance with forward y_return (per-quarter).
+        """Get fundamental data from Yahoo Finance with forward y_return (per-quarter) and incremental updates.
         Extends to next quarter to compute last forward return and drops rows with missing y_return."""
         import time
         import random
 
-        cache_key = f"fundamentals_{start_date}_{end_date}"
-        cache_path = self._get_cache_path(cache_key)
+        # Step 1: Check database for existing data
+        existing_data = self.data_store.get_fundamental_data(tickers, start_date, end_date)
+        logger.info(f"Found {len(existing_data)} existing fundamental records in database")
 
-        if self._is_cache_valid(cache_path):
-            logger.info(f"Loading fundamental data from cache: {cache_path}")
-            return pd.read_csv(cache_path)
+        # Step 2: Identify tickers that need to be fetched
+        tickers_to_fetch = []
+        for ticker in tickers[:30]:  # Limit to 30 tickers
+            missing_ranges = self.data_store.get_missing_fundamental_dates(ticker, start_date, end_date)
+            if missing_ranges:
+                tickers_to_fetch.append(ticker)
+                logger.info(f"Ticker {ticker}: Need to fetch fundamental data")
 
+        # Step 3: Fetch missing data from API
         all_data = []
-        failed_tickers = []
+        if tickers_to_fetch:
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            extended_start_dt = (start_dt - pd.DateOffset(months=6))
+            extended_end_dt = (end_dt + pd.DateOffset(months=6))
 
-        start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date)
-        extended_start_dt = (start_dt - pd.DateOffset(months=6))
-        extended_end_dt = (end_dt + pd.DateOffset(months=6))
+            logger.info(f"Fetching Yahoo fundamentals for {len(tickers_to_fetch)} tickers (quarterly, forward)")
 
-        selected_tickers = tickers[: min(len(tickers), 30)]
-        logger.info(f"Fetching Yahoo fundamentals for {len(selected_tickers)} tickers (quarterly, forward)")
-
-        for i, ticker in enumerate(selected_tickers):
-            try:
-                if i > 0:
-                    time.sleep(random.uniform(1.5, 3.5))
-
-                stock = yf.Ticker(ticker)
-
-                price_df = stock.history(start=extended_start_dt.strftime('%Y-%m-%d'), end=extended_end_dt.strftime('%Y-%m-%d'))
-                price_df = price_df.reset_index() if not price_df.empty else pd.DataFrame()
-
-                q_fin = getattr(stock, 'quarterly_financials', pd.DataFrame())
-                q_bs = getattr(stock, 'quarterly_balance_sheet', pd.DataFrame())
-
-                fin_dates = list(q_fin.columns) if isinstance(q_fin, pd.DataFrame) and not q_fin.empty else []
-                bs_dates = list(q_bs.columns) if isinstance(q_bs, pd.DataFrame) and not q_bs.empty else []
-
-                all_quarter_dates = sorted(set([pd.to_datetime(d) for d in fin_dates + bs_dates]))
-                inrange_quarters = [d for d in all_quarter_dates if start_dt <= d <= end_dt]
-
-                # add next quarter to compute forward return
-                next_q_candidates = [d for d in all_quarter_dates if d > end_dt]
-                if next_q_candidates:
-                    next_quarter_date = min(next_q_candidates)
-                else:
-                    if inrange_quarters:
-                        next_quarter_date = inrange_quarters[-1] + pd.offsets.QuarterEnd(1)
-                    else:
-                        next_quarter_date = end_dt + pd.offsets.QuarterEnd(1)
-
-                quarter_dates = inrange_quarters + [next_quarter_date]
-
-                # try to get sharesOutstanding from info
+            for i, ticker in enumerate(tickers_to_fetch):
                 try:
-                    info = stock.info
-                    shares_out = info.get('sharesOutstanding', None)
-                except Exception:
-                    shares_out = None
+                    if i > 0:
+                        time.sleep(random.uniform(1.5, 3.5))
 
-                def get_fin_value(df: pd.DataFrame, row_name_candidates: List[str], col_date: pd.Timestamp) -> Optional[float]:
-                    if not isinstance(df, pd.DataFrame) or df.empty:
+                    stock = yf.Ticker(ticker)
+
+                    price_df = stock.history(start=extended_start_dt.strftime('%Y-%m-%d'), end=extended_end_dt.strftime('%Y-%m-%d'))
+                    price_df = price_df.reset_index() if not price_df.empty else pd.DataFrame()
+
+                    q_fin = getattr(stock, 'quarterly_financials', pd.DataFrame())
+                    q_bs = getattr(stock, 'quarterly_balance_sheet', pd.DataFrame())
+
+                    fin_dates = list(q_fin.columns) if isinstance(q_fin, pd.DataFrame) and not q_fin.empty else []
+                    bs_dates = list(q_bs.columns) if isinstance(q_bs, pd.DataFrame) and not q_bs.empty else []
+
+                    all_quarter_dates = sorted(set([pd.to_datetime(d) for d in fin_dates + bs_dates]))
+                    inrange_quarters = [d for d in all_quarter_dates if start_dt <= d <= end_dt]
+
+                    # add next quarter to compute forward return
+                    next_q_candidates = [d for d in all_quarter_dates if d > end_dt]
+                    if next_q_candidates:
+                        next_quarter_date = min(next_q_candidates)
+                    else:
+                        if inrange_quarters:
+                            next_quarter_date = inrange_quarters[-1] + pd.offsets.QuarterEnd(1)
+                        else:
+                            next_quarter_date = end_dt + pd.offsets.QuarterEnd(1)
+
+                    quarter_dates = inrange_quarters + [next_quarter_date]
+
+                    # try to get sharesOutstanding from info
+                    try:
+                        info = stock.info
+                        shares_out = info.get('sharesOutstanding', None)
+                    except Exception:
+                        info = {}
+                        shares_out = None
+
+                    # Save RAW Yahoo payloads via datastore helper (only original API data)
+                    try:
+                        self.data_store.save_raw_yahoo_fundamentals(
+                            ticker=ticker,
+                            start_date=start_date,
+                            end_date=end_date,
+                            quarterly_financials=q_fin if isinstance(q_fin, pd.DataFrame) else pd.DataFrame(),
+                            quarterly_balance_sheet=q_bs if isinstance(q_bs, pd.DataFrame) else pd.DataFrame(),
+                            info=info if isinstance(info, dict) else {}
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed saving raw Yahoo fundamentals for {ticker}: {e}")
+
+                    def get_fin_value(df: pd.DataFrame, row_name_candidates: List[str], col_date: pd.Timestamp) -> Optional[float]:
+                        if not isinstance(df, pd.DataFrame) or df.empty:
+                            return None
+                        for rn in row_name_candidates:
+                            if rn in df.index and col_date in df.columns:
+                                try:
+                                    val = df.loc[rn, col_date]
+                                    return float(val) if pd.notna(val) else None
+                                except Exception:
+                                    continue
                         return None
-                    for rn in row_name_candidates:
-                        if rn in df.index and col_date in df.columns:
-                            try:
-                                val = df.loc[rn, col_date]
-                                return float(val) if pd.notna(val) else None
-                            except Exception:
-                                continue
-                    return None
 
-                for q_date in quarter_dates:
-                    # quarter-end price
-                    prccd = np.nan
-                    adj_close = np.nan
-                    ajexdi = 1.0
-                    if not price_df.empty:
-                        sub = price_df[price_df['Date'] <= q_date]
-                        if not sub.empty:
-                            last_row = sub.head(1).iloc[0]
-                            prccd = float(last_row.get('Close', np.nan))
-                            adj_close = float(last_row.get('Adj Close', prccd)) if pd.notna(last_row.get('Adj Close', np.nan)) else prccd
-                            ajexdi = (prccd / adj_close) if (pd.notna(prccd) and pd.notna(adj_close) and adj_close != 0) else 1.0
+                    for q_date in quarter_dates:
+                        # quarter-end price
+                        prccd = np.nan
+                        adj_close = np.nan
+                        ajexdi = 1.0
+                        if not price_df.empty:
+                            sub = price_df[price_df['Date'] <= q_date]
+                            if not sub.empty:
+                                last_row = sub.head(1).iloc[0]
+                                prccd = float(last_row.get('Close', np.nan))
+                                adj_close = float(last_row.get('Adj Close', prccd)) if pd.notna(last_row.get('Adj Close', np.nan)) else prccd
+                                ajexdi = (prccd / adj_close) if (pd.notna(prccd) and pd.notna(adj_close) and adj_close != 0) else 1.0
 
-                    net_income = get_fin_value(q_fin, ['Net Income', 'NetIncome'], q_date) or 0.0
-                    equity = get_fin_value(q_bs, ["Total Stockholder Equity", "Total Stockholders' Equity", 'Total Equity'], q_date)
-                    equity = float(equity) if equity is not None else 0.0
+                        net_income = get_fin_value(q_fin, ['Net Income', 'NetIncome'], q_date) or 0.0
+                        equity = get_fin_value(q_bs, ["Total Stockholder Equity", "Total Stockholders' Equity", 'Total Equity'], q_date)
+                        equity = float(equity) if equity is not None else 0.0
 
-                    effective_shares = float(shares_out) if shares_out not in (None, 0) else None
-                    eps = (net_income / effective_shares) if effective_shares else np.nan
-                    bps = (equity / effective_shares) if effective_shares else np.nan
+                        effective_shares = float(shares_out) if shares_out not in (None, 0) else None
+                        eps = (net_income / effective_shares) if effective_shares else np.nan
+                        bps = (equity / effective_shares) if effective_shares else np.nan
 
-                    pe = (prccd / eps) if (pd.notna(prccd) and pd.notna(eps) and eps not in (0, np.nan)) else np.nan
-                    pb = (prccd / bps) if (pd.notna(prccd) and pd.notna(bps) and bps not in (0, np.nan)) else np.nan
-                    roe = (net_income / equity) if equity not in (0, np.nan) and equity != 0 else np.nan
-                    market_cap = (prccd * effective_shares) if (pd.notna(prccd) and effective_shares) else np.nan
+                        pe = (prccd / eps) if (pd.notna(prccd) and pd.notna(eps) and eps not in (0, np.nan)) else np.nan
+                        pb = (prccd / bps) if (pd.notna(prccd) and pd.notna(bps) and bps not in (0, np.nan)) else np.nan
+                        roe = (net_income / equity) if equity not in (0, np.nan) and equity != 0 else np.nan
+                        market_cap = (prccd * effective_shares) if (pd.notna(prccd) and effective_shares) else np.nan
 
-                    record = {
-                        'gvkey': ticker,
-                        'datadate': q_date.strftime('%Y-%m-%d'),
-                        'tic': ticker,
-                        'prccd': prccd if pd.notna(prccd) else np.nan,
-                        'ajexdi': ajexdi,
-                        'adj_close_q': adj_close if pd.notna(adj_close) else np.nan,
-                        'adj_close': adj_close if pd.notna(adj_close) else np.nan,
-                        'pe': pe if pd.notna(pe) else np.nan,
-                        'pb': pb if pd.notna(pb) else np.nan,
-                        'roe': roe if pd.notna(roe) else np.nan,
-                        'market_cap': market_cap if pd.notna(market_cap) else np.nan,
-                    }
-                    all_data.append(record)
+                        record = {
+                            'gvkey': ticker,
+                            'datadate': q_date.strftime('%Y-%m-%d'),
+                            'tic': ticker,
+                            'prccd': prccd if pd.notna(prccd) else np.nan,
+                            'ajexdi': ajexdi,
+                            'adj_close_q': adj_close if pd.notna(adj_close) else np.nan,
+                            'adj_close': adj_close if pd.notna(adj_close) else np.nan,
+                            'pe': pe if pd.notna(pe) else np.nan,
+                            'pb': pb if pd.notna(pb) else np.nan,
+                            'roe': roe if pd.notna(roe) else np.nan,
+                            'market_cap': market_cap if pd.notna(market_cap) else np.nan,
+                        }
+                        all_data.append(record)
 
+                except Exception as e:
+                    logger.warning(f"Failed to fetch Yahoo fundamentals for {ticker}: {e}")
+                    continue
+
+        # Step 4: Process and save presence only (do NOT persist processed metrics)
+        if all_data:
+            df = pd.DataFrame(all_data)
+            try:
+                df = df.sort_values(['tic', 'datadate'])
+                df['y_return'] = df.groupby('tic')['adj_close_q'].pct_change().shift(-1)
+                # keep only in-range
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+                mask_in_range = pd.to_datetime(df['datadate']).between(start_dt, end_dt, inclusive='both')
+                df = df[mask_in_range]
+                # drop rows without y_return
+                df = df[df['y_return'].notna()].reset_index(drop=True)
+
+                # Save presence rows (ticker, date) for incremental checks only
+                try:
+                    presence_df = df[['tic', 'datadate']].rename(columns={'tic': 'ticker', 'datadate': 'date'})
+                    rows_saved = self.data_store.save_fundamental_data(presence_df)
+                    logger.info(f"Saved {rows_saved} presence rows for Yahoo fundamentals")
+                except Exception as e:
+                    logger.warning(f"Failed to save presence rows for Yahoo fundamentals: {e}")
             except Exception as e:
-                logger.warning(f"Failed to fetch Yahoo fundamentals for {ticker}: {e}")
-                continue
+                logger.warning(f"Failed to compute forward y_return for Yahoo: {e}")
 
-        if not all_data:
-            logger.error("No Yahoo fundamental data fetched for any ticker")
-            return pd.DataFrame()
-
-        df = pd.DataFrame(all_data)
-        try:
-            df = df.sort_values(['tic', 'datadate'])
-            df['y_return'] = df.groupby('tic')['adj_close_q'].pct_change().shift(-1)
-            # keep only in-range
-            mask_in_range = pd.to_datetime(df['datadate']).between(start_dt, end_dt, inclusive='both')
-            df = df[mask_in_range]
-            # drop rows without y_return
-            df = df[df['y_return'].notna()].reset_index(drop=True)
-        except Exception as e:
-            logger.warning(f"Failed to compute forward y_return for Yahoo: {e}")
-
-        # Cache result
-        df.to_csv(cache_path, index=False)
-        logger.info(f"Cached Yahoo fundamental data to {cache_path} ({len(df)} records)")
-
-        return df
+        # Step 5: Return combined data from database
+        final_data = self.data_store.get_fundamental_data(tickers, start_date, end_date)
+        logger.info(f"Returning {len(final_data)} total fundamental records")
+        
+        return final_data
 
     def get_price_data(self, tickers: List[str],
                       start_date: str, end_date: str) -> pd.DataFrame:
-        """Get price data from Yahoo Finance with rate limiting."""
+        """Get price data from Yahoo Finance with rate limiting and incremental updates."""
         import time
         import random
 
-        cache_key = f"prices_{start_date}_{end_date}"
-        cache_path = self._get_cache_path(cache_key)
+        # Step 1: Check database for existing data
+        existing_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        logger.info(f"Found {len(existing_data)} existing price records in database")
 
-        if self._is_cache_valid(cache_path):
-            logger.info(f"Loading price data from cache: {cache_path}")
-            return pd.read_csv(cache_path)
+        # Step 2: Identify tickers and date ranges that need to be fetched
+        tickers_to_fetch = {}  # ticker -> list of (start_date, end_date) ranges
+        
+        for ticker in tickers:
+            missing_ranges = self.data_store.get_missing_price_dates(ticker, start_date, end_date)
+            if missing_ranges:
+                tickers_to_fetch[ticker] = missing_ranges
+                logger.info(f"Ticker {ticker}: Need to fetch {len(missing_ranges)} date range(s)")
 
-        all_data = []
-        failed_tickers = []
-        success_count = 0
+        # Step 3: Fetch missing data from API
+        new_data = []
+        if tickers_to_fetch:
+            logger.info(f"Fetching price data for {len(tickers_to_fetch)} tickers from Yahoo Finance")
+            
+            for i, (ticker, date_ranges) in enumerate(tickers_to_fetch.items()):
+                try:
+                    # Add rate limiting delay
+                    if i > 0:
+                        base_delay = random.uniform(1, 3)
+                        batch_delay = (i // 8) * 2
+                        total_delay = base_delay + batch_delay
+                        logger.debug(f"Rate limiting: waiting {total_delay:.1f}s before {ticker}")
+                        time.sleep(total_delay)
 
-        # Limit to reasonable number of tickers to avoid rate limits
-        max_tickers = min(len(tickers), 25)  # Reduced from 50 to 25 for price data
-        selected_tickers = tickers[:max_tickers]
+                    # Fetch data for all missing ranges (use full start_date to end_date for simplicity)
+                    stock = yf.Ticker(ticker)
+                    df = stock.history(start=start_date, end=end_date)
 
-        logger.info(f"Fetching price data for {len(selected_tickers)} tickers with rate limiting")
+                    if not df.empty and len(df) > 0:
+                        df = df.reset_index()
+                        df['gvkey'] = ticker
+                        df['tic'] = ticker
+                        df = self._standardize_price_data(df)
+                        new_data.append(df)
+                        logger.debug(f"Successfully fetched {len(df)} records for {ticker}")
+                    else:
+                        logger.warning(f"No price data returned for {ticker}")
 
-        for i, ticker in enumerate(selected_tickers):
-            try:
-                # Add progressive delay to avoid rate limits
-                if i > 0:  # Skip delay for first request
-                    # Base delay of 1-3 seconds for price data (less intensive than fundamentals)
-                    base_delay = random.uniform(1, 3)
-                    batch_delay = (i // 8) * 2  # Extra 2 seconds every 8 requests
-                    total_delay = base_delay + batch_delay
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if "rate" in error_msg or "limit" in error_msg:
+                        logger.warning(f"Rate limited for {ticker}, adding extra delay")
+                        time.sleep(8)
+                    else:
+                        logger.warning(f"Failed to fetch price data for {ticker}: {e}")
+                    continue
 
-                    logger.debug(f"Rate limiting: waiting {total_delay:.1f}s before {ticker}")
-                    time.sleep(total_delay)
+        # Step 4: Save new data to database
+        if new_data:
+            combined_new = pd.concat(new_data, ignore_index=True)
+            rows_saved = self.data_store.save_price_data(combined_new)
+            logger.info(f"Saved {rows_saved} new price records to database")
 
-                stock = yf.Ticker(ticker)
-                df = stock.history(start=start_date, end=end_date)
-
-                if not df.empty and len(df) > 10:  # Ensure we have meaningful data
-                    df = df.reset_index()
-                    df['gvkey'] = ticker
-                    df['tic'] = ticker
-                    all_data.append(df)
-
-                    success_count += 1
-                    logger.debug(f"Successfully fetched price data for {ticker} ({success_count}/{len(selected_tickers)})")
-                else:
-                    logger.warning(f"Insufficient price data for {ticker}")
-                    failed_tickers.append(ticker)
-
-                # Progress update every 10 tickers
-                if success_count % 10 == 0 and success_count > 0:
-                    logger.info(f"Progress: {success_count}/{len(selected_tickers)} tickers processed")
-
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "rate" in error_msg or "limit" in error_msg:
-                    logger.warning(f"Rate limited for {ticker}, adding extra delay")
-                    time.sleep(8)  # Extra delay for rate limit
-                else:
-                    logger.warning(f"Failed to fetch price data for {ticker}: {e}")
-
-                failed_tickers.append(ticker)
-                continue
-
-        # Summary
-        logger.info(f"Price data fetch completed: {success_count} successful, {len(failed_tickers)} failed")
-
-        if not all_data:
-            logger.error("No price data fetched for any ticker")
-
-            # Return fallback data
-            logger.info("Returning fallback price data")
-            fallback_data = []
-            dates = pd.date_range(start_date, end_date, freq='D')
-
-            for ticker in selected_tickers[:3]:  # Provide data for first 3 tickers
-                for date in dates:
-                    fallback_data.append({
-                        'datadate': date.strftime('%Y-%m-%d'),
-                        'gvkey': ticker,
-                        'tic': ticker,
-                        'prccd': 102.0,    # Close price
-                        'prcod': 100.0,    # Open price
-                        'prchd': 105.0,    # High price
-                        'prcld': 95.0,     # Low price
-                        'cshtrd': 1000000, # Volume
-                        'adj_close': 102.0 # Adjusted close
-                    })
-
-            df = pd.DataFrame(fallback_data)
-            return df
-
-        # Combine all data
-        combined_df = pd.concat(all_data, ignore_index=True)
-        combined_df = self._standardize_price_data(combined_df)
-
-        # Cache result
-        combined_df.to_csv(cache_path, index=False)
-        logger.info(f"Cached price data to {cache_path} ({len(combined_df)} records)")
-
-        return combined_df
+        # Step 5: Return combined data (existing + new) from database
+        final_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        logger.info(f"Returning {len(final_data)} total price records")
+        
+        return final_data
 
 
 class FMPFetcher(BaseDataFetcher, DataSource):
@@ -581,28 +570,69 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             logger.error(f"Failed to get FMP API key: {e}")
             return None
 
-    def _fetch_fmp_data(self, ticker: str, endpoint: str, period: str) -> List[Dict[str, Any]]:
-        """Helper to fetch data from FMP API."""
+    def _fetch_fmp_data(self, ticker: str, endpoint: str, period: str,
+                        start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Helper to fetch data from FMP API with local-first strategy.
+
+        - If start/end provided and raw payload in DB covers the range, return it.
+        - Else try SQLite cache_entries (24h cached JSON).
+        - Else call API, then save raw payload and cache.
+        """
         api_key = self._get_api_key()
         if not api_key:
             raise ValueError("FMP API key not found")
 
-        url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={api_key}"
+        # Map endpoint -> payload key for raw save/load
+        payload_key = None
+        if endpoint in ('income-statement', 'balance-sheet-statement', 'cash-flow-statement', 'ratios', 'profile'):
+            payload_key = {
+                'income-statement': 'income',
+                'balance-sheet-statement': 'balance',
+                'cash-flow-statement': 'cashflow',
+                'ratios': 'ratios',
+                'profile': 'profile'
+            }[endpoint]
+
+            # 1) Try to load from raw payload storage (covers requested range)
+            if start_date and end_date:
+                try:
+                    stored = self.data_store.get_raw_fmp_payload(ticker, payload_key, start_date, end_date)
+                    if stored is not None:
+                        return stored
+                except Exception:
+                    pass
+
+        # Build URL (profile endpoint doesn't use period)
+        if endpoint == 'profile':
+            url = f"{self.base_url}/{endpoint}/{ticker}?apikey={api_key}"
+        else:
+            url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={api_key}"
+
         try:
             response = requests.get(url)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            # Save raw payload for fundamentals endpoints
+            if payload_key and start_date and end_date:
+                try:
+                    self.data_store._save_raw_payload('FMP', ticker, payload_key, start_date, end_date, data)
+                except Exception as se:
+                    logger.debug(f"Failed to save raw FMP payload {payload_key} for {ticker}: {se}")
+            return data
         except requests.exceptions.RequestException as e:
             logger.warning(f"Failed to fetch {endpoint} data for {ticker}: {e}")
             return []
 
     def get_sp500_components(self, date: str = None) -> pd.DataFrame:
         """Get S&P 500 components from FMP."""
-        cache_path = self._get_cache_path("sp500_components", date or "latest")
-
-        if self._is_cache_valid(cache_path):
-            logger.info(f"Loading S&P 500 components from cache: {cache_path}")
-            return pd.read_csv(cache_path, index_col='date')
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Check database first
+        cached_tickers = self.data_store.get_sp500_components(date)
+        if cached_tickers:
+            logger.info(f"Loading S&P 500 components from database for {date}")
+            return pd.DataFrame({'tickers': [cached_tickers]}, index=[date])
 
         try:
             api_key = self._get_api_key()
@@ -621,13 +651,13 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
             # Create DataFrame
             df = pd.DataFrame({
-                'date': [date or datetime.now().strftime("%Y-%m-%d")],
+                'date': [date],
                 'tickers': [tickers_str]
             })
 
-            # Cache result
-            df.to_csv(cache_path, index=False)
-            logger.info(f"Cached S&P 500 components to {cache_path}")
+            # Save to database
+            self.data_store.save_sp500_components(date, tickers_str)
+            logger.info(f"Saved S&P 500 components to database for {date}")
 
             return df.set_index('date')
 
@@ -636,7 +666,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             return self.get_sp500_components.__wrapped__(self, date)  # Fallback
 
     def get_fundamental_data(self, tickers: List[str], start_date: str, end_date: str, align_quarter_dates: bool = False) -> pd.DataFrame:
-        """Get fundamental data from FMP with extended fields and forward y_return.
+        """Get fundamental data from FMP with extended fields and forward y_return and incremental updates.
         Adds one next quarter to compute the last forward return, then drops that extra row, and drops rows with missing y_return.
         If align_quarter_dates is True, align each quarter to Mar/Jun/Sep/Dec 1st and compute prices and y_return based on these aligned dates."""
         api_key = self._get_api_key()
@@ -644,54 +674,63 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             logger.error("FMP API key not found")
             return pd.DataFrame()
 
-        all_records: List[Dict[str, Any]] = []
-        start_dt = pd.to_datetime(start_date)
-        end_dt = pd.to_datetime(end_date)
-        # extend both ends to ensure previous/next quarter prices available
-        extended_start_dt = (start_dt - pd.DateOffset(months=6))
-        extended_end_dt = (end_dt + pd.DateOffset(months=6))
-        extended_start_date = extended_start_dt.strftime('%Y-%m-%d')
-        extended_end_date = extended_end_dt.strftime('%Y-%m-%d')
-        
-        def align_to_mjsd_first(d: pd.Timestamp) -> pd.Timestamp:
-            # Map quarter end month to the 1st day of the following 2 months later: target months 3,6,9,12 => day 1
-            # We approximate by finding the quarter index and composing a date with month in {3,6,9,12} and day=1
-            month = int(d.month)
-            year = int(d.year)
-            # Determine quarter start month
-            # Q1->3, Q2->6, Q3->9, Q4->12
-            if month in (1, 2, 3):
-                return pd.Timestamp(year=year, month=3, day=1)
-            if month in (4, 5, 6):
-                return pd.Timestamp(year=year, month=6, day=1)
-            if month in (7, 8, 9):
-                return pd.Timestamp(year=year, month=9, day=1)
-            # 10,11,12
-            return pd.Timestamp(year=year, month=12, day=1)
+        # # Step 1: Check database for existing data
+        # existing_data = self.data_store.get_fundamental_data(tickers, start_date, end_date)
+        # logger.info(f"Found {len(existing_data)} existing fundamental records in database")
 
-        for ticker in tickers:
+        # Step 2: Decide tickers to handle (local-first inside _fetch_fmp_data avoids extra API calls)
+        tickers_to_fetch = list(tickers)
+
+        # Step 3: Fetch missing data from API
+        all_records: List[Dict[str, Any]] = []
+        if tickers_to_fetch:
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            # extend both ends to ensure previous/next quarter prices available
+            extended_start_dt = (start_dt - pd.DateOffset(months=6))
+            # Ensure extended_end_dt does not exceed today
+            today = pd.Timestamp.today().normalize()
+            candidate_end_dt = (end_dt + pd.DateOffset(months=3))
+            extended_end_dt = min(candidate_end_dt, today)
+            extended_start_date = extended_start_dt.strftime('%Y-%m-%d')
+            extended_end_date = extended_end_dt.strftime('%Y-%m-%d')
+            
+            def align_to_mjsd_first(d: pd.Timestamp) -> pd.Timestamp:
+                # Map quarter end month to the 1st day of the following 2 months later: target months 3,6,9,12 => day 1
+                # We approximate by finding the quarter index and composing a date with month in {3,6,9,12} and day=1
+                month = int(d.month)
+                year = int(d.year)
+                # Determine quarter start month
+                # Q1->3, Q2->6, Q3->9, Q4->12
+                if month in (12, 1, 2):
+                    if month == 12:
+                        year = year + 1
+                    return pd.Timestamp(year=year, month=3, day=1)
+                if month in (3, 4, 5):
+                    return pd.Timestamp(year=year, month=6, day=1)
+                if month in (6, 7, 8):
+                    return pd.Timestamp(year=year, month=9, day=1)
+                # 9,10,11
+                return pd.Timestamp(year=year, month=12, day=1)
+
+            
+
+        for ticker in tickers_to_fetch if tickers_to_fetch else []:
             try:
-                income_data = self._fetch_fmp_data(ticker, 'income-statement', 'quarter')
-                balance_data = self._fetch_fmp_data(ticker, 'balance-sheet-statement', 'quarter')
-                cashflow_data = self._fetch_fmp_data(ticker, 'cash-flow-statement', 'quarter')
+                # Local-first: try load/save raw payloads within helper
+                income_data = self._fetch_fmp_data(ticker, 'income-statement', 'quarter', start_date, end_date)
+                balance_data = self._fetch_fmp_data(ticker, 'balance-sheet-statement', 'quarter', start_date, end_date)
+                cashflow_data = self._fetch_fmp_data(ticker, 'cash-flow-statement', 'quarter', start_date, end_date)
 
                 # ratios
-                ratios_url = f"{self.base_url}/ratios/{ticker}?period=quarter&apikey={api_key}"
-                try:
-                    ratios_resp = requests.get(ratios_url)
-                    ratios_resp.raise_for_status()
-                    ratios_data = ratios_resp.json() or []
-                except Exception as e:
-                    logger.warning(f"Failed to fetch ratios for {ticker}: {e}")
-                    ratios_data = []
+                # Ratios via helper
+                ratios_data = self._fetch_fmp_data(ticker, 'ratios', 'quarter', start_date, end_date) or []
 
                 # profile for sector
+                # Profile via helper
                 gsector = None
                 try:
-                    prof_url = f"{self.base_url}/profile/{ticker}?apikey={api_key}"
-                    prof_resp = requests.get(prof_url)
-                    prof_resp.raise_for_status()
-                    prof_json = prof_resp.json()
+                    prof_json = self._fetch_fmp_data(ticker, 'profile', 'na', start_date, end_date)
                     if isinstance(prof_json, list) and prof_json:
                         gsector = prof_json[0].get('sector')
                 except Exception as e:
@@ -724,30 +763,19 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 all_quarter_dates = sorted(set(income_by_date.keys()) | set(balance_by_date.keys()) | set(ratios_by_date.keys()))
                 inrange_quarters = [d for d in all_quarter_dates if start_dt <= d <= end_dt]
 
-                # determine a next quarter date for forward return
-                next_q_candidates = [d for d in all_quarter_dates if d > end_dt]
-                if next_q_candidates:
-                    next_quarter_date = min(next_q_candidates)
-                else:
-                    if inrange_quarters:
-                        next_quarter_date = inrange_quarters[-1] + pd.offsets.QuarterEnd(1)
-                    else:
-                        next_quarter_date = end_dt + pd.offsets.QuarterEnd(1)
-
-                quarter_dates = inrange_quarters + [next_quarter_date]
-
                 # If aligning, create a mapping from original qd -> aligned date
                 if align_quarter_dates:
-                    aligned_dates = {qd: align_to_mjsd_first(qd) for qd in quarter_dates}
+                    aligned_dates = {qd: align_to_mjsd_first(qd) for qd in inrange_quarters}
                 else:
-                    aligned_dates = {qd: qd for qd in quarter_dates}
+                    aligned_dates = {qd: qd for qd in inrange_quarters}
 
-                for qd in quarter_dates:
+                for qd, aligned_date in aligned_dates.items():
+                    # if aligned_date > today:
+                    #     continue
                     income_q = income_by_date.get(qd, {})
                     balance_q = balance_by_date.get(qd, {})
                     cash_q = cashflow_by_date.get(qd, {})
                     ratio_q = ratios_by_date.get(qd, {})
-                    aligned_date = aligned_dates[qd]
 
                     # shares outstanding
                     shares_out = balance_q.get('commonStockSharesOutstanding') or income_q.get('weightedAverageShsOutDil') or income_q.get('weightedAverageShsOut')
@@ -797,8 +825,8 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                             if price_row.empty:
                                 price_row = prices_t[prices_t['datadate'] <= aligned_date_str].head(1)
                         else:
-                            # 不对齐时，取对齐日期之前的最近价格
-                            price_row = prices_t[prices_t['datadate'] <= aligned_date.strftime('%Y-%m-%d')].head(1)
+                            # 不对齐时，取对齐日期之后的最近价格
+                            price_row = prices_t[prices_t['datadate'] >= aligned_date.strftime('%Y-%m-%d')].head(1)
                         
                         if not price_row.empty:
                             prccd = float(price_row.iloc[0].get('prccd', np.nan))
@@ -894,7 +922,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                         'tic': ticker,
                         'gsector': gsector,
                         'prccd': prccd if pd.notna(prccd) else np.nan,
-                        'ajexdi': ajexdi,
+                        # 'ajexdi': ajexdi,
                         'adj_close_q': adj_close if pd.notna(adj_close) else np.nan,
                         'adj_close': adj_close if pd.notna(adj_close) else np.nan,
                         'EPS': eps if eps is not None else np.nan,
@@ -919,93 +947,102 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 logger.error(f"Error fetching fundamentals for {ticker}: {e}")
                 continue
         
-        if not all_records:
-            logger.error("No fundamental data fetched for any ticker")
-            return pd.DataFrame()
+        # Step 4: Process and combine data
+        if all_records:
+            df = pd.DataFrame(all_records)
+            try:
+                df = df.sort_values(['tic', 'datadate'])
+                # forward return: next quarter vs current quarter
+                df['y_return'] = df.groupby('tic')['adj_close_q'].pct_change().shift(-1)
+                # keep only original in-range quarters
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+                mask_in_range = pd.to_datetime(df['datadate']).between(start_dt, end_dt, inclusive='both')
+                df = df[mask_in_range].reset_index(drop=True)
+                # drop rows without y_return
+                df = df[df['y_return'].notna()].reset_index(drop=True)
+            except Exception as e:
+                logger.warning(f"Failed to compute forward y_return: {e}")
 
-        df = pd.DataFrame(all_records)
-        try:
-            df = df.sort_values(['tic', 'datadate'])
-            # forward return: next quarter vs current quarter
-            df['y_return'] = df.groupby('tic')['adj_close_q'].pct_change().shift(-1)
-            # keep only original in-range quarters
-            mask_in_range = pd.to_datetime(df['datadate']).between(start_dt, end_dt, inclusive='both')
-            df = df[mask_in_range].reset_index(drop=True)
-            # drop rows without y_return
-            df = df[df['y_return'].notna()].reset_index(drop=True)
-        except Exception as e:
-            logger.warning(f"Failed to compute forward y_return: {e}")
-
+        # Step 5: Return combined data
+        logger.info(f"Returning {len(df)} total fundamental records")
+        
         return df
 
     def get_price_data(self, tickers: List[str],
                       start_date: str, end_date: str) -> pd.DataFrame:
-        """Get price data from FMP."""
-        all_data = []
-        
+        """Get price data from FMP with incremental updates."""
         api_key = self._get_api_key()
         if not api_key:
             logger.error("FMP API key not found")
             return pd.DataFrame()
-        
+
+        # Step 1: Check database for existing data
+        existing_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        logger.info(f"Found {len(existing_data)} existing price records in database")
+
+        # Step 2: Identify tickers that need to be fetched
+        tickers_to_fetch = {}
         for ticker in tickers:
-            # Create unique cache key for each ticker
-            cache_key = f"prices_{ticker}_{start_date}_{end_date}"
-            cache_path = self._get_cache_path(cache_key)
+            missing_ranges = self.data_store.get_missing_price_dates(ticker, start_date, end_date, exchange='NYSE')
+            if missing_ranges:
+                tickers_to_fetch[ticker] = missing_ranges
+                logger.info(f"Ticker {ticker}: Need to fetch price data")
+
+        # Step 3: Fetch missing data from API
+        all_data = []
+        if tickers_to_fetch:
+            logger.info(f"Fetching price data for {len(tickers_to_fetch)} tickers from FMP")
             
-            if self._is_cache_valid(cache_path):
-                logger.info(f"Loading price data for {ticker} from cache: {cache_path}")
-                cached_df = pd.read_csv(cache_path)
-                all_data.extend(cached_df.to_dict('records'))
-                continue
-            
-            try:
-                url = f"{self.base_url}/historical-price-full/{ticker}?from={start_date}&to={end_date}&apikey={api_key}"
-                response = requests.get(url)
-                response.raise_for_status()
-                
-                data = response.json()
-                
-                if 'historical' in data:
-                    ticker_data = []
-                    for item in data['historical']:
-                        record = {
-                            'gvkey': ticker,
-                            'datadate': item['date'],
-                            'tic': ticker,
-                            'prccd': item['close'],
-                            'prcod': item['open'],
-                            'prchd': item['high'],
-                            'prcld': item['low'],
-                            'cshtrd': item['volume'],
-                            'adj_close': item.get('adjClose', item['close'])
-                        }
-                        ticker_data.append(record)
+            for ticker, date_ranges in tickers_to_fetch.items():
+                for range_start, range_end in date_ranges:
+                    try:
+                        url = f"{self.base_url}/historical-price-full/{ticker}?from={range_start}&to={range_end}&apikey={api_key}"
+                        response = requests.get(url)
+                        response.raise_for_status()
+                        
+                        data = response.json()
+                        
+                        if 'historical' in data:
+                            ticker_data = []
+                            for item in data['historical']:
+                                record = {
+                                    'gvkey': ticker,
+                                    'datadate': item['date'],
+                                    'tic': ticker,
+                                    'prccd': item['close'],
+                                    'prcod': item['open'],
+                                    'prchd': item['high'],
+                                    'prcld': item['low'],
+                                    'cshtrd': item['volume'],
+                                    'adj_close': item.get('adjClose', item['close'])
+                                }
+                                ticker_data.append(record)
+                            
+                            if ticker_data:
+                                all_data.extend(ticker_data)
+                                logger.debug(f"Fetched {len(ticker_data)} records for {ticker} ({range_start} to {range_end})")
+                            else:
+                                logger.warning(f"No historical data for {ticker} ({range_start} to {range_end})")
+                        else:
+                            logger.warning(f"No historical data key in response for {ticker} ({range_start} to {range_end})")
                     
-                    if ticker_data:
-                        ticker_df = pd.DataFrame(ticker_data)
-                        ticker_df = self._standardize_price_data(ticker_df)
-                        
-                        # Cache this ticker's data
-                        ticker_df.to_csv(cache_path, index=False)
-                        logger.info(f"Cached price data for {ticker} to {cache_path}")
-                        
-                        all_data.extend(ticker_data)
-                    else:
-                        logger.warning(f"No historical data for {ticker}")
-                else:
-                    logger.warning(f"No historical data key in response for {ticker}")
-            
-            except Exception as e:
-                logger.warning(f"Failed to fetch price data for {ticker}: {e}")
-                continue
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch price data for {ticker} ({range_start} to {range_end}): {e}")
+                        continue
+
+        # Step 4: Save new data to database
+        if all_data:
+            df = pd.DataFrame(all_data)
+            df = self._standardize_price_data(df)
+            rows_saved = self.data_store.save_price_data(df)
+            logger.info(f"Saved {rows_saved} new price records to database")
+
+        # Step 5: Return combined data from database
+        final_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        logger.info(f"Returning {len(final_data)} total price records")
         
-        if not all_data:
-            logger.error("No price data fetched")
-            return pd.DataFrame()
-        
-        df = pd.DataFrame(all_data)
-        return df
+        return final_data
 
 
 class WRDSFetcher(BaseDataFetcher, DataSource):
@@ -1360,32 +1397,51 @@ def fetch_sp500_tickers(output_path: str = "./data/sp500_tickers.txt", preferred
 
 
 def fetch_fundamental_data(tickers: List[str], start_date: str, end_date: str,
-                          output_path: str = "./data/fundamentals.csv", align_quarter_dates: bool = False, preferred_source='FMP') -> pd.DataFrame:
-    """Fetch fundamental data for tickers."""
+                          align_quarter_dates: bool = False, preferred_source='FMP') -> pd.DataFrame:
+    """
+    Fetch fundamental data for tickers.
+    
+    All data is automatically stored in and retrieved from the database.
+    No CSV files are created.
+    
+    Args:
+        tickers: List of ticker symbols
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        align_quarter_dates: Whether to align quarter dates to Mar/Jun/Sep/Dec 1st
+        preferred_source: Preferred data source ('FMP', 'Yahoo', 'WRDS')
+        
+    Returns:
+        DataFrame with fundamental data from database
+    """
     manager = get_data_manager(preferred_source=preferred_source)
     df = manager.get_fundamental_data(tickers, start_date, end_date, align_quarter_dates)
-
-    # Save to file
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-
-    logger.info(f"Saved fundamental data to {output_path}")
+    
+    logger.info(f"Retrieved {len(df)} fundamental records from database")
     return df
 
 
 def fetch_price_data(tickers: List[str], start_date: str, end_date: str,
-                    output_path: str = "./data/prices.csv", preferred_source='FMP') -> pd.DataFrame:
-    """Fetch price data for tickers."""
+                    preferred_source='FMP') -> pd.DataFrame:
+    """
+    Fetch price data for tickers.
+    
+    All data is automatically stored in and retrieved from the database.
+    No CSV files are created.
+    
+    Args:
+        tickers: List of ticker symbols
+        start_date: Start date (YYYY-MM-DD)
+        end_date: End date (YYYY-MM-DD)
+        preferred_source: Preferred data source ('FMP', 'Yahoo', 'WRDS')
+        
+    Returns:
+        DataFrame with price data from database
+    """
     manager = get_data_manager(preferred_source=preferred_source)
     df = manager.get_price_data(tickers, start_date, end_date)
-
-    # Save to file
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-
-    logger.info(f"Saved price data to {output_path}")
+    
+    logger.info(f"Retrieved {len(df)} price records from database")
     return df
 
 
@@ -1407,7 +1463,19 @@ if __name__ == "__main__":
 
     # Fetch sample data
     fundamentals = fetch_fundamental_data(
-        tickers[:5], "2024-09-01", "2025-09-15", align_quarter_dates=True
+        tickers[:5], "2024-12-01", "2025-09-10", align_quarter_dates=True
+    )
+    print(f"Fetched {len(fundamentals)} fundamental records")
+
+    # Fetch sample data
+    fundamentals = fetch_fundamental_data(
+        tickers[:5], "2025-06-01", "2025-09-15", align_quarter_dates=True
+    )
+    print(f"Fetched {len(fundamentals)} fundamental records")
+
+    # Fetch sample data
+    fundamentals = fetch_fundamental_data(
+        tickers[:5], "2025-09-10", "2025-10-20", align_quarter_dates=True
     )
     print(f"Fetched {len(fundamentals)} fundamental records")
 
