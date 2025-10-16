@@ -3,3 +3,4 @@
 *.sh  text eol=lf
 *.ipynb -text
 *.csv text eol=lf
+data/finrl_trading.db filter=lfs diff=lfs merge=lfs -text

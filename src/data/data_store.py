@@ -11,7 +11,7 @@ Manages data persistence and caching:
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Set
 from pathlib import Path
 from datetime import datetime
 import json
@@ -21,6 +21,12 @@ import os
 
 import pandas as pd
 import numpy as np
+
+from src.data.trading_calendar import (
+    get_missing_trading_days,
+    consolidate_date_ranges,
+    get_trading_days_set,
+)
 
 import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -48,8 +54,8 @@ class DataStore:
                 config = get_config()
                 base_dir = config.data.base_dir
             except Exception as e:
-                logger.warning(f"Failed to load config, using default './data': {e}")
-                base_dir = './data'
+                logger.warning(f"Failed to load config, using default 'data': {e}")
+                base_dir = 'data'
         
         self.base_dir = Path(base_dir)
         self.processed_dir = self.base_dir / "processed"
@@ -87,31 +93,14 @@ class DataStore:
 
             # Create S&P 500 components table
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sp500_components (
+                CREATE TABLE IF NOT EXISTS sp500_components_details (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date TEXT NOT NULL,
                     tickers TEXT NOT NULL,
+                    sectors TEXT NOT NULL,
+                    dateFirstAdded TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(date)
-                )
-            ''')
-
-
-            # New schema: remove version; add data_source; no backward compatibility; rebuild
-            try:
-                cursor.execute('DROP TABLE IF EXISTS data_objects')
-            except Exception:
-                pass
-
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS data_objects (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    data_type TEXT NOT NULL,
-                    data_source TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    data_blob BLOB,
-                    metadata TEXT,
-                    UNIQUE(data_type, data_source)
+                    UNIQUE(date, tickers, sectors)
                 )
             ''')
 
@@ -133,89 +122,6 @@ class DataStore:
 
             conn.commit()
             logger.info(f"Initialized database at {self.db_path}")
-
-    def save_dataframe(self, df: pd.DataFrame, name: str,
-                      data_source: str = None, metadata: Dict = None) -> bool:
-        """
-        Save DataFrame to database (unique by data_type + data_source).
-
-        Args:
-            df: DataFrame to save
-            name: Name identifier for the data
-            data_source: Data source (e.g., 'FMP', 'Yahoo')
-            metadata: Additional metadata
-
-        Returns:
-            True if saved successfully
-        """
-        if not data_source:
-            raise ValueError("data_source is required when saving DataFrame")
-
-        # Serialize DataFrame to binary (pickle)
-        try:
-            data_blob = pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL)
-        except Exception as e:
-            logger.error(f"Failed to serialize DataFrame for {name}: {e}")
-            raise
-
-        # Insert/replace into data_objects
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO data_objects (data_type, data_source, data_blob, metadata)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(data_type, data_source) DO UPDATE SET
-                    data_blob=excluded.data_blob,
-                    metadata=excluded.metadata,
-                    created_at=CURRENT_TIMESTAMP
-            ''', (
-                name,
-                data_source,
-                data_blob,
-                json.dumps(metadata) if metadata else None
-            ))
-            conn.commit()
-
-        logger.info(f"Saved DataFrame '{name}' (source={data_source}) to database")
-        return True
-
-    def load_dataframe(self, name: str, data_source: str = None) -> Optional[pd.DataFrame]:
-        """
-        Load DataFrame from database.
-        If data_source is provided, return latest for (data_type, data_source);
-        otherwise return latest by data_type across all sources.
-
-        Args:
-            name: Name identifier for the data
-            data_source: Specific data source or None
-
-        Returns:
-            Loaded DataFrame or None if not found
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            if data_source:
-                cursor.execute('''
-                    SELECT data_blob FROM data_objects
-                    WHERE data_type = ? AND data_source = ?
-                    ORDER BY created_at DESC LIMIT 1
-                ''', (name, data_source))
-            else:
-                cursor.execute('''
-                    SELECT data_blob FROM data_objects
-                    WHERE data_type = ?
-                    ORDER BY created_at DESC LIMIT 1
-                ''', (name,))
-            row = cursor.fetchone()
-
-        if row and row[0] is not None:
-            try:
-                return pickle.loads(row[0])
-            except Exception as e:
-                logger.error(f"Failed to deserialize DataFrame '{name}': {e}")
-                return None
-
-        return None
 
 
     def save_price_data(self, df: pd.DataFrame) -> int:
@@ -304,10 +210,18 @@ class DataStore:
         Returns:
             DataFrame with price data
         """
-        if not tickers:
+        # Normalize tickers to a plain List[str] to avoid Series + list arithmetic
+        if isinstance(tickers, pd.Series):
+            tickers_list = tickers.astype(str).tolist()
+        elif isinstance(tickers, pd.DataFrame):
+            tickers_list = tickers['tickers'].astype(str).tolist() if 'tickers' in tickers.columns else []
+        else:
+            tickers_list = list(tickers) if tickers is not None else []
+
+        if not tickers_list:
             return pd.DataFrame()
-        
-        placeholders = ','.join(['?' for _ in tickers])
+
+        placeholders = ','.join(['?' for _ in tickers_list])
         query = f'''
             SELECT ticker, date, open, high, low, close, adj_close, volume
             FROM price_data
@@ -317,7 +231,7 @@ class DataStore:
         '''
         
         with sqlite3.connect(self.db_path) as conn:
-            df = pd.read_sql_query(query, conn, params=tickers + [start_date, end_date])
+            df = pd.read_sql_query(query, conn, params=tickers_list + [start_date, end_date])
         
         if not df.empty:
             # Rename to match expected format
@@ -351,7 +265,7 @@ class DataStore:
             - Only reports missing trading days, excludes weekends and holidays
             - If trading calendar library is not available, falls back to business days
         """
-        from src.data.trading_calendar import get_missing_trading_days, consolidate_date_ranges
+        
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -387,15 +301,111 @@ class DataStore:
         
         return missing_ranges
 
+    def get_missing_price_dates_bulk(self, tickers: List[str] | pd.DataFrame, start_date: str, end_date: str, exchange: str = 'NYSE') -> Dict[str, List[Tuple[str, str]]]:
+        """
+        Bulk version of missing trading date range detection.
 
-    def save_sp500_components(self, date: str, tickers: str) -> bool:
+        Args:
+            tickers: List of symbols or DataFrame with columns 'tickers' and optionally 'dateFirstAdded'
+            start_date: YYYY-MM-DD
+            end_date: YYYY-MM-DD
+            exchange: Trading calendar name
+
+        Returns:
+            Dict[ticker, List[(start, end)]]
+        """
+        results: Dict[str, List[Tuple[str, str]]] = {}
+        if tickers is None:
+            return results
+
+        # Normalize inputs
+        if isinstance(tickers, pd.DataFrame):
+            if 'tickers' not in tickers.columns:
+                return results
+            tickers_list: List[str] = tickers['tickers'].astype(str).tolist()
+            # map for per-ticker first-added date (may contain NaN/None)
+            try:
+                date_first_added_map: Dict[str, Optional[str]] = {
+                    r['tickers']: r.get('dateFirstAdded') for _, r in tickers[['tickers', 'dateFirstAdded']].to_dict('index').items()
+                }
+            except Exception:
+                # If dateFirstAdded missing, default to None
+                date_first_added_map = {t: None for t in tickers_list}
+        else:
+            tickers_list = list(tickers)
+            date_first_added_map = {t: None for t in tickers_list}
+
+        if not tickers_list:
+            return results
+
+        # Pre-compute trading days set ONCE for the whole [start_date, end_date]
+        trading_days_all: Set[str] = get_trading_days_set(start_date, end_date, exchange)
+
+        # Fetch existing dates for all tickers in one query to reduce round-trips
+        placeholders = ','.join(['?' for _ in tickers_list])
+        query = f'''
+            SELECT ticker, date
+            FROM price_data
+            WHERE ticker IN ({placeholders}) AND date >= ? AND date <= ?
+            ORDER BY ticker, date
+        '''
+
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=tickers_list + [start_date, end_date])
+
+        # Build per-ticker existing date sets
+        existing_dates_by_ticker: Dict[str, Set[str]] = {t: set() for t in tickers_list}
+        if not df.empty:
+            for t, grp in df.groupby('ticker'):
+                existing_dates_by_ticker[str(t)] = set(grp['date'].astype(str).tolist())
+
+        # For each ticker, adjust start by dateFirstAdded and compute missing ranges
+        for t in tickers_list:
+            dfa_raw = date_first_added_map.get(t)
+            try:
+                dfa = pd.to_datetime(dfa_raw, errors='coerce') if dfa_raw is not None else None
+            except Exception:
+                dfa = None
+
+            # Effective start = max(global start, dateFirstAdded) if available
+            eff_start_dt = max(pd.to_datetime(start_date), dfa) if dfa is not None else pd.to_datetime(start_date)
+            eff_end_dt = pd.to_datetime(end_date)
+
+            if eff_start_dt > eff_end_dt:
+                results[t] = []
+                continue
+
+            eff_start_str = eff_start_dt.strftime('%Y-%m-%d')
+            eff_end_str = eff_end_dt.strftime('%Y-%m-%d')
+
+            # Subset precomputed trading days for the effective window
+            trading_subset = [d for d in trading_days_all if eff_start_str <= d <= eff_end_str]
+            trading_subset_sorted = sorted(trading_subset)
+
+            if not trading_subset_sorted:
+                results[t] = []
+                continue
+
+            existing_set = existing_dates_by_ticker.get(t, set())
+            missing_days_sorted = [d for d in trading_subset_sorted if d not in existing_set]
+
+            if not missing_days_sorted:
+                results[t] = []
+            else:
+                results[t] = consolidate_date_ranges(missing_days_sorted)
+
+        return results
+
+
+    def save_sp500_components(self, date: str, tickers: str, sectors: str, dateFirstAdded: str) -> bool:
         """
         Save S&P 500 components to database.
         
         Args:
             date: Date for the components (YYYY-MM-DD)
             tickers: Comma-separated ticker string
-            
+            sectors: Comma-separated sector string
+            dateFirstAdded: Date the component was added to the S&P 500 (YYYY-MM-DD)
         Returns:
             True if successful
         """
@@ -403,9 +413,9 @@ class DataStore:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT OR REPLACE INTO sp500_components (date, tickers)
-                    VALUES (?, ?)
-                ''', (date, tickers))
+                    INSERT OR REPLACE INTO sp500_components_details (date, tickers, sectors, dateFirstAdded)
+                    VALUES (?, ?, ?, ?)
+                ''', (date, tickers, sectors, dateFirstAdded))
                 conn.commit()
             
             logger.info(f"Saved S&P 500 components for {date}")
@@ -422,24 +432,27 @@ class DataStore:
             date: Date for the components (latest if None)
             
         Returns:
-            Comma-separated ticker string or None
+            Comma-separated ticker string, Comma-separated sector string, Date the component was added to the S&P 500 (YYYY-MM-DD) or None
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
             if date:
                 cursor.execute('''
-                    SELECT tickers FROM sp500_components
+                    SELECT tickers, sectors, dateFirstAdded FROM sp500_components_details
                     WHERE date = ?
                 ''', (date,))
             else:
                 cursor.execute('''
-                    SELECT tickers FROM sp500_components
+                    SELECT tickers, sectors, dateFirstAdded FROM sp500_components_details
                     ORDER BY date DESC LIMIT 1
                 ''')
             
             result = cursor.fetchone()
-            return result[0] if result else None
+            if result:
+                return result[0], result[1], result[2]
+            else:
+                return None, None, None
 
     def get_storage_stats(self) -> Dict:
         """Get storage statistics."""
@@ -463,19 +476,11 @@ class DataStore:
             cursor.execute("SELECT COUNT(*) FROM price_data")
             price_count = cursor.fetchone()[0]
 
-
-            # New tables
-            try:
-                cursor.execute("SELECT COUNT(*) FROM data_objects")
-                objects_count = cursor.fetchone()[0]
-            except Exception:
-                objects_count = 0
-
         return {
             'total_files': file_count,
             'total_size_mb': total_size / (1024 * 1024),
             'price_records': price_count,
-            'data_objects': objects_count,
+            # 'data_objects': objects_count,
             'database_path': str(self.db_path)
         }
 
@@ -502,18 +507,17 @@ class DataStore:
                 return col
         return None
 
-    def _save_raw_payload(self, source: str, ticker: Optional[str], payload: str) -> Optional[str]:
+    def _save_raw_payload(self, source: str, ticker: Optional[str], payload: str, start_date: Optional[str], end_date: Optional[str], data: Any) -> Optional[str]:
         """
-        Save raw fundamentals payload into data_objects table.
+        Save raw fundamentals payload into raw_payloads table.
 
         Args:
             source: 'FMP' | 'Yahoo' | 'WRDS' etc.
             ticker: Ticker symbol or None for bulk
             payload: e.g., 'income', 'balance', 'cashflow', 'ratios', 'profile', 'yahoo_quarterly_financials'
-            start_date: requested start
-            end_date: requested end
+            start_date: requested start (inclusive, YYYY-MM-DD) or None
+            end_date: requested end (inclusive, YYYY-MM-DD) or None
             data: list/dict/DataFrame
-            extra_meta: additional metadata
 
         Returns:
             version string if saved, else None
@@ -556,6 +560,21 @@ class DataStore:
         obj_to_store = obj_to_store.dropna(subset=[date_column])
         if obj_to_store.empty:
             logger.warning(f"All rows invalid after date parsing for raw payload {payload} ({source})")
+            return None
+
+        # Filter by requested date range if provided
+        try:
+            if start_date:
+                start_dt = pd.to_datetime(start_date)
+                obj_to_store = obj_to_store[obj_to_store[date_column] >= start_dt]
+            if end_date:
+                end_dt = pd.to_datetime(end_date)
+                obj_to_store = obj_to_store[obj_to_store[date_column] <= end_dt]
+        except Exception:
+            pass
+
+        if obj_to_store.empty:
+            logger.warning(f"No rows within requested range for raw payload {payload} of {ticker} ({source})")
             return None
 
         obj_to_store[date_column] = obj_to_store[date_column].dt.strftime('%Y-%m-%d')
@@ -667,4 +686,4 @@ if __name__ == "__main__":
     store = get_data_store()
     stats = store.get_storage_stats()
     print(f"Database path: {stats['database_path']}")
-    print(f"Records - price: {stats['price_records']}, data_objects: {stats.get('data_objects', 0)}")
+    print(f"Records - price: {stats['price_records']}")

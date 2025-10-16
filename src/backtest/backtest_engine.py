@@ -32,7 +32,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 print(f"project_root: {project_root}")
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'src'))
-from src.data.data_fetcher import get_data_manager, fetch_price_data
+from src.data.data_fetcher import fetch_price_data
 
 
 
@@ -106,7 +106,7 @@ class BacktestEngine:
         self.config = config
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         # Initialize data source manager
-        self.data_manager = get_data_manager()
+        # self.data_manager = get_data_manager()
 
     def run_backtest(self, strategy_name: str, price_data: pd.DataFrame,
                      weight_signals: pd.DataFrame) -> BacktestResult:
@@ -412,7 +412,7 @@ class BacktestEngine:
         for ticker in self.config.benchmark_tickers:
             try:
                 # Fetch benchmark price data
-                bm_data = self.data_manager.get_price_data([ticker], start_date, end_date)
+                bm_data = fetch_price_data([ticker], start_date, end_date)
                 if bm_data.empty:
                     self.logger.warning(f"No data for benchmark {ticker}, skipping")
                     continue
@@ -569,9 +569,9 @@ if __name__ == "__main__":
     # 3) 配置回测区间（自动覆盖为权重日期的最小/最大范围）
     # 回测日期重新配置，向前或向后延申一个季度
     # start_date = (weight_signals.index.min() - pd.Timedelta(days=90)).strftime('%Y-%m-%d')
-    end_date = (weight_signals.index.max() + pd.Timedelta(days=90)).strftime('%Y-%m-%d')
+    # end_date = (weight_signals.index.max() + pd.Timedelta(days=90)).strftime('%Y-%m-%d')
     start_date = weight_signals.index.min().strftime('%Y-%m-%d')
-    # end_date = weight_signals.index.max().strftime('%Y-%m-%d')
+    end_date = weight_signals.index.max().strftime('%Y-%m-%d')
 
     config = BacktestConfig(
         start_date=start_date,
