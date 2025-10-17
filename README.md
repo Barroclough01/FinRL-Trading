@@ -97,7 +97,7 @@ cat examples/README.md
 jupyter notebook examples/FinRL_Full_Workflow.ipynb
 ```
 
-# For offline version, unzip data/finrl_trading.7z andrun the following command
+#### For offline version, unzip data/finrl_trading.7z andrun the following command
 
 ```
 jupyter notebook examples/FinRL_offline_Workflow.ipynb
