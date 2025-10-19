@@ -10,6 +10,7 @@ import logging
 from typing import List, Set
 from datetime import datetime, date
 import pandas as pd
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,18 @@ except ImportError:
         logger.warning("Install with: pip install pandas-market-calendars  OR  pip install exchange-calendars")
 
 
+@lru_cache(maxsize=32)
+def _get_calendar_cached(exchange: str):
+    return mcal.get_calendar(exchange)
+
+
+@lru_cache(maxsize=256)
+def _cached_trading_days(exchange: str, start_date: str, end_date: str) -> tuple:
+    cal = _get_calendar_cached(exchange)
+    schedule = cal.schedule(start_date=start_date, end_date=end_date)
+    return tuple(schedule.index.strftime('%Y-%m-%d').tolist())
+
+
 def get_trading_days(start_date: str, end_date: str, exchange: str = 'NYSE') -> pd.DatetimeIndex:
     """
     Get trading days between start_date and end_date.
@@ -46,9 +59,9 @@ def get_trading_days(start_date: str, end_date: str, exchange: str = 'NYSE') -> 
     Returns:
         DatetimeIndex of trading days
     """
-    _nyse_calendar = mcal.get_calendar(exchange)
-    schedule = _nyse_calendar.schedule(start_date=start_date, end_date=end_date)
-    return schedule.index
+    # Use cached trading days for repeated calls with same parameters
+    days = _cached_trading_days(exchange, start_date, end_date)
+    return pd.DatetimeIndex(pd.to_datetime(list(days)))
     
 
 def is_trading_day(check_date: str, exchange: str = 'NYSE') -> bool:
@@ -62,9 +75,8 @@ def is_trading_day(check_date: str, exchange: str = 'NYSE') -> bool:
     Returns:
         True if it's a trading day, False otherwise
     """
-    _nyse_calendar = mcal.get_calendar(exchange)
-    schedule = _nyse_calendar.schedule(start_date=check_date, end_date=check_date)
-    return not schedule.empty
+    # Reuse cached trading days via set to avoid repeated schedule queries
+    return check_date in get_trading_days_set(check_date, check_date, exchange)
     
     
 
@@ -82,8 +94,8 @@ def get_trading_days_set(start_date: str, end_date: str, exchange: str = 'NYSE')
     Returns:
         Set of trading days in YYYY-MM-DD format
     """
-    trading_days = get_trading_days(start_date, end_date, exchange)
-    return set(trading_days.strftime('%Y-%m-%d'))
+    # Directly use cached days to avoid conversions and repeated lookups
+    return set(_cached_trading_days(exchange, start_date, end_date))
 
 
 def filter_trading_days(dates: List[str], exchange: str = 'NYSE') -> List[str]:

@@ -44,7 +44,7 @@ class DataSource(Protocol):
         """Get fundamental data for tickers."""
         ...
 
-    def get_price_data(self, tickers: List[str],
+    def get_price_data(self, tickers: pd.DataFrame,
                       start_date: str, end_date: str) -> pd.DataFrame:
         """Get price data for tickers."""
         ...
@@ -151,16 +151,16 @@ class FMPFetcher(BaseDataFetcher, DataSource):
     def __init__(self, cache_dir: str = "./data/cache"):
         super().__init__(cache_dir)
         self.base_url = "https://financialmodelingprep.com/api/v3"
+        # Offline mode when API key is not provided; computed lazily but default here
+        try:
+            self.offline_mode = not bool(self._get_api_key())
+        except Exception:
+            self.offline_mode = True
 
     def is_available(self) -> bool:
-        """Check if FMP API is available."""
-        try:
-            from src.config.settings import get_config
-            config = get_config()
-            return bool(config.fmp.api_key)
-        except Exception as e:
-            logger.error(f"Failed to check FMP API availability: {e}")
-            return False
+        """Check if data source is usable (online or offline)."""
+        # FMPFetcher supports offline mode using local database even without API key
+        return True
 
     def _get_api_key(self) -> Optional[str]:
         """Get FMP API key from config."""
@@ -182,8 +182,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         - Else call API, then save raw payload and cache.
         """
         api_key = self._get_api_key()
-        if not api_key:
-            raise ValueError("FMP API key not found")
+        offline = not bool(api_key)
 
         # Map endpoint -> payload key for raw save/load
         payload_key = None
@@ -196,22 +195,30 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 'profile': 'profile'
             }[endpoint]
 
-            # 1) Local-first freshness check
+            # 1) Local-first: if offline or data is fresh, use local store
             if start_date and end_date:
                 try:
-                    # Freshness rule: if DB latest date >= threshold, use local; else fetch from FMP
-                    latest_str = self.data_store.get_raw_payload_latest_date(ticker, payload_key, source='FMP')
-                    if latest_str:
-                        latest_dt = pd.to_datetime(latest_str)
-                        today = pd.Timestamp.today().normalize()
-                        req_end_dt = pd.to_datetime(end_date)
-                        threshold_dt = min(today - pd.DateOffset(months=3), req_end_dt - pd.DateOffset(months=3))
-                        if latest_dt >= threshold_dt:
-                            stored = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
-                            if stored is not None:
-                                return stored
+                    stored = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
+                    if stored:
+                        return stored
+                    if not offline:
+                        latest_str = self.data_store.get_raw_payload_latest_date(ticker, payload_key, source='FMP')
+                        if latest_str:
+                            latest_dt = pd.to_datetime(latest_str)
+                            today = pd.Timestamp.today().normalize()
+                            req_end_dt = pd.to_datetime(end_date)
+                            threshold_dt = min(today - pd.DateOffset(months=3), req_end_dt - pd.DateOffset(months=3))
+                            if latest_dt >= threshold_dt:
+                                stored2 = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
+                                if stored2 is not None:
+                                    return stored2
                 except Exception:
                     pass
+
+        # Offline mode: skip any network requests
+        if offline:
+            logger.info(f"Offline mode: skip remote fetch for {endpoint} {ticker}; using local DB if available")
+            return []
 
         # Build URL (profile endpoint doesn't use period). Do not set any limit param.
         if endpoint == 'profile':
@@ -240,10 +247,19 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             date = datetime.now().strftime("%Y-%m-%d")
         
         # Check database first
-        cached_tickers = self.data_store.get_sp500_components(date)
+        cached_tickers, cached_sectors, cached_dateFirstAdded = self.data_store.get_sp500_components(date)
         if cached_tickers:
             logger.info(f"Loading S&P 500 components from database for {date}")
-            return pd.DataFrame({'tickers': [cached_tickers]}, index=[date])
+            return pd.DataFrame({'tickers': cached_tickers.split(","), 'sectors': cached_sectors.split(","), 'dateFirstAdded': cached_dateFirstAdded.split(",")})
+
+        # If offline, return latest available from DB and skip network
+        if not self._get_api_key():
+            latest, latest_sectors, latest_dateFirstAdded = self.data_store.get_sp500_components()
+            if latest:
+                logger.info("Offline mode: returning latest S&P 500 components from database")
+                return pd.DataFrame({'tickers': latest.split(","), 'sectors': latest_sectors.split(","), 'dateFirstAdded': latest_dateFirstAdded.split(",")})
+            logger.warning("Offline mode: no S&P 500 components available in database")
+            return pd.DataFrame({'tickers': [], 'sectors': [], 'dateFirstAdded': []}).set_index(pd.Index([], name='date'))
 
         try:
             api_key = self._get_api_key()
@@ -259,38 +275,45 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             # Extract tickers
             tickers = [item['symbol'] for item in data]
             tickers_str = ','.join(tickers)
+            sectors = [item['sector'] for item in data]
+            sectors_str = ','.join(sectors)
+            dateFirstAdded = [item['dateFirstAdded'] for item in data]
+            dateFirstAdded_str = ','.join(dateFirstAdded)
 
             # Create DataFrame
             df = pd.DataFrame({
-                'date': [date],
-                'tickers': [tickers_str]
+                'tickers': tickers,
+                'sectors': sectors,
+                'dateFirstAdded': dateFirstAdded
             })
 
             # Save to database
-            self.data_store.save_sp500_components(date, tickers_str)
+            self.data_store.save_sp500_components(date, tickers_str, sectors_str, dateFirstAdded_str)
             logger.info(f"Saved S&P 500 components to database for {date}")
 
-            return df.set_index('date')
+            return df
 
         except Exception as e:
             logger.error(f"Failed to fetch S&P 500 components from FMP: {e}")
-            return self.get_sp500_components.__wrapped__(self, date)  # Fallback
+            # Fallback to whatever in DB
+            latest, latest_sectors, latest_dateFirstAdded = self.data_store.get_sp500_components()
+            if latest:
+                return pd.DataFrame({'tickers': latest.split(","), 'sectors': latest_sectors.split(","), 'dateFirstAdded': latest_dateFirstAdded.split(",")})
+            return pd.DataFrame({'tickers': [], 'sectors': [], 'dateFirstAdded': []})
 
-    def get_fundamental_data(self, tickers: List[str], start_date: str, end_date: str, align_quarter_dates: bool = False) -> pd.DataFrame:
+    def get_fundamental_data(self, tickers: pd.DataFrame, start_date: str, end_date: str, align_quarter_dates: bool = False) -> pd.DataFrame:
         """Get fundamental data from FMP with extended fields and forward y_return and incremental updates.
         Adds one next quarter to compute the last forward return, then drops that extra row, and drops rows with missing y_return.
         If align_quarter_dates is True, align each quarter to Mar/Jun/Sep/Dec 1st and compute prices and y_return based on these aligned dates."""
         api_key = self._get_api_key()
-        if not api_key:
-            logger.error("FMP API key not found")
-            return pd.DataFrame()
+        self.offline_mode = not bool(api_key)
 
         # # Step 1: Check database for existing data
         # existing_data = self.data_store.get_fundamental_data(tickers, start_date, end_date)
         # logger.info(f"Found {len(existing_data)} existing fundamental records in database")
 
         # Step 2: Decide tickers to handle (local-first inside _fetch_fmp_data avoids extra API calls)
-        tickers_to_fetch = list(tickers)
+        tickers_to_fetch = list(tickers['tickers'])
 
         # Step 3: Fetch missing data from API
         all_records: List[Dict[str, Any]] = []
@@ -324,11 +347,11 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 # 9,10,11
                 return pd.Timestamp(year=year, month=12, day=1)
 
-        prices = self.get_price_data(tickers_to_fetch, extended_start_date, extended_end_date)
+        prices = self.get_price_data(tickers, extended_start_date, extended_end_date)
 
         for ticker in tickers_to_fetch if tickers_to_fetch else []:
             try:
-                # Local-first: try load/save raw payloads within helper
+                # Local-first: helper will use DB in offline mode
                 income_data = self._fetch_fmp_data(ticker, 'income-statement', 'quarter', start_date, end_date)
                 balance_data = self._fetch_fmp_data(ticker, 'balance-sheet-statement', 'quarter', start_date, end_date)
                 cashflow_data = self._fetch_fmp_data(ticker, 'cash-flow-statement', 'quarter', start_date, end_date)
@@ -341,9 +364,10 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 # Profile via helper
                 gsector = None
                 try:
-                    prof_json = self._fetch_fmp_data(ticker, 'profile', 'na', start_date, end_date)
-                    if isinstance(prof_json, list) and prof_json:
-                        gsector = prof_json[0].get('sector')
+                    gsector = tickers[tickers['tickers'] == ticker]['sectors'].values[0]
+                    # prof_json = self._fetch_fmp_data(ticker, 'profile', 'na', start_date, end_date)
+                    # if isinstance(prof_json, list) and prof_json:
+                    #     gsector = prof_json[0].get('sector')
                 except Exception as e:
                     logger.warning(f"Failed to fetch profile for {ticker}: {e}")
 
@@ -569,6 +593,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 continue
         
         # Step 4: Process and combine data
+        df = pd.DataFrame()
         if all_records:
             df = pd.DataFrame(all_records)
             try:
@@ -587,41 +612,69 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 logger.warning(f"Failed to compute forward y_return: {e}")
 
         # Step 5: Return combined data
-        logger.info(f"Returning {len(df)} total fundamental records")
+        mode = 'offline' if self.offline_mode else 'online'
+        logger.info(f"Returning {len(df)} total fundamental records ({mode} mode)")
         
         return df
 
-    def get_price_data(self, tickers: List[str],
+    def get_price_data(self, tickers: pd.DataFrame,
                       start_date: str, end_date: str) -> pd.DataFrame:
         """Get price data from FMP with incremental updates."""
         api_key = self._get_api_key()
-        if not api_key:
-            logger.error("FMP API key not found")
-            return pd.DataFrame()
 
         # Step 1: Check database for existing data
-        existing_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        existing_data = self.data_store.get_price_data(tickers['tickers'], start_date, end_date)
         logger.info(f"Found {len(existing_data)} existing price records in database")
 
-        # Step 2: Identify tickers that need to be fetched
-        
+        # Offline: return existing data only
+        if not api_key:
+            logger.info("Offline mode: returning existing price data from database and skipping remote fetch")
+            return existing_data
 
+        # Step 2: Identify tickers that need to be fetched
         tickers_to_fetch = {}
 
-        def check_missing_ranges(ticker):
-            missing_ranges = self.data_store.get_missing_price_dates(ticker, start_date, end_date, exchange='NYSE')
-            if missing_ranges:
-                logger.info(f"Ticker {ticker}: Need to fetch price data")
-                return (ticker, missing_ranges)
-            return None
+        # Bulk query for missing ranges to reduce overhead
+        try:
+            bulk_missing = self.data_store.get_missing_price_dates_bulk(tickers, start_date, end_date, exchange='NYSE')
+        except Exception as e:
+            logger.debug(f"bulk missing ranges failed, fallback to per-ticker: {e}")
+            bulk_missing = None
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = list(executor.map(check_missing_ranges, tickers))
+        if bulk_missing is not None:
+            for t, ranges in (bulk_missing or {}).items():
+                if ranges:
+                    tickers_to_fetch[t] = ranges
+        else:
+            # Prepare per-ticker dateFirstAdded lookup
+            tickers_list = tickers['tickers'].astype(str).tolist() if isinstance(tickers, pd.DataFrame) else list(tickers)
+            if isinstance(tickers, pd.DataFrame) and 'dateFirstAdded' in tickers.columns:
+                dfa_map = {row['tickers']: row['dateFirstAdded'] for _, row in tickers[['tickers', 'dateFirstAdded']].iterrows()}
+            else:
+                dfa_map = {t: None for t in tickers_list}
 
-        for res in results:
-            if res:
-                ticker, missing_ranges = res
-                tickers_to_fetch[ticker] = missing_ranges
+            def check_missing_ranges(ticker: str):
+                dfa_raw = dfa_map.get(ticker)
+                try:
+                    dfa = pd.to_datetime(dfa_raw, errors='coerce') if dfa_raw is not None else None
+                except Exception:
+                    dfa = None
+                eff_start_dt = max(pd.to_datetime(start_date), dfa) if dfa is not None else pd.to_datetime(start_date)
+                eff_start_str = eff_start_dt.strftime('%Y-%m-%d')
+
+                missing_ranges = self.data_store.get_missing_price_dates(ticker, eff_start_str, end_date, exchange='NYSE')
+                if missing_ranges:
+                    logger.info(f"Ticker {ticker}: Need to fetch price data")
+                    return (ticker, missing_ranges)
+                return None
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                results = list(executor.map(check_missing_ranges, tickers_list))
+
+            for res in results:
+                if res:
+                    ticker, missing_ranges = res
+                    tickers_to_fetch[ticker] = missing_ranges
 
         # Step 3: Fetch missing data from API
         all_data = []
@@ -678,7 +731,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             logger.info(f"Saved {rows_saved} new price records to database")
 
         # Step 5: Return combined data from database
-        final_data = self.data_store.get_price_data(tickers, start_date, end_date)
+        final_data = self.data_store.get_price_data(tickers['tickers'].astype(str).tolist() if isinstance(tickers, pd.DataFrame) else list(tickers), start_date, end_date)
         logger.info(f"Returning {len(final_data)} total price records")
         
         return final_data
@@ -735,23 +788,15 @@ class DataSourceManager:
         """Get S&P 500 components using best available source."""
         return self.current_source.get_sp500_components(date)
 
-    def get_fundamental_data(self, tickers: List[str],
+    def get_fundamental_data(self, tickers: pd.DataFrame,
                            start_date: str, end_date: str, align_quarter_dates: bool = False) -> pd.DataFrame:
         """Get fundamental data using best available source."""
         return self.current_source.get_fundamental_data(tickers, start_date, end_date, align_quarter_dates)
 
-    def get_price_data(self, tickers: List[str],
+    def get_price_data(self, tickers: pd.DataFrame,
                       start_date: str, end_date: str) -> pd.DataFrame:
         """Get price data using best available source."""
         return self.current_source.get_price_data(tickers, start_date, end_date)
-
-    def get_unique_tickers(self, components_df: pd.DataFrame) -> List[str]:
-        """Extract unique tickers from components data."""
-        all_tickers = []
-        for tickers_str in components_df['tickers']:
-            tickers = [t.split('-')[0] for t in tickers_str.split(',')]
-            all_tickers.extend(tickers)
-        return list(set(all_tickers))
 
     def get_source_info(self) -> Dict[str, Any]:
         """Get information about current data source."""
@@ -798,25 +843,23 @@ def get_data_manager(cache_dir: str = "./data/cache", preferred_source: Optional
 
 
 # Convenience functions for backward compatibility
-def fetch_sp500_tickers(output_path: str = "./data/sp500_tickers.txt", preferred_source='FMP') -> List[str]:
+def fetch_sp500_tickers(output_path: str = "./data/sp500_tickers.csv", preferred_source='FMP') -> List[str]:
     """Fetch S&P 500 tickers and save to file."""
     manager = get_data_manager(preferred_source=preferred_source)
     components = manager.get_sp500_components()
-    tickers = manager.get_unique_tickers(components)
+    # tickers = manager.get_unique_tickers(components)
 
     # Save to file
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w') as f:
-        for ticker in sorted(tickers):
-            f.write(f"{ticker}\n")
+    components.to_csv(output_path, index=False)
 
-    logger.info(f"Saved {len(tickers)} tickers to {output_path}")
-    return tickers
+    logger.info(f"Saved {len(components)} tickers to {output_path}")
+    return components
 
 
-def fetch_fundamental_data(tickers: List[str], start_date: str, end_date: str,
+def fetch_fundamental_data(tickers: List[str] | pd.DataFrame, start_date: str, end_date: str,
                           align_quarter_dates: bool = False, preferred_source='FMP') -> pd.DataFrame:
     """
     Fetch fundamental data for tickers.
@@ -825,7 +868,7 @@ def fetch_fundamental_data(tickers: List[str], start_date: str, end_date: str,
     No CSV files are created.
     
     Args:
-        tickers: List of ticker symbols
+        tickers: List of ticker symbols or DataFrame with tickers and sectors
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
         align_quarter_dates: Whether to align quarter dates to Mar/Jun/Sep/Dec 1st
@@ -835,13 +878,15 @@ def fetch_fundamental_data(tickers: List[str], start_date: str, end_date: str,
         DataFrame with fundamental data from database
     """
     manager = get_data_manager(preferred_source=preferred_source)
+    if isinstance(tickers, list):
+        tickers = pd.DataFrame({'tickers': tickers, 'sectors': [None] * len(tickers), 'dateFirstAdded': [None] * len(tickers)})
     df = manager.get_fundamental_data(tickers, start_date, end_date, align_quarter_dates)
     
     logger.info(f"Retrieved {len(df)} fundamental records from database")
     return df
 
 
-def fetch_price_data(tickers: List[str], start_date: str, end_date: str,
+def fetch_price_data(tickers: List[str] | pd.DataFrame, start_date: str, end_date: str,
                     preferred_source='FMP') -> pd.DataFrame:
     """
     Fetch price data for tickers.
@@ -850,7 +895,7 @@ def fetch_price_data(tickers: List[str], start_date: str, end_date: str,
     No CSV files are created.
     
     Args:
-        tickers: List of ticker symbols
+        tickers: List of ticker symbols or DataFrame with tickers and sectors
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
         preferred_source: Preferred data source ('FMP')
@@ -859,6 +904,8 @@ def fetch_price_data(tickers: List[str], start_date: str, end_date: str,
         DataFrame with price data from database
     """
     manager = get_data_manager(preferred_source=preferred_source)
+    if isinstance(tickers, list):
+        tickers = pd.DataFrame({'tickers': tickers, 'sectors': [None] * len(tickers), 'dateFirstAdded': [None] * len(tickers)})
     df = manager.get_price_data(tickers, start_date, end_date)
     
     logger.info(f"Retrieved {len(df)} price records from database")
@@ -874,8 +921,8 @@ if __name__ == "__main__":
     print(f"Data Source Info: {info}")
 
     # Test fetching data
-    tickers = fetch_sp500_tickers()
-    print(f"Fetched {len(tickers)} tickers")
+    components = fetch_sp500_tickers()
+    print(f"Fetched {len(components)} tickers")
 
     # # 按字母顺序对tickers排序
     # tickers = sorted(tickers)
@@ -883,9 +930,9 @@ if __name__ == "__main__":
     tickers = ["NVDA"]
 
     # Fetch sample data
-    end_date = datetime.now().strftime('%Y-%m-%d')
+    # end_date = datetime.now().strftime('%Y-%m-%d')
     fundamentals = fetch_fundamental_data(
-        tickers, "2019-12-01", end_date, align_quarter_dates=True
+        components, "2015-10-15", "2025-10-15", align_quarter_dates=True
     )
     print(f"Fetched {len(fundamentals)} fundamental records")
     fundamentals.to_csv("./data/fundamentals.csv", index=False)
