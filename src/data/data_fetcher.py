@@ -151,12 +151,11 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
     def __init__(self, cache_dir: str = "./data/cache"):
         super().__init__(cache_dir)
-        self.base_url = "https://financialmodelingprep.com/api/v3"
+        # self.base_url = "https://financialmodelingprep.com/api/v3"
+        self.base_url = "https://financialmodelingprep.com/stable/"
         # Offline mode when API key is not provided; computed lazily but default here
-        try:
-            self.offline_mode = not bool(self._get_api_key())
-        except Exception:
-            self.offline_mode = True
+        self.api_key = self._get_api_key()
+        self.offline_mode = not bool(self.api_key)
 
     def is_available(self) -> bool:
         """Check if data source is usable (online or offline)."""
@@ -182,8 +181,6 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         - If start/end provided and raw payload in DB is sufficiently fresh, return it.
         - Else call API, then save raw payload and cache.
         """
-        api_key = self._get_api_key()
-        offline = not bool(api_key)
 
         # Map endpoint -> payload key for raw save/load
         payload_key = None
@@ -202,7 +199,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     stored = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
                     if stored:
                         return stored
-                    if not offline:
+                    if not self.offline_mode:
                         latest_str = self.data_store.get_raw_payload_latest_date(ticker, payload_key, source='FMP')
                         if latest_str:
                             latest_dt = pd.to_datetime(latest_str)
@@ -217,15 +214,15 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     pass
 
         # Offline mode: skip any network requests
-        if offline:
+        if self.offline_mode:
             logger.info(f"Offline mode: skip remote fetch for {endpoint} {ticker}; using local DB if available")
             return []
 
         # Build URL (profile endpoint doesn't use period). Do not set any limit param.
         if endpoint == 'profile':
-            url = f"{self.base_url}/{endpoint}/{ticker}?apikey={api_key}"
+            url = f"{self.base_url}/{endpoint}/{ticker}?apikey={self.api_key}"
         else:
-            url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={api_key}"
+            url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={self.api_key}"
 
         try:
             response = requests.get(url)
@@ -254,7 +251,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             return pd.DataFrame({'tickers': cached_tickers.split(","), 'sectors': cached_sectors.split(","), 'dateFirstAdded': cached_dateFirstAdded.split(",")})
 
         # If offline, return latest available from DB and skip network
-        if not self._get_api_key():
+        if self.offline_mode:
             latest, latest_sectors, latest_dateFirstAdded = self.data_store.get_sp500_components()
             if latest:
                 logger.info("Offline mode: returning latest S&P 500 components from database")
@@ -263,11 +260,10 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             return pd.DataFrame({'tickers': [], 'sectors': [], 'dateFirstAdded': []}).set_index(pd.Index([], name='date'))
 
         try:
-            api_key = self._get_api_key()
-            if not api_key:
+            if not self.api_key:
                 raise ValueError("FMP API key not found")
 
-            url = f"{self.base_url}/sp500_constituent?apikey={api_key}"
+            url = f"{self.base_url}/sp500_constituent?apikey={self.api_key}"
             response = requests.get(url)
             response.raise_for_status()
 
@@ -306,8 +302,6 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         """Get fundamental data from FMP with extended fields and forward y_return and incremental updates.
         Adds one next quarter to compute the last forward return, then drops that extra row, and drops rows with missing y_return.
         If align_quarter_dates is True, align each quarter to Mar/Jun/Sep/Dec 1st and compute prices and y_return based on these aligned dates."""
-        api_key = self._get_api_key()
-        self.offline_mode = not bool(api_key)
 
         # # Step 1: Check database for existing data
         # existing_data = self.data_store.get_fundamental_data(tickers, start_date, end_date)
@@ -636,10 +630,39 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         
         return df
 
+    def get_active_trading_list(self) -> pd.DataFrame:
+        """Get active trading list from FMP."""
+        if not self.api_key:
+            raise ValueError("FMP API key not found")
+        url = f"{self.base_url}/actively-trading-list?apikey={self.api_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return data
+
+    def get_realtime_single_price_data(self, ticker: str) -> pd.DataFrame:
+        """Get realtime price data from FMP."""
+        if not self.api_key:
+            raise ValueError("FMP API key not found")
+        url = f"{self.base_url}/quote?symbol={ticker}&apikey={self.api_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return data
+
+    def get_realtime_batch_price_data(self, tickers: List[str]) -> pd.DataFrame:
+        """Get realtime price data from FMP."""
+        if not self.api_key:
+            raise ValueError("FMP API key not found")
+        url = f"{self.base_url}/batch-quote?symbols={','.join(tickers)}&apikey={self.api_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return data
+
     def get_price_data(self, tickers: pd.DataFrame,
                       start_date: str, end_date: str) -> pd.DataFrame:
         """Get price data from FMP with incremental updates."""
-        api_key = self._get_api_key()
 
         # If end_date is today in exchange timezone and current time is before market close,
         # move end_date back by one day to avoid fetching incomplete day
@@ -661,7 +684,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         logger.info(f"Found {len(existing_data)} existing price records in database")
 
         # Offline: return existing data only
-        if not api_key:
+        if self.offline_mode:
             logger.info("Offline mode: returning existing price data from database and skipping remote fetch")
             return existing_data
 
