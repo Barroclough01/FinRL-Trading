@@ -64,12 +64,14 @@ def get_portfolio_history(manager: AlpacaManager, start_date: datetime, end_date
 def get_benchmark_data(start_date: str, end_date: str) -> pd.DataFrame:
     """Get historical price data for SPY and QQQ."""
     #print(f"[DEBUG] Benchmark data from {start_date} to {end_date}")
+    print(f"***************start_date is {start_date}******************")
+    print(f"***************end_date is {end_date}******************")
     df = fetch_price_data(['SPY', 'QQQ'], start_date, end_date)
     df['date'] = pd.to_datetime(df['datadate'])
     df = df.pivot(index='date', columns='tic', values='adj_close')
     # 保留原有列名并明确列顺序，避免因列顺序变化导致 SPY/QQQ 对调
     df = df[[c for c in ['SPY', 'QQQ'] if c in df.columns]]
-    #print(df.tail(10))   
+    print(df.tail(10))   
 
     return df
 
