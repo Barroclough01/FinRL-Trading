@@ -10,8 +10,6 @@
 
 ## 🚀 Key Features
 
-- **📊 Multi-Source Data Pipeline**: Automated data acquisition from Yahoo Finance, FMP, and WRDS
-- **🔄 Smart Data Source Selection**: Automatically selects best available data source (FMP > WRDS > Yahoo)
 - **🤖 Strategy Framework**: Multiple quantitative strategies including ML-based stock selection
 - **📈 Risk Management**: Comprehensive risk controls and position limits
 - **💰 Live Trading**: Alpaca integration with paper and live trading support
