@@ -2,6 +2,9 @@
 <img align="center" width="30%" alt="image" src="https://github.com/AI4Finance-Foundation/FinGPT/assets/31713746/e0371951-1ce1-488e-aa25-0992dafcc139">
 </div>
 
+# FinRL Trading Platform v2.0
+![dark_logo_white_background](https://github.com/user-attachments/assets/80fe89bb-fb09-4267-b29a-76030512f8cf)
+
 
 [![Downloads](https://static.pepy.tech/badge/finrl-trading)](https://pepy.tech/project/finrl-trading)
 [![Downloads](https://static.pepy.tech/badge/finrl-trading/week)](https://pepy.tech/project/finrl-trading)
@@ -14,7 +17,6 @@
 ![](https://img.shields.io/github/issues-pr-raw/AI4Finance-Foundation/FinRL-Trading?label=Open+PRs)
 ![](https://img.shields.io/github/issues-pr-closed-raw/AI4Finance-Foundation/FinRL-Trading?label=Closed+PRs)
 
-# FinRL Trading Platform v2.0
 
 ![Visitors](https://api.visitorbadge.io/api/VisitorHit?user=AI4Finance-Foundation&repo=FinRL-Trading&countColor=%23B17A)
 
