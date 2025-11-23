@@ -24,7 +24,7 @@ def read_requirements():
 
 setup(
     name="finrl-trading",
-    version="2.0.0",
+    version="2.0.1",
     author="FinRL LLC",
     author_email="contact@finrl.ai",
     description="A modern quantitative trading platform with ML strategies and live trading capabilities",
