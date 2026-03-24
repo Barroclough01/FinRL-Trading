@@ -32,7 +32,7 @@
 
 ## 🏗️ Project Architecture
 <p align="center">
-  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/FinRL_X_Framework.png" width="500">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/FinRL_X_Framework.png" width="1000">
 </p>
 
 ```
