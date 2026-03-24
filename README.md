@@ -325,11 +325,11 @@ gym.Env subclassing                  →  BaseStrategy.generate_weights()
 | Feature | FinRL-X | [Qlib](https://github.com/microsoft/qlib) | [TradingAgents](https://github.com/TauricResearch/TradingAgents) | [Zipline](https://github.com/quantopian/zipline)/[Backtrader](https://github.com/mementum/backtrader) | [QuantConnect Lean](https://github.com/QuantConnect/Lean) |
 |:--------|:-------:|:----:|:-------------:|:------------------:|:-----------------:|
 | Primary Orientation | End-to-End System | ML Research | Agent-Based Trading | Backtesting | End-to-End Platform |
-| Broker Integration | Yes | No | No | No | Yes |
-| Deployment-Consistent Interface | Yes | No | No | No | Partial |
-| Reinforcement Learning Support | Yes | Limited | Yes | No | Partial |
-| Modular Strategy Pipeline | Yes | No | No | No | Partial |
-| Portfolio-Level Risk Overlay | Yes | No | No | No | Partial |
+| Broker Integration | Yes | - | - | - | Yes |
+| Deployment-Consistent Interface | Yes | - | - | - | Partial |
+| Reinforcement Learning Support | Yes | Limited | Yes | - | Partial |
+| Modular Strategy Pipeline | Yes | - | - | - | Partial |
+| Portfolio-Level Risk Overlay | Yes | - | - | - | Partial |
 | Open Source License | Apache 2.0 | MIT | Apache 2.0 | Apache 2.0 | Apache 2.0 |
 
 ---
