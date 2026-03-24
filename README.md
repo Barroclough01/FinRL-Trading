@@ -5,8 +5,6 @@
   <img src="https://github.com/user-attachments/assets/80fe89bb-fb09-4267-b29a-76030512f8cf" width="500">
 </p>
 
-[![Paper](https://img.shields.io/badge/📄_Paper-arXiv_2603.21330-b31b1b?style=for-the-badge)](https://arxiv.org/abs/2603.21330)
-
 [![Downloads](https://static.pepy.tech/badge/finrl-trading)](https://pepy.tech/project/finrl-trading)
 [![Downloads](https://static.pepy.tech/badge/finrl-trading/week)](https://pepy.tech/project/finrl-trading)
 [![Join Discord](https://img.shields.io/badge/Discord-Join-blue)](https://discord.gg/trsr8SXpW5)
@@ -22,6 +20,24 @@
 ![Visitors](https://api.visitorbadge.io/api/VisitorHit?user=AI4Finance-Foundation&repo=FinRL-Trading&countColor=%23B17A)
 [![](https://dcbadge.limes.pink/api/server/trsr8SXpW5?cb=1)](https://discord.gg/trsr8SXpW5)
 
+[![Paper](https://img.shields.io/badge/📄_Paper-arXiv_2603.21330-b31b1b?style=for-the-badge)](https://arxiv.org/abs/2603.21330)
+
+---
+
+---
+
+## 🌟 From FinRL to FinRL-X: The Full Evolution
+
+FinRL-X is the **Stage 3.0 production release** of the AI4Finance development roadmap — built for institutions and practitioners who need reliability, modularity, and AI-native capabilities beyond what the original FinRL framework provides.
+
+| Stage | Maturity | Target Users | Project | Core Capability |
+|:---:|:---:|---|---|---|
+| **0.0** | Entry | Practitioners | [FinRL-Meta](https://github.com/AI4Finance-Foundation/FinRL-Meta) | Gym-style market environments & benchmarks |
+| **1.0** | Proof-of-Concept | Developers | [FinRL](https://github.com/AI4Finance-Foundation/FinRL) | Automatic train → test → trade pipeline |
+| **2.0** | Professional | Researchers | [ElegantRL](https://github.com/AI4Finance-Foundation/ElegantRL) | State-of-the-art DRL algorithms |
+| **3.0** 🚀 | **Production** | **Institutions & Quants** | **FinRL-X ← you are here** | **AI-native, modular, live-trading infrastructure** |
+
+> **FinRL** (2020) proved that deep reinforcement learning could automate trading. **FinRL-X** (2025) makes it production-ready — with cleaner architecture, smarter data pipelines, professional backtesting, and live brokerage integration, all redesigned for the LLM and agentic AI era.
 
 ---
 
