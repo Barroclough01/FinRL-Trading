@@ -322,14 +322,15 @@ gym.Env subclassing                  →  BaseStrategy.generate_weights()
 
 ## Comparison with Existing Platforms
 
-| Feature | FinRL-X | Qlib | TradingAgents | Zipline | QuantConnect |
-|:--------|:-------:|:----:|:-------------:|:-------:|:------------:|
-| Broker integration | Yes | — | — | — | Yes |
-| Deployment-consistent | Yes | — | — | — | Partial |
-| Modular pipeline | Yes | — | — | — | Partial |
-| RL support | Yes | Limited | Yes | — | Partial |
-| Risk overlays | Yes | — | — | — | Partial |
-| Weight-centric interface | Yes | — | — | — | — |
+| Feature | FinRL-X | Qlib | TradingAgents | Zipline/Backtrader | QuantConnect Lean |
+|:--------|:-------:|:----:|:-------------:|:------------------:|:-----------------:|
+| Primary Orientation | End-to-End System | ML Research | Agent-Based Trading | Backtesting | End-to-End Platform |
+| Broker Integration | Yes | No | No | No | Yes |
+| Deployment-Consistent Interface | Yes | No | No | No | Partial |
+| Reinforcement Learning Support | Yes | Limited | Yes | No | Partial |
+| Modular Strategy Pipeline | Yes | No | No | No | Partial |
+| Portfolio-Level Risk Overlay | Yes | No | No | No | Partial |
+| Open Source License | Apache 2.0 | MIT | Apache 2.0 | Apache 2.0 | Apache 2.0 |
 
 ---
 
