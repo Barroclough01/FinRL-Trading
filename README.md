@@ -322,7 +322,7 @@ gym.Env subclassing                  →  BaseStrategy.generate_weights()
 
 ## Comparison with Existing Platforms
 
-| Feature | FinRL-X | Qlib | TradingAgents | Zipline/Backtrader | QuantConnect Lean |
+| Feature | FinRL-X | [Qlib](https://github.com/microsoft/qlib) | [TradingAgents](https://github.com/TauricResearch/TradingAgents) | [Zipline](https://github.com/quantopian/zipline)/[Backtrader](https://github.com/mementum/backtrader) | [QuantConnect Lean](https://github.com/QuantConnect/Lean) |
 |:--------|:-------:|:----:|:-------------:|:------------------:|:-----------------:|
 | Primary Orientation | End-to-End System | ML Research | Agent-Based Trading | Backtesting | End-to-End Platform |
 | Broker Integration | Yes | No | No | No | Yes |
