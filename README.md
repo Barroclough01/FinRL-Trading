@@ -115,93 +115,123 @@ finrl-trading/
 ├── requirements.txt
 └── setup.py
 ```
-## 🛠️ Installation & Setup
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - **Python 3.11+**
-- **Alpaca Account** (for live trading)
-- **Data Source APIs**:
-  - FMP API Key
+- **Alpaca Account** — for live / paper trading ([sign up free](https://alpaca.markets/))
+- **FMP API Key** — optional; Yahoo Finance works as a free default
 
-### Quick Start
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/FinRL-Trading.git
-   cd FinRL-Trading
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure environment variables**
-   ```bash
-   # Copy configuration template
-   cp .env.example .env
-   
-   # Edit .env file with your API keys
-   # Windows: notepad .env
-   # Linux/Mac: nano .env
-   ```
-
-4. **Run example tutorial**
-   ```bash
-   # Launch Jupyter Notebook (recommended starting point)
-   jupyter notebook examples/FinRL_Full_Workflow.ipynb
-   ```
-
-### Complete Example Tutorial
-
-The project includes a comprehensive interactive tutorial covering the entire workflow from data acquisition to live trading:
+### Install via PyPI
 
 ```bash
-# View examples documentation
-cat examples/README.md
+pip install finrl-trading
+```
 
-# Run complete workflow tutorial (recommended)
+### Install from Source
+
+```bash
+# 1. Clone
+git clone https://github.com/AI4Finance-Foundation/FinRL-Trading.git
+cd FinRL-Trading
+
+# 2. Install
+pip install -r requirements.txt
+
+# 3. Configure API keys
+cp .env.example .env
+nano .env    # Windows: notepad .env
+
+# 4. Launch the full workflow tutorial
 jupyter notebook examples/FinRL_Full_Workflow.ipynb
 ```
 
-**Tutorial Contents:**
-- ✅ S&P 500 components data acquisition
-- ✅ Fundamental and historical price data fetching
-- ✅ Machine learning stock selection strategy implementation
-- ✅ Professional backtesting (with VOO/QQQ benchmark comparison)
-- ✅ Alpaca Paper Trading execution
+### Migration Guide: Coming from FinRL?
 
+If you've been using FinRL's `train.py → test.py → trade.py` pipeline:
 
-## 📖 Usage Examples
+```
+FinRL                               →   FinRL-X
+──────────────────────────────────────────────────────────────────
+finrl/meta/data_processor.py        →   src/data/data_fetcher.py
+finrl/train.py                      →   strategy.generate_weights() + BacktestEngine
+finrl/trade.py                      →   TradeExecutor.execute_portfolio_rebalance()
+config.py + config_tickers.py       →   src/config/settings.py  (Pydantic + .env)
+gym.Env subclassing                 →   BaseStrategy.generate_weights()  (no gym needed)
+Manual DRL algorithm config         →   StrategyConfig  (declarative, type-checked)
+```
+
+---
+
+## 🔑 Configuration
+
+```bash
+# ── Application ─────────────────────────────────────────────────
+ENVIRONMENT=development          # development | staging | production
+APP_NAME="FinRL-X Trading"
+
+# ── Alpaca API (required for live/paper trading) ─────────────────
+APCA_API_KEY=your_alpaca_api_key
+APCA_API_SECRET=your_alpaca_api_secret
+APCA_BASE_URL=https://paper-api.alpaca.markets   # Use live URL for real money
+
+# ── Data Sources (priority: FMP > WRDS > Yahoo Finance) ──────────
+FMP_API_KEY=your_fmp_api_key                     # Optional; Yahoo is the free default
+
+# ── Risk Controls ─────────────────────────────────────────────────
+TRADING_MAX_ORDER_VALUE=100000          # Max single order ($)
+TRADING_MAX_PORTFOLIO_TURNOVER=0.5      # Max 50% portfolio turnover per rebalance
+STRATEGY_MAX_WEIGHT_PER_STOCK=0.1       # Max 10% per position
+
+# ── Caching ───────────────────────────────────────────────────────
+DATA_CACHE_TTL_HOURS=24
+DATA_MAX_CACHE_SIZE_MB=1000
+```
+
+---
+
+## 📓 Tutorial: Full Workflow
+
+```bash
+jupyter notebook examples/FinRL_Full_Workflow.ipynb
+```
+
+| Step | Content |
+|:---:|---|
+| **1** | Build S&P 500 universe; download multi-source fundamental + price data |
+| **2** | Engineer features for ML model training |
+| **3** | Train and evaluate a Random Forest stock selection strategy |
+| **4** | Run professional backtests vs. VOO / QQQ benchmarks |
+| **5** | Execute via Alpaca paper trading; analyze live P&L |
+
+---
+
+## 📚 Usage Examples
 
 ### Data Acquisition
 
 ```python
 from src.data.data_fetcher import get_data_manager
 
-# Initialize data manager (automatically selects best available source)
+# Intelligently selects best available data source
 manager = get_data_manager()
 
-# Check current data source
 info = manager.get_source_info()
-print(f"Current data source: {info['current_source']}")
-print(f"Available sources: {info['available_sources']}")
+print(f"Active source: {info['current_source']}")
+print(f"Available:     {info['available_sources']}")
 
-# Get S&P 500 components
-components = manager.get_sp500_components()
-
-# Fetch fundamental data
 tickers = ['AAPL', 'MSFT', 'GOOGL']
-fundamentals = manager.get_fundamental_data(
-    tickers, '2020-01-01', '2023-12-31'
-)
 
-# Fetch historical price data
-prices = manager.get_price_data(
-    tickers, '2020-01-01', '2023-12-31'
-)
+fundamentals = manager.get_fundamental_data(tickers, '2020-01-01', '2023-12-31')
+prices        = manager.get_price_data(tickers,        '2020-01-01', '2023-12-31')
+sp500         = manager.get_sp500_components()
 ```
+
+> **vs. FinRL**: No more manually choosing between `YahooDownloader`, `AlpacaProcessor`, or `WRDSProcessor`. FinRL-X auto-detects available credentials and selects the optimal source automatically.
 
 ### Strategy Development
 
@@ -209,60 +239,65 @@ prices = manager.get_price_data(
 from src.strategies.ml_strategy import MLStockSelectorStrategy
 from src.strategies.base_strategy import StrategyConfig
 
-# Create ML-based stock selection strategy
 config = StrategyConfig(
     name="ML Stock Selector",
     parameters={
         'model_type': 'random_forest',
         'top_n': 30,
-        'sector_neutral': True
+        'sector_neutral': True   # Enforces sector diversification
     },
     risk_limits={'max_weight': 0.1}
 )
 
 strategy = MLStockSelectorStrategy(config)
-
-# Generate portfolio weights
-data = {
-    'fundamentals': fundamentals,
-    'prices': prices
-}
-result = strategy.generate_weights(data)
+result = strategy.generate_weights({'fundamentals': fundamentals, 'prices': prices})
 print(result.weights.head())
 ```
 
-### Strategy Backtesting
+**Add a custom strategy in minutes:**
+
+```python
+from src.strategies.base_strategy import BaseStrategy, StrategyConfig, StrategyResult
+
+class MyAlphaStrategy(BaseStrategy):
+    """Drop-in for any built-in strategy — no gym.Env required."""
+    def generate_weights(self, data, **kwargs) -> StrategyResult:
+        # Your alpha logic here
+        pass
+```
+
+> **vs. FinRL**: No need to define `state_space`, `action_space`, or reward functions. FinRL-X's `BaseStrategy` produces portfolio weights directly, cleanly separating alpha generation from execution.
+
+### Backtesting
 
 ```python
 from src.backtest.backtest_engine import BacktestEngine, BacktestConfig
 
-# Configure backtest parameters
-backtest_config = BacktestConfig(
+config = BacktestConfig(
     start_date='2020-01-01',
     end_date='2023-12-31',
-    initial_capital=1000000,
-    rebalance_freq='Q',  # Quarterly rebalancing
-    transaction_cost=0.001,  # 0.1% transaction cost
-    benchmark_tickers=['VOO', 'QQQ']  # Benchmark comparison
+    initial_capital=1_000_000,
+    rebalance_freq='Q',           # Q=Quarterly, M=Monthly, W=Weekly
+    transaction_cost=0.001,       # 10 bps round-trip
+    benchmark_tickers=['VOO', 'QQQ', 'SPY']
 )
 
-# Run backtest
-engine = BacktestEngine(backtest_config)
+engine = BacktestEngine(config)
 result = engine.run_backtest(
     strategy_name="ML Stock Selector",
     weight_signals=ml_weights,
     price_data=prices
 )
 
-# View backtest results
-print(f"Total Return: {result.metrics['total_return']:.2%}")
+print(f"Total Return:      {result.metrics['total_return']:.2%}")
 print(f"Annualized Return: {result.annualized_return:.2%}")
-print(f"Sharpe Ratio: {result.metrics['sharpe_ratio']:.2f}")
-print(f"Max Drawdown: {result.metrics['max_drawdown']:.2%}")
+print(f"Sharpe Ratio:      {result.metrics['sharpe_ratio']:.2f}")
+print(f"Max Drawdown:      {result.metrics['max_drawdown']:.2%}")
 
-# Generate visualization report
-engine.plot_results(result)
+engine.plot_results(result)   # Full performance dashboard
 ```
+
+> **vs. FinRL**: FinRL uses hand-rolled evaluation loops. FinRL-X leverages the `bt` library, providing multi-benchmark comparison, rolling statistics, transaction cost simulation, and automated dashboards out of the box.
 
 ### Live Trading
 
@@ -270,106 +305,70 @@ engine.plot_results(result)
 from src.trading.alpaca_manager import create_alpaca_account_from_env, AlpacaManager
 from src.trading.trade_executor import TradeExecutor, ExecutionConfig
 
-# Connect to Alpaca
-account = create_alpaca_account_from_env()
-alpaca_manager = AlpacaManager([account])
-
-# Configure execution settings
-exec_config = ExecutionConfig(
-    max_order_value=100000,
-    risk_checks_enabled=True
+account  = create_alpaca_account_from_env()
+alpaca   = AlpacaManager([account])     # Multi-account supported
+executor = TradeExecutor(
+    alpaca,
+    ExecutionConfig(max_order_value=100_000, risk_checks_enabled=True)
 )
 
-executor = TradeExecutor(alpaca_manager, exec_config)
-
-# Execute portfolio rebalance
 target_weights = {'AAPL': 0.3, 'MSFT': 0.3, 'GOOGL': 0.4}
 result = executor.execute_portfolio_rebalance(target_weights)
 
-print(f"Orders placed: {len(result.orders_placed)}")
-print(f"Execution success: {result.success}")
+print(f"Orders placed:  {len(result.orders_placed)}")
+print(f"Status:         {'✅ Success' if result.success else '❌ Failed'}")
 ```
 
-## 🎯 Core Components
+---
 
-### Data Layer (`src/data/`)
-- **Multi-Source Data Manager** (`data_fetcher.py`): Intelligent data source selection and management
-  - Yahoo Finance: Free financial data (default)
-  - FMP (Financial Modeling Prep): High-quality paid data (requires API Key)
-  - WRDS: Academic database (requires credentials)
-- **Data Processor** (`data_processor.py`): Feature engineering, data cleaning, and quality checks
-- **Data Storage** (`data_store.py`): SQLite-based data persistence with caching and version control
+## 🧩 Core Components
 
-### Strategy Framework (`src/strategies/`)
-- **Base Strategy** (`base_strategy.py`): Abstract framework for custom strategies
-- **ML Strategy** (`ml_strategy.py`): Random Forest-based stock selection
+### 🗄️ Data Layer — `src/data/`
 
-**Implemented Strategies:**
-- Equal Weight Strategy
-- Market Cap Weighted Strategy
-- ML-based Stock Selection
-- Sector Neutral ML Strategy
+| Module | Role |
+|---|---|
+| `data_fetcher.py` | **Intelligent multi-source manager**: auto-selects Yahoo Finance → FMP → WRDS |
+| `data_processor.py` | Feature engineering, technical indicators, factor construction, quality checks |
+| `data_store.py` | SQLite persistence with TTL caching, deduplication, version tracking |
 
-### Backtesting System (`src/backtest/`)
-- **Professional Backtesting Engine** (`backtest_engine.py`): Powered by `bt` library
-  - Comprehensive performance and risk analysis
-  - Multiple benchmark comparison (SPY, VOO, QQQ, etc.)
-  - Transaction cost simulation
-  - Visualization report generation
+**Data source comparison** (vs. FinRL's 14 manually configured sources):
 
-### Trading System (`src/trading/`)
-- **Alpaca Integration** (`alpaca_manager.py`): Alpaca API client with multi-account support
-- **Trade Executor** (`trade_executor.py`): Order management and risk controls
-- **Performance Analyzer** (`performance_analyzer.py`): Real-time position tracking and P&L calculation
+| Source | Asset Class | Access | Notes |
+|---|---|---|---|
+| Yahoo Finance | US Stocks, ETFs | Free | Default fallback; no API key needed |
+| Financial Modeling Prep | US Securities | API Key | Premium fundamental + price data |
+| WRDS / TAQ | US Equities | Academic | Intraday tick-level data |
 
-### Configuration System (`src/config/`)
-- **Pydantic Settings** (`settings.py`): Type-safe configuration with environment variables
-- **Multi-environment Support**: Development, testing, production configurations
-- **Centralized Management**: All settings in one place
+### 🤖 Strategy Framework — `src/strategies/`
 
+| Strategy | Type | Description |
+|---|---|---|
+| Equal Weight | Baseline | Uniform portfolio allocation |
+| Market Cap Weighted | Baseline | Cap-weighted universe weighting |
+| ML Stock Selection | ML | Random Forest factor model |
+| Sector Neutral ML | ML | Sector-constrained selection |
+| DRL Timing *(planned)* | DRL | PPO / SAC market timing agent |
+| LLM Signal *(planned)* | LLM | FinGPT-powered sentiment alpha |
 
-## 🔧 Configuration
+### 📊 Backtesting Engine — `src/backtest/`
 
-The platform uses **Pydantic-based settings** with environment variable support:
+Powered by [`bt`](https://github.com/pmorissette/bt):
 
-### Environment Variables
+- Multi-period, multi-benchmark comparison (any ticker)
+- Configurable rebalance frequency: Q / M / W / custom
+- Transaction cost and slippage simulation
+- Rolling Sharpe, drawdown timelines, sector attribution
+- HTML / PDF performance report generation
 
-Create a `.env` file and configure the following variables:
+### 💰 Trading System — `src/trading/`
 
-```bash
-# Application
-ENVIRONMENT=development
-APP_NAME="FinRL Trading"
+| Module | Responsibility |
+|---|---|
+| `alpaca_manager.py` | Multi-account Alpaca client; paper ↔ live switching |
+| `trade_executor.py` | Order routing, pre-trade risk checks, order lifecycle tracking |
+| `performance_analyzer.py` | Real-time position tracking, P&L attribution, exposure reporting |
 
-# Alpaca API (Required for live trading)
-APCA_API_KEY=your_alpaca_key
-APCA_API_SECRET=your_alpaca_secret
-APCA_BASE_URL=https://paper-api.alpaca.markets  # Paper Trading
-
-# Data Sources (Optional, prioritized: FMP > WRDS > Yahoo)
-FMP_API_KEY=your_fmp_api_key           # Financial Modeling Prep
-
-
-# Risk Management
-TRADING_MAX_ORDER_VALUE=100000         # Maximum order value
-TRADING_MAX_PORTFOLIO_TURNOVER=0.5     # Maximum portfolio turnover
-STRATEGY_MAX_WEIGHT_PER_STOCK=0.1      # Maximum weight per stock
-
-# Data Management
-DATA_CACHE_TTL_HOURS=24                # Cache TTL in hours
-DATA_MAX_CACHE_SIZE_MB=1000            # Maximum cache size in MB
-```
-
-### Configuration Usage
-
-```python
-from src.config.settings import get_config
-
-config = get_config()
-print(f"Environment: {config.environment}")
-print(f"Database: {config.database.url}")
-print(f"Risk Limits: {config.trading.max_order_value}")
-```
+---
 
 ## 📊 Performance Metrics
 <p align="center">
