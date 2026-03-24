@@ -130,6 +130,7 @@ dmypy.json
 
 # Project specific
 /data/*
+src/strategies/output/
 logs/
 *.db
 *.sqlite
