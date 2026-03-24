@@ -320,7 +320,20 @@ print(f"Risk Limits: {config.trading.max_order_value}")
 ```
 
 ## 📊 Performance Metrics
+<p align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/All_Backtests_v2.png" width="1000">
+</p>
+<p align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/Paper_Trading.png" width="1000">
+</p>
 
+<p align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/Sector_Rotation_Standalone.png" width="1000">
+</p>
+
+<p align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/DRL_Timing_Backtest.png" width="1000">
+</p>
 The backtesting engine provides comprehensive quantitative analysis:
 
 ### Return Metrics
