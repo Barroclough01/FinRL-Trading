@@ -31,7 +31,9 @@
 - **🔧 Modular Design**: Clean, extensible architecture following best practices
 
 ## 🏗️ Project Architecture
-<img width="1515" height="688" alt="FinRL_X_Gemini" src="https://github.com/user-attachments/assets/e016eaba-6a40-48f6-9fdc-8b62b700f568" />
+<p align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/FinRL_X_Framework.png" width="500">
+</p>
 
 ```
 finrl-trading/
