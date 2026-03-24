@@ -21,48 +21,66 @@
 [![](https://dcbadge.limes.pink/api/server/trsr8SXpW5?cb=1)](https://discord.gg/trsr8SXpW5)
 
 
-**A modern, modular quantitative trading platform built with Python, featuring machine learning strategies, professional backtesting, and live trading capabilities.**
+---
 
-## 🚀 Key Features
+## 📖 About
 
-- **🤖 Strategy Framework**: Multiple quantitative strategies including ML-based stock selection
-- **📈 Risk Management**: Comprehensive risk controls and position limits
-- **💰 Live Trading**: Alpaca integration with paper and live trading support
-- **🔧 Modular Design**: Clean, extensible architecture following best practices
+**FinRL-X** is a next-generation, **AI-native** quantitative trading infrastructure that redefines how researchers and practitioners build, test, and deploy algorithmic trading strategies. Introduced in our paper *"FinRL-X: An AI-Native Modular Infrastructure for Quantitative Trading"* ([arXiv:2603.21330](https://arxiv.org/abs/2603.21330)), FinRL-X succeeds the original [FinRL](https://github.com/AI4Finance-Foundation/FinRL) framework with a fully modernized architecture designed for the LLM and agentic AI era.
 
-## 🏗️ Project Architecture
-<p align="center">
-  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/FinRL_X_Framework.png" width="1000">
-</p>
+> FinRL-X is **not just a library** — it is a full-stack trading platform engineered around modularity, reproducibility, and production-readiness, supporting everything from ML-based stock selection and professional backtesting to live brokerage execution.
+
+---
+
+## ✨ Key Features
+
+| Feature | Description |
+|---|---|
+| 🤖 **AI-Native Strategy Framework** | Pluggable strategies including ML stock selection, DRL agents, and LLM-driven signal generation |
+| 📈 **Risk Management** | Comprehensive risk controls: position limits, turnover caps, and drawdown guards |
+| 💰 **Live Trading** | Alpaca brokerage integration with paper and live trading modes |
+| 🔧 **Modular Architecture** | Clean, extensible design following software engineering best practices |
+| 🗄️ **Multi-Source Data** | Yahoo Finance · FMP · WRDS — intelligent source selection with SQLite caching |
+| 📊 **Professional Backtesting** | Powered by the `bt` library with benchmark comparison and transaction cost simulation |
+| ⚙️ **Type-Safe Configuration** | Pydantic-based settings with environment variable support across dev/test/prod |
+
+---
+
+## 🏗️ Architecture
+
+<div align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/FinRL_X_Framework.png" width="900"/>
+  <br/><em>FinRL-X layered architecture: Data → Strategy → Backtest → Live Trading</em>
+</div>
+
+<br/>
 
 ```
 finrl-trading/
 ├── src/
-│   ├── config/           # Centralized configuration management
-│   │   └── settings.py   # Pydantic-based settings with environment variables
-│   ├── data/            # Data acquisition and processing
-│   │   ├── data_fetcher.py     # Multi-source data integration (Yahoo/FMP/WRDS)
-│   │   ├── data_processor.py   # Data cleaning and feature engineering
-│   │   └── data_store.py       # SQLite-based data persistence
-│   ├── backtest/      # Backtesting system
-│   │   └── backtest_engine.py  # Professional backtesting engine powered by bt library
-│   ├── strategies/      # Trading strategies
-│   │   ├── base_strategy.py    # Abstract strategy framework
-│   │   └── ml_strategy.py      # ML-based stock selection
-│   ├── trading/         # Live trading execution
-│   │   ├── alpaca_manager.py     # Alpaca API integration
-│   │   ├── trade_executor.py     # Order execution and risk management
-│   │   └── performance_analyzer.py  # Performance analysis
-│   └── main.py         # CLI entry point
-├── examples/           # Examples and tutorials
-│   ├── FinRL_Full_Workflow.ipynb  # Complete workflow tutorial (recommended)
-│   └── README.md       # Examples documentation
-├── data/               # Runtime data storage (gitignored)
-├── logs/               # Application logs (gitignored)
-├── requirements.txt    # Python dependencies
-└── setup.py           # Package installation
+│   ├── config/                     # ⚙️  Centralized configuration management
+│   │   └── settings.py             #     Pydantic-based settings + environment variables
+│   ├── data/                       # 🗄️  Data acquisition and processing
+│   │   ├── data_fetcher.py         #     Multi-source integration (Yahoo / FMP / WRDS)
+│   │   ├── data_processor.py       #     Feature engineering & data cleaning
+│   │   └── data_store.py           #     SQLite persistence with caching
+│   ├── backtest/                   # 📊  Backtesting engine
+│   │   └── backtest_engine.py      #     bt-powered engine with benchmark comparison
+│   ├── strategies/                 # 🤖  Trading strategies
+│   │   ├── base_strategy.py        #     Abstract strategy framework
+│   │   └── ml_strategy.py          #     Random Forest stock selection
+│   ├── trading/                    # 💰  Live trading execution
+│   │   ├── alpaca_manager.py       #     Alpaca API integration (multi-account)
+│   │   ├── trade_executor.py       #     Order management & risk controls
+│   │   └── performance_analyzer.py #     Real-time P&L tracking
+│   └── main.py                     # 🚀  CLI entry point
+├── examples/
+│   ├── FinRL_Full_Workflow.ipynb   # 📓  Complete workflow tutorial (start here!)
+│   └── README.md
+├── data/                           # Runtime data storage (gitignored)
+├── logs/                           # Application logs (gitignored)
+├── requirements.txt
+└── setup.py
 ```
-
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
