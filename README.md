@@ -24,6 +24,13 @@
 
 ---
 
+## 📖 About
+
+**FinRL-X** is a next-generation, **AI-native** quantitative trading infrastructure that redefines how researchers and practitioners build, test, and deploy algorithmic trading strategies. Introduced in our paper *"FinRL-X: An AI-Native Modular Infrastructure for Quantitative Trading"* ([arXiv:2603.21330](https://arxiv.org/abs/2603.21330)), FinRL-X succeeds the original [FinRL](https://github.com/AI4Finance-Foundation/FinRL) framework with a fully modernized architecture designed for the LLM and agentic AI era.
+
+> FinRL-X is **not just a library** — it is a full-stack trading platform engineered around modularity, reproducibility, and production-readiness, supporting everything from ML-based stock selection and professional backtesting to live brokerage execution.
+---
+
 ## 🌟 From FinRL to FinRL-X: The Full Evolution
 
 FinRL-X is the **Stage 3.0 production release** of the AI4Finance development roadmap — built for institutions and practitioners who need reliability, modularity, and AI-native capabilities beyond what the original FinRL framework provides.
@@ -56,49 +63,6 @@ FinRL-X is the **Stage 3.0 production release** of the AI4Finance development ro
 | **Target Users** | Researchers & students | Quants, institutions, production deployments |
 | **Paper** | [arXiv:2011.09607](https://arxiv.org/abs/2011.09607) | [arXiv:2603.21330](https://arxiv.org/abs/2603.21330) |
 
----
-
-
-
-## 📖 About
-
-**FinRL-X** is a next-generation, **AI-native** quantitative trading infrastructure that redefines how researchers and practitioners build, test, and deploy algorithmic trading strategies. Introduced in our paper *"FinRL-X: An AI-Native Modular Infrastructure for Quantitative Trading"* ([arXiv:2603.21330](https://arxiv.org/abs/2603.21330)), FinRL-X succeeds the original [FinRL](https://github.com/AI4Finance-Foundation/FinRL) framework with a fully modernized architecture designed for the LLM and agentic AI era.
-
-> FinRL-X is **not just a library** — it is a full-stack trading platform engineered around modularity, reproducibility, and production-readiness, supporting everything from ML-based stock selection and professional backtesting to live brokerage execution.
----
-
-## ✨ Key Features
-
-<table>
-<tr>
-<td width="50%">
-
-**🤖 AI-Native Strategy Framework**
-Pluggable strategies spanning classical ML stock selection, DRL market timing, and LLM-driven signals — all behind a unified `BaseStrategy` interface.
-
-**📈 Professional Backtesting**
-Powered by the `bt` library with multi-benchmark comparison (SPY / VOO / QQQ), transaction cost simulation, drawdown analysis, and automated reporting.
-
-**💰 Live & Paper Trading**
-Full Alpaca integration with multi-account management, risk-gated order execution, and seamless promotion from paper to live.
-
-</td>
-<td width="50%">
-
-**🗄️ Intelligent Data Layer**
-Auto-selecting multi-source manager: Yahoo Finance (free) → FMP (premium) → WRDS (academic). SQLite caching with TTL and version control.
-
-**⚙️ Production Configuration**
-Pydantic-based settings with environment variable support, type validation, and dev / staging / prod profiles.
-
-**🛡️ Multi-Layer Risk Controls**
-Pre-trade checks, position limits, portfolio turnover caps, and real-time P&L tracking — enforced at order and portfolio levels.
-
-</td>
-</tr>
-</table>
-
----
 ---
 
 ## ✨ Key Features
