@@ -176,13 +176,13 @@ Ensemble of Rolling Selection + Adaptive Rotation deployed on Alpaca paper tradi
 | **Calmar Ratio** | **5.09** | -1.23 | -1.56 |
 | Win Rate | **64.89%** | 52.13% | 54.02% |
 
-<details>
-<summary><b>More backtest charts</b></summary>
-<br/>
+### Dynamic Sector Rotation
+
 <div align="center">
   <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/Sector_Rotation_Standalone.png" width="900"/>
 </div>
-</details>
+
+The Adaptive Rotation strategy dynamically shifts capital across three asset groups — **Growth Tech**, **Real Assets**, and **Defensive** — based on market regime signals. During risk-on regimes, the portfolio tilts toward high-momentum growth and commodity plays; when regime detection flags risk-off or fast risk-off conditions, capital rotates into bonds and utilities with an automatic cash buffer. Weekly rebalancing is complemented by daily stop-loss and fast risk-off monitoring, enabling rapid de-risking without waiting for the next scheduled rebalance.
 
 ---
 
