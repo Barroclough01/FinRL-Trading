@@ -108,6 +108,10 @@ Compares heterogeneous allocation methods under a unified interface:
 
 All methods output the same weight vector, making them directly composable with timing and risk overlays.
 
+<div align="center">
+  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/DRL_Timing_Backtest.png" width="900"/>
+</div>
+
 ### Use Case 2 — Rolling Stock Selection + DRL
 
 Quarterly selection of top-25% NASDAQ-100 stocks via ML fundamental scoring, combined with DRL-based portfolio allocation. Strict no-lookahead semantics prevent data leakage.
@@ -177,8 +181,6 @@ Ensemble of Rolling Selection + Adaptive Rotation deployed on Alpaca paper tradi
 <br/>
 <div align="center">
   <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/Sector_Rotation_Standalone.png" width="900"/>
-  <br/><br/>
-  <img src="https://github.com/AI4Finance-Foundation/FinRL-Trading/blob/master/figs/DRL_Timing_Backtest.png" width="900"/>
 </div>
 </details>
 
