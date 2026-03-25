@@ -23,7 +23,7 @@
 
 *A deployment-consistent trading system that unifies data processing, strategy composition, backtesting, and broker execution through a weight-centric interface.*
 
-[Paper](https://arxiv.org/abs/2603.21330) | [Quick Start](#-quick-start) | [Strategies](#-strategies) | [Results](#-results) | [Discord](https://discord.gg/trsr8SXpW5)
+[Paper](https://arxiv.org/abs/2603.21330) | [Quick Start](#quick-start) | [Strategies](#strategies) | [Results](#results) | [Discord](https://discord.gg/trsr8SXpW5)
 
 </div>
 
