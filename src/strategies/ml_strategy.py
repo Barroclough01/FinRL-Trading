@@ -44,6 +44,7 @@ Implements ML-based stock selection strategies:
 """
 
 import logging
+import warnings
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -80,24 +81,6 @@ class MLStockSelectionStrategy(BaseStrategy):
             config: Strategy configuration
         """
         super().__init__(config)
-        # logger, avoid relying on external base class behavior.
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def apply_risk_limits(self, weights_df: pd.DataFrame) -> pd.DataFrame:
-        """Minimal local risk normalization fallback.
-
-        Current repository BaseStrategy is a minimal interface and may not expose
-        shared risk-limit helpers. Keep behavior safe and deterministic here.
-        """
-        if weights_df is None or len(weights_df) == 0 or 'weight' not in weights_df.columns:
-            return weights_df
-
-        out = weights_df.copy()
-        out['weight'] = out['weight'].clip(lower=0.0)
-        total = out['weight'].sum()
-        if total > 0:
-            out['weight'] = out['weight'] / total
-        return out
 
     def _compute_min_variance_weights(self, 
                                      selected_gvkeys: List[str], 
@@ -367,7 +350,8 @@ class MLStockSelectionStrategy(BaseStrategy):
                 n_estimators=500,
                 learning_rate=0.05,
                 random_state=42,
-                n_jobs=-1
+                n_jobs=-1,
+                verbose=-1
             )
         except Exception:
             logger.warning("LightGBM not installed, skipping. Please install LightGBM to use this model.")
@@ -627,6 +611,12 @@ class MLStockSelectionStrategy(BaseStrategy):
         test_mask = (masks_date >= test_start) & (masks_date < test_end_exclusive)
         trade_mask = (masks_date == trade_date)
 
+        # y_return may be missing for some rows (especially near the latest quarter).
+        # Keep trade rows for inference, but restrict supervised train/test rows.
+        y_valid_mask = df_xy['y_return'].notna()
+        train_mask = train_mask & y_valid_mask
+        test_mask = test_mask & y_valid_mask
+
         # 去掉"Unnamed: 0"这类列
         feature_cols = [col for col in X.columns if not col.startswith('Unnamed:')]
         X_train = df_xy.loc[train_mask, feature_cols]
@@ -650,9 +640,9 @@ class MLStockSelectionStrategy(BaseStrategy):
 
         # Fit a per-date scaler
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else None
-        X_trade_scaled = scaler.transform(X_trade)
+        X_train_scaled = np.asarray(scaler.fit_transform(X_train), dtype=float)
+        X_test_scaled = np.asarray(scaler.transform(X_test), dtype=float) if len(X_test) > 0 else None
+        X_trade_scaled = np.asarray(scaler.transform(X_trade), dtype=float)
 
         best_name = None
         best_mse = np.inf
@@ -660,23 +650,29 @@ class MLStockSelectionStrategy(BaseStrategy):
 
         for name, model in candidates.items():
             try:
-                model.fit(X_train_scaled, y_train)
-                if X_test_scaled is not None and len(y_test) > 0:
-                    y_hat = model.predict(X_test_scaled)
-                    mse = mean_squared_error(y_test, y_hat)
-                else:
-                    # If no test window, evaluate on train (discouraged but fallback)
-                    y_hat = model.predict(X_train_scaled)
-                    mse = mean_squared_error(y_train, y_hat)
-                metrics[name] = mse
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=r"X does not have valid feature names, but .* was fitted with feature names",
+                        category=UserWarning,
+                    )
+                    model.fit(X_train_scaled, y_train)
+                    if X_test_scaled is not None and len(y_test) > 0:
+                        y_hat = model.predict(X_test_scaled)
+                        mse = mean_squared_error(y_test, y_hat)
+                    else:
+                        # If no test window, evaluate on train (discouraged but fallback)
+                        y_hat = model.predict(X_train_scaled)
+                        mse = mean_squared_error(y_train, y_hat)
+                    metrics[name] = mse
 
-                trade_pred = model.predict(X_trade_scaled)
-                preds_trade[name] = trade_pred
+                    trade_pred = model.predict(X_trade_scaled)
+                    preds_trade[name] = trade_pred
 
-                if mse < best_mse:
-                    best_mse = mse
-                    best_name = name
-                    best_model = model
+                    if mse < best_mse:
+                        best_mse = mse
+                        best_name = name
+                        best_model = model
             except Exception as e:
                 logger.warning(f"候选模型 {name} 训练失败: {e}")
                 continue
@@ -1175,23 +1171,9 @@ if __name__ == "__main__":
     # fundamentals = fetch_fundamental_data(tickers, start_date, end_date)
 
     # fundamentals = pd.read_csv('./data/fundamentals.csv')
-    local_fundamentals_path = Path(project_root) / 'data' / 'fundamentals.csv'
-    if local_fundamentals_path.exists():
-        fundamentals = pd.read_csv(local_fundamentals_path)
-    else:
-        tickers_df = fetch_sp500_tickers(preferred_source='FMP')
-        if isinstance(tickers_df, pd.DataFrame) and 'tickers' in tickers_df.columns:
-            tickers_df = tickers_df.head(100)
-        fundamentals = fetch_fundamental_data(
-            tickers_df,
-            '2019-01-01',
-            datetime.now().strftime('%Y-%m-%d'),
-            preferred_source='FMP'
-        )
-    if 'datadate' not in fundamentals.columns and 'date' in fundamentals.columns:
-        fundamentals['datadate'] = fundamentals['date']
-    if 'gvkey' not in fundamentals.columns and 'tic' in fundamentals.columns:
-        fundamentals['gvkey'] = fundamentals['tic']
+    fundamentals = pd.read_csv(r'D:\Projects\FinRL-Trading-old\output_20250712\output_20250712\final_ratios.csv')
+    fundamentals['datadate'] = fundamentals['date']
+    fundamentals['gvkey'] = fundamentals['tic']
 
     fundamentals = fundamentals[(fundamentals['datadate'] <= '2025-03-01') & (fundamentals['datadate'] >= '2019-03-01')]
     # 仅保留包含 y_return 的样本
@@ -1203,7 +1185,10 @@ if __name__ == "__main__":
 
     # 跨行业版本
     # 单次模式
-    config = StrategyConfig(name="ML Stock Selection")
+    config = StrategyConfig(
+        name="ML Stock Selection",
+        description="Machine learning based stock selection"
+    )
 
     # 以末期季度为目标日期进行训练与预测
     target_date = sorted(pd.to_datetime(fundamentals['datadate']).unique())[-1] if len(fundamentals) else None
@@ -1255,7 +1240,10 @@ if __name__ == "__main__":
 
 
     # 行业版本（如果有 sector/gsector 信息）
-    sector_config = StrategyConfig(name="Sector Neutral ML")
+    sector_config = StrategyConfig(
+        name="Sector Neutral ML",
+        description="Sector-neutral ML strategy"
+    )
     sector_strategy = SectorNeutralMLStrategy(sector_config)
 
     # 行业-单次 - 等权重
