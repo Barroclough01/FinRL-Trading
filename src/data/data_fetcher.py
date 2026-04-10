@@ -168,6 +168,8 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         self._openai_api_key: Optional[str] = None
         self._sentiment_model: Optional[str] = None
         self._sentiment_request_timeout: int = 30
+        # Suppress repeated ratio endpoint warnings; keep one concise line per run.
+        self._ratios_error_once_logged: bool = False
         self._init_sentiment_settings()
 
     def is_available(self) -> bool:
@@ -242,11 +244,21 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 'profile': 'profile'
             }[endpoint]
 
+            def _quarter_history_sufficient(items: Optional[List[Dict[str, Any]]]) -> bool:
+                """Check if cached quarterly payload has enough depth for ML windows."""
+                if period != 'quarter':
+                    return True
+                if not items:
+                    return False
+                # 4 test quarters + at least 1 train quarter + buffer
+                min_quarters = 8
+                return len(items) >= min_quarters
+
             # 1) Local-first: if offline or data is fresh, use local store
             if start_date and end_date:
                 try:
                     stored = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
-                    if stored:
+                    if stored and (self.offline_mode or _quarter_history_sufficient(stored)):
                         return stored
                     if not self.offline_mode:
                         latest_str = self.data_store.get_raw_payload_latest_date(ticker, payload_key, source='FMP')
@@ -257,7 +269,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                             threshold_dt = min(today - pd.DateOffset(months=3), req_end_dt - pd.DateOffset(months=3))
                             if latest_dt >= threshold_dt:
                                 stored2 = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
-                                if stored2 is not None:
+                                if stored2 is not None and _quarter_history_sufficient(stored2):
                                     return stored2
                 except Exception:
                     pass
@@ -271,7 +283,11 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         if endpoint == 'profile':
             url = f"{self.base_url}/{endpoint}/{ticker}?apikey={self.api_key}"
         else:
-            url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={self.api_key}"
+            # FMP stable fundamentals endpoints use query-style symbol parameters.
+            if period == 'quarter':
+                url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&limit=120&apikey={self.api_key}"
+            else:
+                url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&apikey={self.api_key}"
 
         try:
             response = requests.get(url)
@@ -285,7 +301,17 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     logger.debug(f"Failed to save raw FMP payload {payload_key} for {ticker}: {se}")
             return data
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Failed to fetch {endpoint} data for {ticker}: {e}")
+            if endpoint == 'ratios':
+                if not self._ratios_error_once_logged:
+                    status_code = getattr(getattr(e, 'response', None), 'status_code', 'unknown')
+                    logger.warning(
+                        f"Ratios endpoint unavailable (status={status_code}); continuing without ratio API fields and suppressing repeated ratio errors"
+                    )
+                    self._ratios_error_once_logged = True
+                else:
+                    logger.debug(f"Suppressed repeated ratios fetch error for {ticker}: {e}")
+            else:
+                logger.warning(f"Failed to fetch {endpoint} data for {ticker}: {e}")
             return []
 
     def get_sp500_components(self, date: str = None) -> pd.DataFrame:
@@ -611,9 +637,9 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 # price data for quarter adj_close (need next quarter too)
                 
                 prices_t = prices[prices['tic'] == ticker].copy() if not prices.empty else pd.DataFrame()
-                # 按日期降序排序，以便于向前查找最近价格时能正确获取
                 if not prices_t.empty and 'datadate' in prices_t.columns:
-                    prices_t = prices_t.sort_values('datadate', ascending=False)
+                    prices_t['datadate'] = pd.to_datetime(prices_t['datadate'], errors='coerce')
+                    prices_t = prices_t.dropna(subset=['datadate']).sort_values('datadate', ascending=True)
 
                 # Index data by date for quick lookup
                 def index_by_date(items: List[Dict[str, Any]]) -> Dict[pd.Timestamp, Dict[str, Any]]:
@@ -706,9 +732,10 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     prccd_aligned = np.nan
                     adj_close_aligned = np.nan
                     if not prices_t.empty and 'datadate' in prices_t.columns:
-                        # 原始季度日价格：使用 qd 之后最近的交易日
-                        qd_str = qd.strftime('%Y-%m-%d')
-                        price_row_orig = prices_t[prices_t['datadate'] > qd_str].head(1)
+                        # 原始季度日价格：优先取季度日(含)之后最近交易日，若无则回退到之前最近交易日
+                        price_row_orig = prices_t[prices_t['datadate'] >= qd].head(1)
+                        if price_row_orig.empty:
+                            price_row_orig = prices_t[prices_t['datadate'] < qd].tail(1)
                         if not price_row_orig.empty:
                             prccd_orig = float(price_row_orig.iloc[0].get('prccd', np.nan))
                             ac_o = price_row_orig.iloc[0].get('adj_close', np.nan)
@@ -726,7 +753,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                                 if not price_row_aln.empty:
                                     break
                             if price_row_aln.empty:
-                                price_row_aln = prices_t[prices_t['datadate'] <= aligned_date_str].head(1)
+                                price_row_aln = prices_t[prices_t['datadate'] <= aligned_date].tail(1)
                             if not price_row_aln.empty:
                                 prccd_aligned = float(price_row_aln.iloc[0].get('prccd', np.nan))
                                 ac_a = price_row_aln.iloc[0].get('adj_close', np.nan)
@@ -735,9 +762,18 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                     # EPS, BPS, DPS
                     eps = income_q.get('eps')
-                    net_income = income_q.get('netIncome')
+                    net_income_raw = income_q.get('netIncome')
+                    try:
+                        net_income = float(net_income_raw) if net_income_raw is not None else np.nan
+                    except Exception:
+                        net_income = np.nan
                     if eps is None and shares_out:
-                        eps = net_income / shares_out if shares_out else np.nan
+                        eps = (net_income / shares_out) if (pd.notna(net_income) and shares_out) else np.nan
+
+                    try:
+                        eps = float(eps) if eps is not None else np.nan
+                    except Exception:
+                        eps = np.nan
 
                     bps = (equity / shares_out) if shares_out else np.nan
 
@@ -811,7 +847,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                         except Exception:
                             pb = np.nan
 
-                    roe = (net_income / equity) if equity not in (0, np.nan) else np.nan
+                    roe = (net_income / equity) if (pd.notna(net_income) and equity and float(equity) != 0.0) else np.nan
 
                     record = {
                         'gvkey': ticker,
@@ -986,7 +1022,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     min_date = min(start for start, _ in date_ranges)
                     max_date = max(end for _, end in date_ranges)
 
-                    url = f"{self.base_url}/historical-price-eod/full?symbol={ticker}?from={min_date}&to={max_date}&apikey={self.api_key}"
+                    url = f"{self.base_url}/historical-price-eod/full?symbol={ticker}&from={min_date}&to={max_date}&apikey={self.api_key}"
                     response = requests.get(url)
                     response.raise_for_status()
                     
