@@ -80,6 +80,24 @@ class MLStockSelectionStrategy(BaseStrategy):
             config: Strategy configuration
         """
         super().__init__(config)
+        # logger, avoid relying on external base class behavior.
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def apply_risk_limits(self, weights_df: pd.DataFrame) -> pd.DataFrame:
+        """Minimal local risk normalization fallback.
+
+        Current repository BaseStrategy is a minimal interface and may not expose
+        shared risk-limit helpers. Keep behavior safe and deterministic here.
+        """
+        if weights_df is None or len(weights_df) == 0 or 'weight' not in weights_df.columns:
+            return weights_df
+
+        out = weights_df.copy()
+        out['weight'] = out['weight'].clip(lower=0.0)
+        total = out['weight'].sum()
+        if total > 0:
+            out['weight'] = out['weight'] / total
+        return out
 
     def _compute_min_variance_weights(self, 
                                      selected_gvkeys: List[str], 
@@ -1157,9 +1175,23 @@ if __name__ == "__main__":
     # fundamentals = fetch_fundamental_data(tickers, start_date, end_date)
 
     # fundamentals = pd.read_csv('./data/fundamentals.csv')
-    fundamentals = pd.read_csv(r'D:\Projects\FinRL-Trading-old\output_20250712\output_20250712\final_ratios.csv')
-    fundamentals['datadate'] = fundamentals['date']
-    fundamentals['gvkey'] = fundamentals['tic']
+    local_fundamentals_path = Path(project_root) / 'data' / 'fundamentals.csv'
+    if local_fundamentals_path.exists():
+        fundamentals = pd.read_csv(local_fundamentals_path)
+    else:
+        tickers_df = fetch_sp500_tickers(preferred_source='FMP')
+        if isinstance(tickers_df, pd.DataFrame) and 'tickers' in tickers_df.columns:
+            tickers_df = tickers_df.head(100)
+        fundamentals = fetch_fundamental_data(
+            tickers_df,
+            '2019-01-01',
+            datetime.now().strftime('%Y-%m-%d'),
+            preferred_source='FMP'
+        )
+    if 'datadate' not in fundamentals.columns and 'date' in fundamentals.columns:
+        fundamentals['datadate'] = fundamentals['date']
+    if 'gvkey' not in fundamentals.columns and 'tic' in fundamentals.columns:
+        fundamentals['gvkey'] = fundamentals['tic']
 
     fundamentals = fundamentals[(fundamentals['datadate'] <= '2025-03-01') & (fundamentals['datadate'] >= '2019-03-01')]
     # 仅保留包含 y_return 的样本
@@ -1171,10 +1203,7 @@ if __name__ == "__main__":
 
     # 跨行业版本
     # 单次模式
-    config = StrategyConfig(
-        name="ML Stock Selection",
-        description="Machine learning based stock selection"
-    )
+    config = StrategyConfig(name="ML Stock Selection")
 
     # 以末期季度为目标日期进行训练与预测
     target_date = sorted(pd.to_datetime(fundamentals['datadate']).unique())[-1] if len(fundamentals) else None
@@ -1226,10 +1255,7 @@ if __name__ == "__main__":
 
 
     # 行业版本（如果有 sector/gsector 信息）
-    sector_config = StrategyConfig(
-        name="Sector Neutral ML",
-        description="Sector-neutral ML strategy"
-    )
+    sector_config = StrategyConfig(name="Sector Neutral ML")
     sector_strategy = SectorNeutralMLStrategy(sector_config)
 
     # 行业-单次 - 等权重
