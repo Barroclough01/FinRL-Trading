@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 import pandas as pd
 
+@dataclass
 class StrategyResult:
     strategy_name: str
     weights: pd.DataFrame
@@ -12,11 +13,12 @@ class StrategyResult:
         if self.metadata is None:
             self.metadata = {}
 
+@dataclass
 class StrategyConfig:
     name: str = "BaseStrategy"
 
 class BaseStrategy:
-    #Minimal base strategy
+    """Minimal base strategy interface."""
 
     def __init__(self, config: StrategyConfig):
         self.config = config
