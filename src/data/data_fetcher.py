@@ -168,8 +168,6 @@ class FMPFetcher(BaseDataFetcher, DataSource):
         self._openai_api_key: Optional[str] = None
         self._sentiment_model: Optional[str] = None
         self._sentiment_request_timeout: int = 30
-        # Suppress repeated ratio endpoint warnings; keep one concise line per run.
-        self._ratios_error_once_logged: bool = False
         self._init_sentiment_settings()
 
     def is_available(self) -> bool:
@@ -244,21 +242,11 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 'profile': 'profile'
             }[endpoint]
 
-            def _quarter_history_sufficient(items: Optional[List[Dict[str, Any]]]) -> bool:
-                """Check if cached quarterly payload has enough depth for ML windows."""
-                if period != 'quarter':
-                    return True
-                if not items:
-                    return False
-                # 4 test quarters + at least 1 train quarter + buffer
-                min_quarters = 8
-                return len(items) >= min_quarters
-
             # 1) Local-first: if offline or data is fresh, use local store
             if start_date and end_date:
                 try:
                     stored = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
-                    if stored and (self.offline_mode or _quarter_history_sufficient(stored)):
+                    if stored:
                         return stored
                     if not self.offline_mode:
                         latest_str = self.data_store.get_raw_payload_latest_date(ticker, payload_key, source='FMP')
@@ -269,7 +257,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                             threshold_dt = min(today - pd.DateOffset(months=3), req_end_dt - pd.DateOffset(months=3))
                             if latest_dt >= threshold_dt:
                                 stored2 = self.data_store.get_raw_payload(ticker, payload_key, start_date, end_date, source='FMP')
-                                if stored2 is not None and _quarter_history_sufficient(stored2):
+                                if stored2 is not None:
                                     return stored2
                 except Exception:
                     pass
@@ -281,13 +269,9 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
         # Build URL (profile endpoint doesn't use period). Do not set any limit param.
         if endpoint == 'profile':
-            url = f"{self.base_url}/{endpoint}/{ticker}?apikey={self.api_key}"
+            url = f"{self.base_url}/{endpoint}?symbol={ticker}&apikey={self.api_key}"
         else:
-            # FMP stable fundamentals endpoints use query-style symbol parameters.
-            if period == 'quarter':
-                url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&limit=120&apikey={self.api_key}"
-            else:
-                url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&apikey={self.api_key}"
+            url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&apikey={self.api_key}"
 
         try:
             response = requests.get(url)
@@ -301,17 +285,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     logger.debug(f"Failed to save raw FMP payload {payload_key} for {ticker}: {se}")
             return data
         except requests.exceptions.RequestException as e:
-            if endpoint == 'ratios':
-                if not self._ratios_error_once_logged:
-                    status_code = getattr(getattr(e, 'response', None), 'status_code', 'unknown')
-                    logger.warning(
-                        f"Ratios endpoint unavailable (status={status_code}); continuing without ratio API fields and suppressing repeated ratio errors"
-                    )
-                    self._ratios_error_once_logged = True
-                else:
-                    logger.debug(f"Suppressed repeated ratios fetch error for {ticker}: {e}")
-            else:
-                logger.warning(f"Failed to fetch {endpoint} data for {ticker}: {e}")
+            logger.warning(f"Failed to fetch {endpoint} data for {ticker}: {e}")
             return []
 
     def get_sp500_components(self, date: str = None) -> pd.DataFrame:
@@ -744,11 +718,10 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                         # 对齐日价格：仅当开启对齐时计算，用于 y_return
                         if align_quarter_dates:
-                            aligned_date_str = aligned_date.strftime('%Y-%m-%d')
                             max_days_forward = 10
                             price_row_aln = pd.DataFrame()
                             for days_offset in range(max_days_forward + 1):
-                                search_date = (aligned_date + pd.Timedelta(days=days_offset)).strftime('%Y-%m-%d')
+                                search_date = aligned_date + pd.Timedelta(days=days_offset)
                                 price_row_aln = prices_t[prices_t['datadate'] == search_date]
                                 if not price_row_aln.empty:
                                     break
@@ -1027,10 +1000,18 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     response.raise_for_status()
                     
                     data = response.json()
-                    
-                    if 'historical' in data:
+
+                    if isinstance(data, dict) and 'historical' in data:
+                        historical_rows = data.get('historical') or []
+                    elif isinstance(data, list):
+                        historical_rows = data
+                    else:
+                        logger.warning(f"No historical data key in response for {ticker} ({min_date} to {max_date})")
+                        historical_rows = []
+
+                    if historical_rows:
                         ticker_data = []
-                        for item in data['historical']:
+                        for item in historical_rows:
                             record = {
                                 'gvkey': ticker,
                                 'datadate': item['date'],
@@ -1049,8 +1030,6 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                             logger.debug(f"Fetched {len(ticker_data)} records for {ticker} ({min_date} to {max_date})")
                         else:
                             logger.warning(f"No historical data for {ticker} ({min_date} to {max_date})")
-                    else:
-                        logger.warning(f"No historical data key in response for {ticker} ({min_date} to {max_date})")
 
                 except Exception as e:
                     logger.warning(f"Failed to fetch price data for {ticker} ({min_date} to {max_date}): {e}")
