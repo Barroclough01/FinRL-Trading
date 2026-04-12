@@ -27,7 +27,7 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, "src"))
 
 from src.data.data_fetcher import fetch_fundamental_data, fetch_sp500_tickers
-from src.strategies.base_strategy import StrategyConfig
+#from src.strategies.base_strategy import StrategyConfig
 from src.strategies.ml_strategy import MLStockSelectionStrategy
 
 
@@ -72,6 +72,11 @@ class GroupSelectionSummary:
     selection_mode: str
     strict_threshold: float
 
+@dataclass
+class LocalStrategyConfig:
+    """Minimal config shim to avoid hard dependency on base_strategy module."""
+
+    name: str = "BaseStrategy"
 
 def _norm_sector(value: object) -> str:
     if value is None:
@@ -395,7 +400,7 @@ def main() -> None:
         )
     fundamentals = fundamentals[pd.to_datetime(fundamentals["datadate"]) <= cutoff_date].copy()
 
-    strategy = MLStockSelectionStrategy(StrategyConfig(name="ML GICS Preclassified Selection"))
+    strategy = MLStockSelectionStrategy(LocalStrategyConfig(name="ML GICS Preclassified Selection"))
 
     # rolling predictions, keep the latest prediction for each ticker.
     unique_quarters = sorted(pd.to_datetime(fundamentals["datadate"]).dropna().unique())
