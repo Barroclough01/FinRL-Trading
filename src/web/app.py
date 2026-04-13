@@ -23,7 +23,7 @@ try:
     from ..config.settings import get_config
     from ..data.data_store import get_data_store
     from ..strategies.base_strategy import create_strategy, StrategyConfig
-    from ..strategies.backtest_engine import BacktestEngine, BacktestConfig
+    from ..backtest.backtest_engine import BacktestEngine, BacktestConfig
     from ..trading.alpaca_manager import create_alpaca_account_from_env
     from ..trading.trade_executor import TradeExecutor, ExecutionConfig
     from ..utils.logging_utils import setup_logging
@@ -32,7 +32,7 @@ except ImportError:
     from config.settings import get_config
     from data.data_store import get_data_store
     from strategies.base_strategy import create_strategy, StrategyConfig
-    from strategies.backtest_engine import BacktestEngine, BacktestConfig
+    from backtest.backtest_engine import BacktestEngine, BacktestConfig
     from trading.alpaca_manager import create_alpaca_account_from_env
     from trading.trade_executor import TradeExecutor, ExecutionConfig
     try:

@@ -44,6 +44,7 @@ Implements ML-based stock selection strategies:
 """
 
 import logging
+import warnings
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -349,7 +350,8 @@ class MLStockSelectionStrategy(BaseStrategy):
                 n_estimators=500,
                 learning_rate=0.05,
                 random_state=42,
-                n_jobs=-1
+                n_jobs=-1,
+                verbose=-1
             )
         except Exception:
             logger.warning("LightGBM not installed, skipping. Please install LightGBM to use this model.")
@@ -609,6 +611,12 @@ class MLStockSelectionStrategy(BaseStrategy):
         test_mask = (masks_date >= test_start) & (masks_date < test_end_exclusive)
         trade_mask = (masks_date == trade_date)
 
+        # y_return may be missing for some rows (especially near the latest quarter).
+        # Keep trade rows for inference, but restrict supervised train/test rows.
+        y_valid_mask = df_xy['y_return'].notna()
+        train_mask = train_mask & y_valid_mask
+        test_mask = test_mask & y_valid_mask
+
         # 去掉"Unnamed: 0"这类列
         feature_cols = [col for col in X.columns if not col.startswith('Unnamed:')]
         X_train = df_xy.loc[train_mask, feature_cols]
@@ -632,9 +640,9 @@ class MLStockSelectionStrategy(BaseStrategy):
 
         # Fit a per-date scaler
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else None
-        X_trade_scaled = scaler.transform(X_trade)
+        X_train_scaled = np.asarray(scaler.fit_transform(X_train), dtype=float)
+        X_test_scaled = np.asarray(scaler.transform(X_test), dtype=float) if len(X_test) > 0 else None
+        X_trade_scaled = np.asarray(scaler.transform(X_trade), dtype=float)
 
         best_name = None
         best_mse = np.inf
@@ -642,23 +650,29 @@ class MLStockSelectionStrategy(BaseStrategy):
 
         for name, model in candidates.items():
             try:
-                model.fit(X_train_scaled, y_train)
-                if X_test_scaled is not None and len(y_test) > 0:
-                    y_hat = model.predict(X_test_scaled)
-                    mse = mean_squared_error(y_test, y_hat)
-                else:
-                    # If no test window, evaluate on train (discouraged but fallback)
-                    y_hat = model.predict(X_train_scaled)
-                    mse = mean_squared_error(y_train, y_hat)
-                metrics[name] = mse
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=r"X does not have valid feature names, but .* was fitted with feature names",
+                        category=UserWarning,
+                    )
+                    model.fit(X_train_scaled, y_train)
+                    if X_test_scaled is not None and len(y_test) > 0:
+                        y_hat = model.predict(X_test_scaled)
+                        mse = mean_squared_error(y_test, y_hat)
+                    else:
+                        # If no test window, evaluate on train (discouraged but fallback)
+                        y_hat = model.predict(X_train_scaled)
+                        mse = mean_squared_error(y_train, y_hat)
+                    metrics[name] = mse
 
-                trade_pred = model.predict(X_trade_scaled)
-                preds_trade[name] = trade_pred
+                    trade_pred = model.predict(X_trade_scaled)
+                    preds_trade[name] = trade_pred
 
-                if mse < best_mse:
-                    best_mse = mse
-                    best_name = name
-                    best_model = model
+                    if mse < best_mse:
+                        best_mse = mse
+                        best_name = name
+                        best_model = model
             except Exception as e:
                 logger.warning(f"候选模型 {name} 训练失败: {e}")
                 continue
