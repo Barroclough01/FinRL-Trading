@@ -263,6 +263,7 @@ def main():
     _feat_sql = ", ".join(FEATURE_COLS)
     df = pd.read_sql(
         f"""SELECT ticker as tic, datadate, gsector, adj_close_q,
+           filing_date, accepted_date,
            {_feat_sql}, y_return
            FROM fundamental_data ORDER BY ticker, datadate""",
         conn,

@@ -183,6 +183,13 @@ class DataStore:
                 )
             ''')
 
+            # Migrate: add metadata columns (idempotent)
+            for col in ['filing_date TEXT', 'accepted_date TEXT']:
+                try:
+                    cursor.execute(f'ALTER TABLE fundamental_data ADD COLUMN {col}')
+                except sqlite3.OperationalError:
+                    pass
+
             # Migrate: add new fundamental columns (idempotent)
             _new_fundamental_cols = [
                 'gross_margin', 'operating_margin', 'ebitda_margin', 'pretax_margin',
@@ -979,13 +986,16 @@ class DataStore:
                     cursor.execute(f'''
                         INSERT OR REPLACE INTO fundamental_data
                         (ticker, datadate, gsector, adj_close_q,
+                         filing_date, accepted_date,
                          {", ".join(factor_cols)})
-                        VALUES (?, ?, ?, ?, {", ".join(["?"] * len(factor_cols))})
+                        VALUES (?, ?, ?, ?, ?, ?, {", ".join(["?"] * len(factor_cols))})
                     ''', (
                         str(row['ticker']),
                         str(row['datadate']),
                         str(row.get('gsector', '')) or None,
                         float(row['adj_close_q']) if pd.notna(row.get('adj_close_q')) else None,
+                        str(row.get('filing_date', '')) or None,
+                        str(row.get('accepted_date', '')) or None,
                         *vals,
                     ))
                     rows_affected += 1

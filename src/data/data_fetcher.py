@@ -898,11 +898,17 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                         except (TypeError, ValueError):
                             extra_ratios[db_col] = np.nan
 
+                    # Earnings release dates from income statement
+                    filing_date = income_q.get('filingDate') or ''
+                    accepted_date = (income_q.get('acceptedDate') or '')[:10]  # trim time part
+
                     record = {
                         'gvkey': ticker,
                         'datadate': aligned_date.strftime('%Y-%m-%d') if align_quarter_dates else qd.strftime('%Y-%m-%d'),
                         'tic': ticker,
                         'gsector': gsector,
+                        'filing_date': filing_date,
+                        'accepted_date': accepted_date,
                         'adj_close_q': (adj_close_aligned if align_quarter_dates and pd.notna(adj_close_aligned) else adj_close_orig) if pd.notna(adj_close_orig) or pd.notna(adj_close_aligned) else np.nan,
                         'EPS': eps if eps is not None else np.nan,
                         'BPS': bps if bps is not None else np.nan,
