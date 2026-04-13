@@ -269,9 +269,9 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
         # Build URL (profile endpoint doesn't use period). Do not set any limit param.
         if endpoint == 'profile':
-            url = f"{self.base_url}/{endpoint}/{ticker}?apikey={self.api_key}"
+            url = f"{self.base_url}/{endpoint}?symbol={ticker}&apikey={self.api_key}"
         else:
-            url = f"{self.base_url}/{endpoint}/{ticker}?period={period}&apikey={self.api_key}"
+            url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&apikey={self.api_key}"
 
         try:
             response = requests.get(url)
@@ -611,9 +611,9 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 # price data for quarter adj_close (need next quarter too)
                 
                 prices_t = prices[prices['tic'] == ticker].copy() if not prices.empty else pd.DataFrame()
-                # 按日期降序排序，以便于向前查找最近价格时能正确获取
                 if not prices_t.empty and 'datadate' in prices_t.columns:
-                    prices_t = prices_t.sort_values('datadate', ascending=False)
+                    prices_t['datadate'] = pd.to_datetime(prices_t['datadate'], errors='coerce')
+                    prices_t = prices_t.dropna(subset=['datadate']).sort_values('datadate', ascending=True)
 
                 # Index data by date for quick lookup
                 def index_by_date(items: List[Dict[str, Any]]) -> Dict[pd.Timestamp, Dict[str, Any]]:
@@ -706,9 +706,10 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     prccd_aligned = np.nan
                     adj_close_aligned = np.nan
                     if not prices_t.empty and 'datadate' in prices_t.columns:
-                        # 原始季度日价格：使用 qd 之后最近的交易日
-                        qd_str = qd.strftime('%Y-%m-%d')
-                        price_row_orig = prices_t[prices_t['datadate'] > qd_str].head(1)
+                        # 原始季度日价格：优先取季度日(含)之后最近交易日，若无则回退到之前最近交易日
+                        price_row_orig = prices_t[prices_t['datadate'] >= qd].head(1)
+                        if price_row_orig.empty:
+                            price_row_orig = prices_t[prices_t['datadate'] < qd].tail(1)
                         if not price_row_orig.empty:
                             prccd_orig = float(price_row_orig.iloc[0].get('prccd', np.nan))
                             ac_o = price_row_orig.iloc[0].get('adj_close', np.nan)
@@ -717,16 +718,15 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                         # 对齐日价格：仅当开启对齐时计算，用于 y_return
                         if align_quarter_dates:
-                            aligned_date_str = aligned_date.strftime('%Y-%m-%d')
                             max_days_forward = 10
                             price_row_aln = pd.DataFrame()
                             for days_offset in range(max_days_forward + 1):
-                                search_date = (aligned_date + pd.Timedelta(days=days_offset)).strftime('%Y-%m-%d')
+                                search_date = aligned_date + pd.Timedelta(days=days_offset)
                                 price_row_aln = prices_t[prices_t['datadate'] == search_date]
                                 if not price_row_aln.empty:
                                     break
                             if price_row_aln.empty:
-                                price_row_aln = prices_t[prices_t['datadate'] <= aligned_date_str].head(1)
+                                price_row_aln = prices_t[prices_t['datadate'] <= aligned_date].tail(1)
                             if not price_row_aln.empty:
                                 prccd_aligned = float(price_row_aln.iloc[0].get('prccd', np.nan))
                                 ac_a = price_row_aln.iloc[0].get('adj_close', np.nan)
@@ -735,9 +735,18 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                     # EPS, BPS, DPS
                     eps = income_q.get('eps')
-                    net_income = income_q.get('netIncome')
+                    net_income_raw = income_q.get('netIncome')
+                    try:
+                        net_income = float(net_income_raw) if net_income_raw is not None else np.nan
+                    except Exception:
+                        net_income = np.nan
                     if eps is None and shares_out:
-                        eps = net_income / shares_out if shares_out else np.nan
+                        eps = (net_income / shares_out) if (pd.notna(net_income) and shares_out) else np.nan
+
+                    try:
+                        eps = float(eps) if eps is not None else np.nan
+                    except Exception:
+                        eps = np.nan
 
                     bps = (equity / shares_out) if shares_out else np.nan
 
@@ -811,7 +820,7 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                         except Exception:
                             pb = np.nan
 
-                    roe = (net_income / equity) if equity not in (0, np.nan) else np.nan
+                    roe = (net_income / equity) if (pd.notna(net_income) and equity and float(equity) != 0.0) else np.nan
 
                     record = {
                         'gvkey': ticker,
@@ -986,15 +995,23 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     min_date = min(start for start, _ in date_ranges)
                     max_date = max(end for _, end in date_ranges)
 
-                    url = f"{self.base_url}/historical-price-eod/full?symbol={ticker}?from={min_date}&to={max_date}&apikey={self.api_key}"
+                    url = f"{self.base_url}/historical-price-eod/full?symbol={ticker}&from={min_date}&to={max_date}&apikey={self.api_key}"
                     response = requests.get(url)
                     response.raise_for_status()
                     
                     data = response.json()
-                    
-                    if 'historical' in data:
+
+                    if isinstance(data, dict) and 'historical' in data:
+                        historical_rows = data.get('historical') or []
+                    elif isinstance(data, list):
+                        historical_rows = data
+                    else:
+                        logger.warning(f"No historical data key in response for {ticker} ({min_date} to {max_date})")
+                        historical_rows = []
+
+                    if historical_rows:
                         ticker_data = []
-                        for item in data['historical']:
+                        for item in historical_rows:
                             record = {
                                 'gvkey': ticker,
                                 'datadate': item['date'],
@@ -1013,8 +1030,6 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                             logger.debug(f"Fetched {len(ticker_data)} records for {ticker} ({min_date} to {max_date})")
                         else:
                             logger.warning(f"No historical data for {ticker} ({min_date} to {max_date})")
-                    else:
-                        logger.warning(f"No historical data key in response for {ticker} ({min_date} to {max_date})")
 
                 except Exception as e:
                     logger.warning(f"Failed to fetch price data for {ticker} ({min_date} to {max_date}): {e}")

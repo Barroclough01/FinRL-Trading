@@ -30,7 +30,6 @@ from src.data.trading_calendar import (
 
 import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-print(f"project_root: {project_root}")
 sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, 'src'))
 
@@ -882,14 +881,21 @@ def get_data_store(base_dir: str = None) -> DataStore:
         To change the database location, set the DATA_BASE_DIR environment variable
         in your .env file or system environment.
     """
-    global _data_store
+    global _data_store, _data_store_config
 
     from src.config.settings import get_config
     config = get_config()
-    base_dir = config.data.base_dir
-    
-    if _data_store is None:
-        _data_store = DataStore(base_dir)
+    if base_dir is None:
+        base_dir = config.data.base_dir
+
+    resolved_base_dir = Path(base_dir)
+    if not resolved_base_dir.is_absolute():
+        resolved_base_dir = Path(project_root) / resolved_base_dir
+
+    current_config = {'base_dir': str(resolved_base_dir)}
+    if _data_store is None or _data_store_config != current_config:
+        _data_store = DataStore(str(resolved_base_dir))
+        _data_store_config = current_config
         
     return _data_store
 
