@@ -155,6 +155,58 @@ class DataStore:
             ''')
 
 
+            # Fundamental data table (processed quarterly factors)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS fundamental_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    datadate TEXT NOT NULL,
+                    gsector TEXT,
+                    adj_close_q REAL,
+                    EPS REAL,
+                    BPS REAL,
+                    DPS REAL,
+                    cur_ratio REAL,
+                    quick_ratio REAL,
+                    cash_ratio REAL,
+                    acc_rec_turnover REAL,
+                    debt_ratio REAL,
+                    debt_to_equity REAL,
+                    pe REAL,
+                    ps REAL,
+                    pb REAL,
+                    roe REAL,
+                    net_income_ratio REAL,
+                    y_return REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(ticker, datadate)
+                )
+            ''')
+
+            # Migrate: add new fundamental columns (idempotent)
+            _new_fundamental_cols = [
+                'gross_margin', 'operating_margin', 'ebitda_margin', 'pretax_margin',
+                'effective_tax_rate', 'ebt_per_ebit', 'net_income_per_ebt',
+                'asset_turnover', 'fixed_asset_turnover', 'inventory_turnover',
+                'payables_turnover', 'wc_turnover',
+                'debt_to_assets', 'debt_to_capital', 'lt_debt_to_capital',
+                'financial_leverage', 'interest_coverage', 'debt_service_coverage',
+                'debt_to_mktcap',
+                'fcf_per_share', 'ocf_per_share', 'cash_per_share', 'capex_per_share',
+                'fcf_to_ocf', 'ocf_ratio', 'ocf_to_sales', 'ocf_coverage',
+                'st_ocf_coverage', 'capex_coverage',
+                'revenue_per_share', 'tangible_bvps', 'interest_debt_per_share',
+                'peg', 'price_to_fcf', 'price_to_ocf', 'price_to_fair_value',
+                'ev_multiple',
+                'dividend_payout', 'dividend_yield', 'div_capex_coverage',
+                'solvency_ratio',
+            ]
+            for col in _new_fundamental_cols:
+                try:
+                    cursor.execute(f'ALTER TABLE fundamental_data ADD COLUMN {col} REAL')
+                except sqlite3.OperationalError:
+                    pass  # column already exists
+
             conn.commit()
             logger.info(f"Initialized database at {self.db_path}")
 
@@ -848,6 +900,145 @@ class DataStore:
             except Exception:
                 continue
         return out if out else None
+
+    # =========================
+    # Fundamental data helpers
+    # =========================
+    FUNDAMENTAL_COLS = [
+        # Original 14 factors
+        'EPS', 'BPS', 'DPS', 'cur_ratio', 'quick_ratio', 'cash_ratio',
+        'acc_rec_turnover', 'debt_ratio', 'debt_to_equity', 'pe', 'ps', 'pb',
+        'roe', 'net_income_ratio',
+        # Profitability (6) — net_income_per_ebt removed (= 1 - effective_tax_rate)
+        'gross_margin', 'operating_margin', 'ebitda_margin', 'pretax_margin',
+        'effective_tax_rate', 'ebt_per_ebit',
+        # Efficiency (5)
+        'asset_turnover', 'fixed_asset_turnover', 'inventory_turnover',
+        'payables_turnover', 'wc_turnover',
+        # Leverage (6) — financial_leverage removed (= debt_to_equity + 1)
+        'debt_to_assets', 'debt_to_capital', 'lt_debt_to_capital',
+        'interest_coverage', 'debt_service_coverage', 'debt_to_mktcap',
+        # Cash Flow (10)
+        'fcf_per_share', 'ocf_per_share', 'cash_per_share', 'capex_per_share',
+        'fcf_to_ocf', 'ocf_ratio', 'ocf_to_sales', 'ocf_coverage',
+        'st_ocf_coverage', 'capex_coverage',
+        # Per-Share (3)
+        'revenue_per_share', 'tangible_bvps', 'interest_debt_per_share',
+        # Valuation (4) — price_to_fair_value removed (= pb)
+        'peg', 'price_to_fcf', 'price_to_ocf', 'ev_multiple',
+        # Dividend (3)
+        'dividend_payout', 'dividend_yield', 'div_capex_coverage',
+        # Solvency (1)
+        'solvency_ratio',
+        # Target
+        'y_return',
+    ]
+
+    def save_fundamental_data(self, df: pd.DataFrame) -> int:
+        """
+        Save processed fundamental data to database (upsert).
+
+        Args:
+            df: DataFrame from data_fetcher.get_fundamental_data().
+                Expected columns: gvkey/tic, datadate, gsector, adj_close_q,
+                EPS, BPS, DPS, cur_ratio, … , y_return
+
+        Returns:
+            Number of rows inserted/updated
+        """
+        if df is None or df.empty:
+            return 0
+
+        df = df.copy()
+        # Normalize ticker column
+        if 'ticker' not in df.columns:
+            df['ticker'] = df.get('tic', df.get('gvkey', 'UNKNOWN'))
+        if 'datadate' not in df.columns and 'date' in df.columns:
+            df['datadate'] = df['date']
+
+        if 'datadate' not in df.columns or 'ticker' not in df.columns:
+            logger.warning("fundamental_data missing required columns (ticker, datadate)")
+            return 0
+
+        # Ensure date string
+        df['datadate'] = pd.to_datetime(df['datadate'], errors='coerce').dt.strftime('%Y-%m-%d')
+        df = df.dropna(subset=['datadate'])
+
+        factor_cols = self.FUNDAMENTAL_COLS
+        rows_affected = 0
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            for _, row in df.iterrows():
+                vals = []
+                for c in factor_cols:
+                    v = row.get(c)
+                    vals.append(float(v) if pd.notna(v) else None)
+
+                try:
+                    cursor.execute(f'''
+                        INSERT OR REPLACE INTO fundamental_data
+                        (ticker, datadate, gsector, adj_close_q,
+                         {", ".join(factor_cols)})
+                        VALUES (?, ?, ?, ?, {", ".join(["?"] * len(factor_cols))})
+                    ''', (
+                        str(row['ticker']),
+                        str(row['datadate']),
+                        str(row.get('gsector', '')) or None,
+                        float(row['adj_close_q']) if pd.notna(row.get('adj_close_q')) else None,
+                        *vals,
+                    ))
+                    rows_affected += 1
+                except Exception as e:
+                    logger.warning(f"Failed to save fundamental row {row.get('ticker')} {row.get('datadate')}: {e}")
+                    continue
+            conn.commit()
+
+        logger.info(f"Saved {rows_affected} fundamental records to database")
+        return rows_affected
+
+    def get_fundamental_data(self, tickers: List[str] = None,
+                              start_date: str = None,
+                              end_date: str = None) -> pd.DataFrame:
+        """
+        Load fundamental data from database.
+
+        Args:
+            tickers: Optional list of ticker symbols (all if None)
+            start_date: Optional start date filter
+            end_date: Optional end date filter
+
+        Returns:
+            DataFrame with fundamental columns
+        """
+        conditions = []
+        params: list = []
+
+        if tickers:
+            if isinstance(tickers, (pd.Series, pd.DataFrame)):
+                tickers = list(tickers) if isinstance(tickers, pd.Series) else tickers['tickers'].tolist()
+            placeholders = ','.join(['?'] * len(tickers))
+            conditions.append(f"ticker IN ({placeholders})")
+            params.extend(tickers)
+        if start_date:
+            conditions.append("datadate >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("datadate <= ?")
+            params.append(end_date)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        query = f"SELECT * FROM fundamental_data {where} ORDER BY ticker, datadate"
+
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=params)
+
+        if not df.empty:
+            # Rename to match fetcher schema
+            df = df.rename(columns={'ticker': 'tic'})
+            df['gvkey'] = df['tic']
+
+        return df
 
     def get_raw_payload_latest_date(self, ticker: str, payload: str, source: str = 'FMP') -> Optional[str]:
         """Return the latest available date for a given (source, payload, ticker)."""

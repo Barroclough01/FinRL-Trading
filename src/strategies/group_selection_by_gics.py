@@ -34,33 +34,36 @@ from src.strategies.ml_strategy import MLStockSelectionStrategy
 BUCKET_ORDER = ["growth_tech", "real_assets", "defensive"]
 BUCKET_TO_GROUP = {
     "growth_tech": "group_a_growth_tech",
-    "real_assets": "group_b_real_assets",
-    "defensive": "group_c_defensive",
+    "cyclical": "group_b_cyclical",
+    "real_assets": "group_c_real_assets",
+    "defensive": "group_d_defensive",
 }
 
 SECTOR_TO_BUCKET = {
-    # Growth tech
+    # Growth tech — 高增长、高估值
     "information technology": "growth_tech",
     "technology": "growth_tech",
     "communication services": "growth_tech",
-    "consumer discretionary": "growth_tech",
-    "consumer cyclical": "growth_tech",
 
-    # Real assets
+    # Cyclical — 跟经济周期走
+    "consumer discretionary": "cyclical",
+    "consumer cyclical": "cyclical",
+    "financials": "cyclical",
+    "financial services": "cyclical",
+    "industrials": "cyclical",
+
+    # Real assets — 跟通胀/大宗商品走
     "energy": "real_assets",
     "materials": "real_assets",
     "basic materials": "real_assets",
     "real estate": "real_assets",
-    "industrials": "real_assets",
 
-    # Defensive
+    # Defensive — 抗衰退、低波动
     "health care": "defensive",
     "healthcare": "defensive",
     "consumer staples": "defensive",
     "consumer defensive": "defensive",
     "utilities": "defensive",
-    "financials": "defensive",
-    "financial services": "defensive",
 }
 
 
