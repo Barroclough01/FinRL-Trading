@@ -267,11 +267,16 @@ class FMPFetcher(BaseDataFetcher, DataSource):
             logger.info(f"Offline mode: skip remote fetch for {endpoint} {ticker}; using local DB if available")
             return []
 
-        # Build URL (profile endpoint doesn't use period). Do not set any limit param.
+        # Build URL (profile endpoint doesn't use period).
         if endpoint == 'profile':
             url = f"{self.base_url}/{endpoint}?symbol={ticker}&apikey={self.api_key}"
         else:
-            url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&apikey={self.api_key}"
+            url = f"{self.base_url}/{endpoint}?symbol={ticker}&period={period}&limit=40&apikey={self.api_key}"
+            # Append date range so FMP returns full history instead of recent quarters only
+            if start_date:
+                url += f"&from={start_date}"
+            if end_date:
+                url += f"&to={end_date}"
 
         try:
             response = requests.get(url)
@@ -688,11 +693,14 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                     except Exception:
                         equity = 0.0
 
-                    net_income_ratio = income_q.get('netIncomeRatio', 0)
+                    # net_income_ratio: prefer ratio endpoint's netProfitMargin
+                    net_income_ratio = ratio_q.get('netProfitMargin')
+                    if net_income_ratio is None:
+                        net_income_ratio = income_q.get('netIncomeRatio')
                     try:
-                        net_income_ratio = float(net_income_ratio)
-                    except Exception:
-                        net_income_ratio = 0.0
+                        net_income_ratio = float(net_income_ratio) if net_income_ratio is not None else np.nan
+                    except (TypeError, ValueError):
+                        net_income_ratio = np.nan
 
                     revenue = income_q.get('revenue', income_q.get('sales', 0))
                     try:
@@ -750,11 +758,18 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                     bps = (equity / shares_out) if shares_out else np.nan
 
-                    dividends_paid = cash_q.get('dividendsPaid')
+                    # DPS: prefer ratio endpoint, fallback to cashflow
+                    dps_raw = ratio_q.get('dividendPerShare')
                     try:
-                        dps = (abs(float(dividends_paid)) / shares_out) if (dividends_paid is not None and shares_out) else np.nan
-                    except Exception:
+                        dps = float(dps_raw) if dps_raw is not None else np.nan
+                    except (TypeError, ValueError):
                         dps = np.nan
+                    if pd.isna(dps):
+                        dividends_paid = cash_q.get('commonDividendsPaid') or cash_q.get('dividendsPaid')
+                        try:
+                            dps = (abs(float(dividends_paid)) / shares_out) if (dividends_paid is not None and shares_out) else np.nan
+                        except Exception:
+                            dps = np.nan
 
                     # ratios (prefer API fields, else compute)
                     cur_ratio = ratio_q.get('currentRatio')
@@ -822,18 +837,73 @@ class FMPFetcher(BaseDataFetcher, DataSource):
 
                     roe = (net_income / equity) if (pd.notna(net_income) and equity and float(equity) != 0.0) else np.nan
 
+                    # --- Extract all additional ratio fields ---
+                    RATIO_FIELD_MAP = {
+                        # Profitability
+                        'grossProfitMargin': 'gross_margin',
+                        'operatingProfitMargin': 'operating_margin',
+                        'ebitdaMargin': 'ebitda_margin',
+                        'pretaxProfitMargin': 'pretax_margin',
+                        'effectiveTaxRate': 'effective_tax_rate',
+                        'ebtPerEbit': 'ebt_per_ebit',
+                        # netIncomePerEBT removed (= 1 - effective_tax_rate)
+                        # Efficiency
+                        'assetTurnover': 'asset_turnover',
+                        'fixedAssetTurnover': 'fixed_asset_turnover',
+                        'inventoryTurnover': 'inventory_turnover',
+                        'payablesTurnover': 'payables_turnover',
+                        'workingCapitalTurnoverRatio': 'wc_turnover',
+                        # Leverage
+                        'debtToAssetsRatio': 'debt_to_assets',
+                        'debtToCapitalRatio': 'debt_to_capital',
+                        'longTermDebtToCapitalRatio': 'lt_debt_to_capital',
+                        # financialLeverageRatio removed (= debt_to_equity + 1)
+                        'interestCoverageRatio': 'interest_coverage',
+                        'debtServiceCoverageRatio': 'debt_service_coverage',
+                        'debtToMarketCap': 'debt_to_mktcap',
+                        # Cash Flow
+                        'freeCashFlowPerShare': 'fcf_per_share',
+                        'operatingCashFlowPerShare': 'ocf_per_share',
+                        'cashPerShare': 'cash_per_share',
+                        'capexPerShare': 'capex_per_share',
+                        'freeCashFlowOperatingCashFlowRatio': 'fcf_to_ocf',
+                        'operatingCashFlowRatio': 'ocf_ratio',
+                        'operatingCashFlowSalesRatio': 'ocf_to_sales',
+                        'operatingCashFlowCoverageRatio': 'ocf_coverage',
+                        'shortTermOperatingCashFlowCoverageRatio': 'st_ocf_coverage',
+                        'capitalExpenditureCoverageRatio': 'capex_coverage',
+                        # Per-Share
+                        'revenuePerShare': 'revenue_per_share',
+                        'tangibleBookValuePerShare': 'tangible_bvps',
+                        'interestDebtPerShare': 'interest_debt_per_share',
+                        # Valuation
+                        'priceToEarningsGrowthRatio': 'peg',
+                        'priceToFreeCashFlowRatio': 'price_to_fcf',
+                        'priceToOperatingCashFlowRatio': 'price_to_ocf',
+                        # priceToFairValue removed (= pb)
+                        'enterpriseValueMultiple': 'ev_multiple',
+                        # Dividend
+                        'dividendPayoutRatio': 'dividend_payout',
+                        'dividendYield': 'dividend_yield',
+                        'dividendPaidAndCapexCoverageRatio': 'div_capex_coverage',
+                        # Solvency
+                        'solvencyRatio': 'solvency_ratio',
+                    }
+
+                    extra_ratios = {}
+                    for fmp_key, db_col in RATIO_FIELD_MAP.items():
+                        v = ratio_q.get(fmp_key)
+                        try:
+                            extra_ratios[db_col] = float(v) if v is not None else np.nan
+                        except (TypeError, ValueError):
+                            extra_ratios[db_col] = np.nan
+
                     record = {
                         'gvkey': ticker,
                         'datadate': aligned_date.strftime('%Y-%m-%d') if align_quarter_dates else qd.strftime('%Y-%m-%d'),
                         'tic': ticker,
                         'gsector': gsector,
-                        # 基本面倍数等一律使用原始季度日价格
-                        # 'prccd': prccd_orig if pd.notna(prccd_orig) else np.nan,
-                        # 'ajexdi': ajexdi,
-                        # y_return 所用价格：若对齐开启则用对齐价，否则用原始价
                         'adj_close_q': (adj_close_aligned if align_quarter_dates and pd.notna(adj_close_aligned) else adj_close_orig) if pd.notna(adj_close_orig) or pd.notna(adj_close_aligned) else np.nan,
-                        # 记录原始季度日的调整收盘价，供特征/倍数使用
-                        # 'adj_close': adj_close_orig if pd.notna(adj_close_orig) else np.nan,
                         'EPS': eps if eps is not None else np.nan,
                         'BPS': bps if bps is not None else np.nan,
                         'DPS': dps if pd.notna(dps) else np.nan,
@@ -847,8 +917,8 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                         'ps': ps if ps is not None else np.nan,
                         'pb': pb if pb is not None else np.nan,
                         'roe': roe if pd.notna(roe) else np.nan,
-                        # 'revenue': revenue,
                         'net_income_ratio': net_income_ratio,
+                        **extra_ratios,
                     }
                     all_records.append(record)
                 
@@ -865,6 +935,38 @@ class FMPFetcher(BaseDataFetcher, DataSource):
                 # forward return: current quarter vs last quarter
                 # df['y_return'] = np.log(df['adj_close_q'].shift(-1) / df['adj_close_q'])
                 df['y_return'] = df.groupby('tic')['adj_close_q'].transform(lambda s: np.log(s.shift( -1) / s))
+
+                # Fill missing y_return for the last quarter of each ticker
+                # using price data (e.g., Q4 2025 y_return needs Q1 2026 price which is available even without Q1 2026 fundamentals)
+                if not prices.empty and 'datadate' in prices.columns:
+                    prices_dt = prices.copy()
+                    prices_dt['datadate'] = pd.to_datetime(prices_dt['datadate'], errors='coerce')
+                    for tic_name, grp in df.groupby('tic'):
+                        last_idx = grp.index[-1]
+                        if pd.isna(df.loc[last_idx, 'y_return']):
+                            last_qd = pd.to_datetime(df.loc[last_idx, 'datadate'])
+                            cur_price = df.loc[last_idx, 'adj_close_q']
+                            if pd.isna(cur_price) or cur_price <= 0:
+                                continue
+                            # Determine next quarter-end date
+                            next_q_end = last_qd + pd.offsets.QuarterEnd(1)
+                            # Look up price near next quarter-end from price data
+                            tic_prices = prices_dt[prices_dt['tic'] == tic_name].sort_values('datadate')
+                            if tic_prices.empty:
+                                continue
+                            # Find closest trading day to next_q_end (within 7 days before)
+                            mask_near = (tic_prices['datadate'] >= next_q_end - pd.Timedelta(days=7)) & (tic_prices['datadate'] <= next_q_end + pd.Timedelta(days=3))
+                            near_prices = tic_prices[mask_near]
+                            if near_prices.empty:
+                                # Fallback: closest price before next_q_end
+                                near_prices = tic_prices[tic_prices['datadate'] <= next_q_end + pd.Timedelta(days=3)].tail(1)
+                            if not near_prices.empty:
+                                # Pick the one closest to next_q_end
+                                near_prices = near_prices.iloc[(near_prices['datadate'] - next_q_end).abs().argsort()[:1]]
+                                next_price = near_prices.iloc[0].get('adj_close', np.nan)
+                                if pd.notna(next_price) and float(next_price) > 0:
+                                    df.loc[last_idx, 'y_return'] = np.log(float(next_price) / cur_price)
+
                 # keep only original in-range quarters
                 start_dt = pd.to_datetime(start_date)
                 end_dt = pd.to_datetime(end_date)
