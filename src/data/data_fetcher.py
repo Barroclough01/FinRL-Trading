@@ -1282,20 +1282,36 @@ def get_data_manager(cache_dir: str = "./data/cache", preferred_source: Optional
 
 
 # Convenience functions for backward compatibility
-def fetch_sp500_tickers(output_path: str = "./data/sp500_tickers.csv", preferred_source='FMP') -> List[str]:
+def fetch_sp500_tickers(output_path: str = "./data/sp500_tickers.csv", preferred_source='FMP') -> pd.DataFrame:
     """Fetch S&P 500 tickers and save to file."""
     manager = get_data_manager(preferred_source=preferred_source)
     components = manager.get_sp500_components()
-    # tickers = manager.get_unique_tickers(components)
 
-    # Save to file
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     components.to_csv(output_path, index=False)
 
     logger.info(f"Saved {len(components)} tickers to {output_path}")
     return components
+
+
+def fetch_nasdaq100_tickers(preferred_source='FMP') -> pd.DataFrame:
+    """Fetch NASDAQ 100 tickers from FMP."""
+    manager = get_data_manager(preferred_source=preferred_source)
+    fetcher = manager.current_source
+
+    url = f"{fetcher.base_url}/nasdaq-constituent?apikey={fetcher.api_key}"
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+
+    df = pd.DataFrame({
+        'tickers': [item['symbol'] for item in data],
+        'sectors': [item.get('sector', '') for item in data],
+        'dateFirstAdded': [item.get('dateFirstAdded') or '' for item in data],
+    })
+    logger.info(f"Fetched {len(df)} NASDAQ 100 tickers")
+    return df
 
 
 def fetch_fundamental_data(tickers: List[str] | pd.DataFrame, start_date: str, end_date: str,

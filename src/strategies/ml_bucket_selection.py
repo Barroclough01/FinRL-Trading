@@ -52,31 +52,26 @@ SECTOR_TO_BUCKET = {
 }
 
 FEATURE_COLS = [
-    # Original 14
-    "EPS", "BPS", "DPS", "cur_ratio", "quick_ratio", "cash_ratio",
-    "acc_rec_turnover", "debt_ratio", "debt_to_equity",
-    "pe", "ps", "pb", "roe", "net_income_ratio",
-    # Profitability
-    "gross_margin", "operating_margin", "ebitda_margin", "pretax_margin",
-    "effective_tax_rate", "ebt_per_ebit",
-    # Efficiency
-    "asset_turnover", "fixed_asset_turnover", "inventory_turnover",
-    "payables_turnover", "wc_turnover",
-    # Leverage
-    "debt_to_assets", "debt_to_capital", "lt_debt_to_capital",
-    "interest_coverage", "debt_service_coverage", "debt_to_mktcap",
-    # Cash Flow
-    "fcf_per_share", "ocf_per_share", "cash_per_share", "capex_per_share",
-    "fcf_to_ocf", "ocf_ratio", "ocf_to_sales", "ocf_coverage",
-    "st_ocf_coverage", "capex_coverage",
-    # Per-Share
-    "revenue_per_share", "tangible_bvps", "interest_debt_per_share",
-    # Valuation
-    "peg", "price_to_fcf", "price_to_ocf", "ev_multiple",
-    # Dividend
-    "dividend_payout", "dividend_yield", "div_capex_coverage",
-    # Solvency
+    # Valuation (5)
+    "pe", "ps", "pb", "peg", "ev_multiple",
+    # Profitability (4)
+    "EPS", "roe", "gross_margin", "operating_margin",
+    # Cash Flow (5)
+    "fcf_per_share", "cash_per_share", "capex_per_share", "fcf_to_ocf", "ocf_ratio",
+    # Leverage (3)
+    "debt_ratio", "debt_to_equity", "debt_to_mktcap",
+    # Liquidity (1)
+    "cur_ratio",
+    # Efficiency (3)
+    "acc_rec_turnover", "asset_turnover", "payables_turnover",
+    # Coverage (2)
+    "interest_coverage", "debt_service_coverage",
+    # Dividend (1)
+    "dividend_yield",
+    # Solvency (1)
     "solvency_ratio",
+    # Per-Share (1)
+    "BPS",
 ]
 
 
@@ -104,11 +99,23 @@ def build_models():
     return models
 
 
-def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31"):
+def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31", val_quarters=3):
     """Train models for one bucket, return (predictions_df, model_results_list)."""
 
-    train_b = bdf[(bdf["datadate"] < val_cutoff) & (bdf["y_return"].notna())]
-    val_b = bdf[(bdf["datadate"] == val_cutoff) & (bdf["y_return"].notna())]
+    # Validation: last N quarters up to val_cutoff (inclusive)
+    all_dates = sorted(bdf[bdf["y_return"].notna()]["datadate"].unique())
+    val_end_idx = None
+    for i, d in enumerate(all_dates):
+        if str(d) <= val_cutoff:
+            val_end_idx = i
+    if val_end_idx is not None:
+        val_start_idx = max(0, val_end_idx - val_quarters + 1)
+        val_dates = set(all_dates[val_start_idx : val_end_idx + 1])
+    else:
+        val_dates = set()
+
+    train_b = bdf[(~bdf["datadate"].isin(val_dates)) & (bdf["datadate"] <= val_cutoff) & (bdf["y_return"].notna())]
+    val_b = bdf[(bdf["datadate"].isin(val_dates)) & (bdf["y_return"].notna())]
     # Infer on the latest quarter after val_cutoff
     infer_dates = sorted(bdf[bdf["datadate"] > val_cutoff]["datadate"].unique())
     if infer_dates:
@@ -119,7 +126,8 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31"):
 
     print(f"\n{'=' * 60}")
     print(f"  Bucket: {bucket.upper()}")
-    print(f"  Train: {len(train_b)} | Val: {len(val_b)} | Infer: {len(infer_b)}")
+    val_date_range = f"{sorted(val_dates)[0]} ~ {sorted(val_dates)[-1]}" if val_dates else "none"
+    print(f"  Train: {len(train_b)} | Val: {len(val_b)} ({len(val_dates)}Q: {val_date_range}) | Infer: {len(infer_b)}")
     if len(infer_b) > 0:
         print(f"  Infer date: {infer_date}")
     print(f"{'=' * 60}")
@@ -187,6 +195,28 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31"):
 
     print(f"  >> Best: {best_name} (MSE={best_mse:.6f})")
 
+    # Retrain all models on train + val before inference
+    full_train = pd.concat([train_b, val_b], ignore_index=True)
+    X_full, y_full = full_train[feature_cols].values, full_train["y_return"].values
+    scaler_full = StandardScaler()
+    X_full_s = scaler_full.fit_transform(X_full)
+    X_infer_s = scaler_full.transform(X_infer)
+    print(f"  Retrained on train+val: {len(full_train)} samples")
+
+    for name, model in fitted.items():
+        if name == "Stacking":
+            continue  # rebuild stacking below
+        model.fit(X_full_s, y_full)
+    # Rebuild stacking with retrained base models
+    stacking = StackingRegressor(
+        estimators=[(n, fitted[n]) for n in top3],
+        final_estimator=Ridge(alpha=1.0), cv=3, n_jobs=-1,
+    )
+    stacking.fit(X_full_s, y_full)
+    fitted["Stacking"] = stacking
+    if best_name == "Stacking":
+        best_model = stacking
+
     # Predict
     infer_b = infer_b.copy()
     infer_b["predicted_return"] = best_model.predict(X_infer_s)
@@ -194,7 +224,7 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31"):
     for n, m in fitted.items():
         infer_b[f"pred_{n}"] = m.predict(X_infer_s)
 
-    # Inverse-MSE weighted ensemble
+    # Inverse-MSE weighted ensemble (weights from val MSE, predictions from retrained models)
     mse_map = {r["model"]: r["val_mse"] for r in model_results}
     pred_model_cols = [c for c in infer_b.columns if c.startswith("pred_") and c != "pred_ensemble_avg"]
     weights = {}
@@ -253,13 +283,15 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31"):
 def main():
     parser = argparse.ArgumentParser(description="Per-bucket ML stock selection")
     parser.add_argument("--db", default=os.path.join(project_root, "data", "finrl_trading.db"))
-    parser.add_argument("--val-cutoff", default="2025-12-31", help="Validation cutoff date (train < this, val = this)")
+    parser.add_argument("--universe", default=None,
+                        help="Filter to a stock universe: sp500, nasdaq100, or path to CSV with 'tickers' column")
+    parser.add_argument("--val-cutoff", default="2025-12-31", help="Validation end date (last val quarter)")
+    parser.add_argument("--val-quarters", type=int, default=3, help="Number of validation quarters (default: 3)")
     parser.add_argument("--output-dir", default=os.path.join(project_root, "data"))
     args = parser.parse_args()
 
     # Load data
     conn = sqlite3.connect(args.db)
-    # Build column list dynamically from FEATURE_COLS
     _feat_sql = ", ".join(FEATURE_COLS)
     df = pd.read_sql(
         f"""SELECT ticker as tic, datadate, gsector, adj_close_q,
@@ -269,6 +301,25 @@ def main():
         conn,
     )
     conn.close()
+
+    # Filter to universe if specified
+    if args.universe:
+        if args.universe.lower() == "nasdaq100":
+            import sys as _sys; _sys.path.insert(0, os.path.join(project_root, "src"))
+            from data.data_fetcher import fetch_nasdaq100_tickers
+            univ = fetch_nasdaq100_tickers()
+            univ_tickers = set(univ["tickers"].tolist())
+        elif args.universe.lower() == "sp500":
+            from data.data_fetcher import fetch_sp500_tickers
+            univ = fetch_sp500_tickers()
+            univ_tickers = set(univ["tickers"].tolist())
+        elif os.path.exists(args.universe):
+            univ_tickers = set(pd.read_csv(args.universe)["tickers"].tolist())
+        else:
+            raise ValueError(f"Unknown universe: {args.universe}")
+        before = len(df)
+        df = df[df["tic"].isin(univ_tickers)].copy()
+        print(f"Universe filter ({args.universe}): {before} -> {len(df)} records ({df['tic'].nunique()} tickers)")
 
     print(f"Loaded {len(df)} records, {df['tic'].nunique()} tickers")
     print(f"Date range: {df['datadate'].min()} ~ {df['datadate'].max()}")
@@ -299,7 +350,7 @@ def main():
 
     for bucket in ["growth_tech", "cyclical", "real_assets", "defensive"]:
         bdf = df[df["bucket"] == bucket].copy()
-        preds, results, importances = run_bucket(bucket, bdf, FEATURE_COLS, val_cutoff=args.val_cutoff)
+        preds, results, importances = run_bucket(bucket, bdf, FEATURE_COLS, val_cutoff=args.val_cutoff, val_quarters=args.val_quarters)
         if len(preds) > 0:
             all_preds.append(preds)
         all_model_results.extend(results)
@@ -315,19 +366,21 @@ def main():
     pred_all["rank_best"] = pred_all.groupby("bucket")["predicted_return"].rank(ascending=False).astype(int)
     pred_all["rank_ensemble"] = pred_all.groupby("bucket")["pred_ensemble_avg"].rank(ascending=False).astype(int)
 
-    # Save
+    # Save — prefix filenames with universe name when filtered
     os.makedirs(args.output_dir, exist_ok=True)
-    pred_path = os.path.join(args.output_dir, "ml_bucket_predictions.csv")
+    prefix = f"{args.universe}_" if args.universe else "sp500_"
+
+    pred_path = os.path.join(args.output_dir, f"{prefix}ml_bucket_predictions.csv")
     pred_all.to_csv(pred_path, index=False)
     print(f"\nSaved: {pred_path} ({len(pred_all)} stocks)")
 
-    model_path = os.path.join(args.output_dir, "ml_bucket_model_results.csv")
+    model_path = os.path.join(args.output_dir, f"{prefix}ml_bucket_model_results.csv")
     pd.DataFrame(all_model_results).to_csv(model_path, index=False)
 
     if all_importances:
         imp_df = pd.DataFrame(all_importances)
         imp_df = imp_df.sort_values(["bucket", "model", "rank"])
-        imp_path = os.path.join(args.output_dir, "ml_feature_importance.csv")
+        imp_path = os.path.join(args.output_dir, f"{prefix}ml_feature_importance.csv")
         imp_df.to_csv(imp_path, index=False)
         print(f"Saved: {imp_path} ({len(imp_df)} rows)")
     print(f"Saved: {model_path} ({len(all_model_results)} rows)")

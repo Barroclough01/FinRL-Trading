@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch SP500 fundamental data and store to local database."""
+"""Fetch fundamental data for a stock universe and store to local database."""
 
 import argparse
 import os
@@ -12,12 +12,14 @@ if project_root not in sys.path:
     sys.path.insert(0, os.path.join(project_root, "src"))
 
 import pandas as pd
-from data.data_fetcher import fetch_fundamental_data, fetch_sp500_tickers
+from data.data_fetcher import fetch_fundamental_data, fetch_sp500_tickers, fetch_nasdaq100_tickers
 from data.data_store import get_data_store
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fetch & store SP500 fundamentals")
+    parser = argparse.ArgumentParser(description="Fetch & store fundamentals")
+    parser.add_argument("--universe", default="sp500", choices=["sp500", "nasdaq100"],
+                        help="Stock universe (default: sp500)")
     parser.add_argument("--start-date", default="2021-01-01")
     parser.add_argument("--end-date", default="2026-04-01")
     parser.add_argument("--limit", type=int, default=10000, help="Universe cap")
@@ -25,11 +27,15 @@ def main():
     parser.add_argument("--output-csv", default=None, help="Also save to CSV")
     args = parser.parse_args()
 
-    # 1. Get SP500 tickers
-    print("Fetching SP500 universe ...")
-    tickers = fetch_sp500_tickers(preferred_source=args.preferred_source)
+    # 1. Get tickers
+    print(f"Fetching {args.universe.upper()} universe ...")
+    if args.universe == "nasdaq100":
+        tickers = fetch_nasdaq100_tickers(preferred_source=args.preferred_source)
+    else:
+        tickers = fetch_sp500_tickers(preferred_source=args.preferred_source)
+
     if tickers is None or len(tickers) == 0:
-        raise ValueError("Failed to fetch SP500 tickers")
+        raise ValueError(f"Failed to fetch {args.universe} tickers")
     if args.limit > 0:
         tickers = tickers.head(args.limit)
     print(f"Universe: {len(tickers)} tickers")
@@ -60,6 +66,7 @@ def main():
 
     # 5. Summary
     print(f"\nSummary:")
+    print(f"  Universe: {args.universe}")
     print(f"  Tickers: {df['tic'].nunique()}")
     print(f"  Date range: {df['datadate'].min()} ~ {df['datadate'].max()}")
     print(f"  Total records: {len(df)}")
