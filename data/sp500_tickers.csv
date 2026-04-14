@@ -1,0 +1,504 @@
+tickers,sectors,dateFirstAdded
+CASY,Consumer Cyclical,2026-04-09
+COHR,Technology,2026-03-23
+LITE,Technology,2026-03-23
+SATS,Technology,2026-03-23
+VRT,Industrials,2026-03-23
+CIEN,Technology,2026-02-09
+CRH,Basic Materials,2025-12-22
+CVNA,Consumer Cyclical,2025-12-22
+FIX,Industrials,2025-12-22
+ARES,Financial Services,2025-12-11
+SNDK,Technology,2025-11-28
+Q,Technology,2025-11-03
+APP,Technology,2025-09-22
+EME,Industrials,2025-09-22
+HOOD,Financial Services,2025-09-22
+IBKR,Financial Services,2025-08-28
+XYZ,Technology,2025-07-23
+TTD,Technology,2025-07-18
+DDOG,Technology,2025-07-09
+COIN,Financial Services,2025-05-19
+DASH,Communication Services,2025-03-24
+EXE,Energy,2025-03-24
+TKO,Communication Services,2025-03-24
+WSM,Consumer Cyclical,2025-03-24
+APO,Financial Services,2024-12-23
+LII,Industrials,2024-12-23
+WDAY,Technology,2024-12-23
+TPL,Energy,2024-11-26
+DELL,Technology,2024-09-23
+ERIE,Financial Services,2024-09-23
+PLTR,Technology,2024-09-23
+SW,Consumer Cyclical,2024-07-08
+CRWD,Technology,2024-06-24
+GDDY,Technology,2024-06-24
+KKR,Financial Services,2024-06-24
+VST,Utilities,2024-05-08
+GEV,Utilities,2024-04-02
+SOLV,Healthcare,2024-04-01
+DECK,Consumer Cyclical,2024-03-18
+SMCI,Technology,2024-03-18
+BLDR,Industrials,2023-12-18
+JBL,Technology,2023-12-18
+UBER,Technology,2023-12-18
+HUBB,Industrials,2023-10-18
+LULU,Consumer Cyclical,2023-10-18
+VLTO,Industrials,2023-10-02
+ABNB,Consumer Cyclical,2023-09-18
+BX,Financial Services,2023-09-18
+KVUE,Consumer Defensive,2023-08-25
+PANW,Technology,2023-06-20
+AXON,Industrials,2023-05-04
+FICO,Technology,2023-03-20
+BG,Consumer Defensive,2023-03-15
+PODD,Healthcare,2023-03-15
+GEHC,Healthcare,2023-01-04
+STLD,Basic Materials,2022-12-22
+FSLR,Energy,2022-12-19
+ACGL,Financial Services,2022-11-01
+TRGP,Energy,2022-10-12
+EQT,Energy,2022-10-03
+PCG,Utilities,2022-10-03
+CSGP,Real Estate,2022-09-19
+INVH,Real Estate,2022-09-19
+KDP,Consumer Defensive,2022-06-21
+ON,Technology,2022-06-21
+VICI,Real Estate,2022-06-08
+WBD,Communication Services,2022-04-11
+CPT,Real Estate,2022-04-04
+NDSN,Industrials,2022-02-15
+CEG,Utilities,2022-02-02
+FDS,Financial Services,2021-12-20
+EPAM,Technology,2021-12-14
+BRO,Financial Services,2021-09-20
+TECH,Healthcare,2021-08-30
+MRNA,Healthcare,2021-07-21
+CRL,Healthcare,2021-05-14
+PTC,Technology,2021-04-20
+GNRC,Industrials,2021-03-22
+NXPI,Technology,2021-03-22
+MPWR,Technology,2021-02-12
+TRMB,Technology,2021-01-21
+TSLA,Consumer Cyclical,2020-12-21
+POOL,Industrials,2020-10-07
+TER,Technology,2020-09-21
+TDY,Technology,2020-06-22
+TYL,Technology,2020-06-22
+WST,Healthcare,2020-05-22
+DPZ,Consumer Cyclical,2020-05-12
+DXCM,Healthcare,2020-05-12
+CARR,Industrials,2020-04-03
+OTIS,Industrials,2020-04-03
+IR,Industrials,2020-03-03
+LYV,Communication Services,2019-12-23
+STE,Healthcare,2019-12-23
+ZBRA,Technology,2019-12-23
+ODFL,Industrials,2019-12-09
+WRB,Financial Services,2019-12-05
+NOW,Technology,2019-11-21
+LVS,Consumer Cyclical,2019-10-03
+NVR,Consumer Cyclical,2019-09-26
+CDW,Technology,2019-09-23
+IEX,Industrials,2019-08-09
+LDOS,Technology,2019-08-09
+TROW,Financial Services,2019-07-29
+TMUS,Communication Services,2019-07-15
+AMCR,Consumer Cyclical,2019-06-07
+CTVA,Basic Materials,2019-06-03
+DD,Basic Materials,2019-04-02
+DOW,Basic Materials,2019-04-01
+FOX,Communication Services,2019-03-04
+FOXA,Communication Services,2019-03-04
+WAB,Industrials,2019-02-27
+ATO,Utilities,2019-02-15
+FANG,Energy,2018-12-03
+JKHY,Technology,2018-11-13
+KEYS,Technology,2018-11-06
+FTNT,Technology,2018-10-11
+ROL,Consumer Cyclical,2018-10-01
+ANET,Technology,2018-08-28
+CPRT,Consumer Cyclical,2018-07-02
+CPAY,Technology,2018-06-20
+BR,Technology,2018-06-18
+EVRG,Utilities,2018-06-05
+MSCI,Financial Services,2018-04-04
+TTWO,Technology,2018-03-19
+HII,Industrials,2018-01-03
+NCLH,Consumer Cyclical,2017-10-13
+CDNS,Technology,2017-09-18
+SBAC,Real Estate,2017-09-01
+IQV,Healthcare,2017-08-29
+AOS,Industrials,2017-07-26
+MGM,Consumer Cyclical,2017-07-26
+PKG,Consumer Cyclical,2017-07-26
+RMD,Healthcare,2017-07-26
+BKR,Energy,2017-07-07
+ALGN,Healthcare,2017-06-19
+EG,Financial Services,2017-06-19
+HLT,Consumer Cyclical,2017-06-19
+IT,Technology,2017-04-05
+AMD,Technology,2017-03-20
+ARE,Real Estate,2017-03-20
+RJF,Financial Services,2017-03-20
+SRE,Utilities,2017-03-17
+SNPS,Technology,2017-03-16
+REG,Real Estate,2017-03-02
+CBOE,Financial Services,2017-03-01
+INCY,Healthcare,2017-02-28
+IDXX,Healthcare,2017-01-05
+MAA,Real Estate,2016-12-02
+D,Utilities,2016-11-30
+HWM,Industrials,2016-10-21
+COO,Healthcare,2016-09-23
+CHTR,Communication Services,2016-09-08
+MTD,Healthcare,2016-09-06
+ALB,Basic Materials,2016-07-01
+FTV,Technology,2016-07-01
+LNT,Utilities,2016-07-01
+TDG,Industrials,2016-06-03
+AJG,Financial Services,2016-05-31
+DLR,Real Estate,2016-05-18
+GPN,Industrials,2016-04-25
+ULTA,Consumer Cyclical,2016-04-18
+CNC,Healthcare,2016-03-30
+UDR,Real Estate,2016-03-07
+AWK,Utilities,2016-03-04
+FRT,Real Estate,2016-02-01
+CFG,Financial Services,2016-01-29
+EXR,Real Estate,2016-01-19
+WTW,Financial Services,2016-01-05
+CHD,Consumer Defensive,2015-12-29
+SYF,Financial Services,2015-11-18
+HPE,Technology,2015-11-02
+VRSK,Industrials,2015-10-08
+NWS,Communication Services,2015-09-18
+UAL,Industrials,2015-09-03
+PYPL,Financial Services,2015-07-20
+KHC,Consumer Defensive,2015-07-06
+JBHT,Industrials,2015-07-01
+O,Real Estate,2015-04-07
+EQIX,Real Estate,2015-03-20
+HSIC,Healthcare,2015-03-17
+SWKS,Technology,2015-03-12
+HCA,Healthcare,2015-01-27
+RCL,Consumer Cyclical,2014-12-05
+UHS,Healthcare,2014-09-20
+URI,Industrials,2014-09-20
+MLM,Basic Materials,2014-07-02
+AVGO,Technology,2014-05-08
+GOOGL,Communication Services,2014-04-03
+ESS,Real Estate,2014-04-02
+TSCO,Consumer Cyclical,2014-01-24
+META,Communication Services,2013-12-23
+ALLE,Industrials,2013-12-02
+AME,Industrials,2013-09-23
+VRTX,Healthcare,2013-09-23
+DAL,Industrials,2013-09-11
+NWSA,Communication Services,2013-08-01
+ZTS,Healthcare,2013-06-21
+GM,Consumer Cyclical,2013-06-06
+REGN,Healthcare,2013-05-01
+ABBV,Healthcare,2012-12-31
+APTV,Consumer Cyclical,2012-12-24
+GRMN,Technology,2012-12-12
+HUM,Healthcare,2012-12-10
+DG,Consumer Defensive,2012-12-03
+MDLZ,Consumer Defensive,2012-10-02
+PNR,Industrials,2012-10-01
+LYB,Basic Materials,2012-09-05
+STX,Technology,2012-07-02
+LRCX,Technology,2012-06-29
+MNST,Consumer Defensive,2012-06-28
+KMI,Energy,2012-05-25
+PSX,Energy,2012-05-01
+CCI,Real Estate,2012-03-14
+DLTR,Consumer Defensive,2011-12-19
+XYL,Industrials,2011-11-01
+TEL,Technology,2011-10-17
+MOS,Basic Materials,2011-09-26
+ACN,Technology,2011-07-06
+FCX,Basic Materials,2011-07-01
+MPC,Energy,2011-07-01
+CMG,Consumer Cyclical,2011-04-28
+BLK,Financial Services,2011-04-04
+EW,Healthcare,2011-04-01
+FFIV,Technology,2010-12-20
+NFLX,Communication Services,2010-12-20
+TT,Industrials,2010-11-17
+JCI,Industrials,2010-08-27
+CB,Financial Services,2010-07-15
+OKE,Energy,2010-03-15
+BRK-B,Financial Services,2010-02-16
+NRG,Utilities,2010-01-29
+ROP,Industrials,2009-12-23
+ROST,Consumer Cyclical,2009-12-21
+V,Financial Services,2009-12-21
+BKNG,Consumer Cyclical,2009-11-06
+ES,Utilities,2009-07-24
+PWR,Industrials,2009-07-01
+WDC,Technology,2009-07-01
+ORLY,Consumer Cyclical,2009-03-27
+HRL,Consumer Defensive,2009-03-04
+VTR,Real Estate,2009-03-04
+WELL,Real Estate,2009-01-30
+IRM,Real Estate,2009-01-06
+RSG,Industrials,2008-12-05
+WYNN,Consumer Cyclical,2008-11-14
+SJM,Consumer Defensive,2008-11-06
+WEC,Utilities,2008-10-31
+NDAQ,Financial Services,2008-10-22
+APH,Technology,2008-09-30
+LHX,Industrials,2008-09-22
+CRM,Technology,2008-09-15
+FAST,Industrials,2008-09-15
+CF,Basic Materials,2008-08-27
+IVZ,Financial Services,2008-08-21
+DVA,Healthcare,2008-07-31
+MA,Financial Services,2008-07-18
+CTRA,Energy,2008-06-23
+ISRG,Healthcare,2008-06-02
+DOC,Real Estate,2008-03-31
+PM,Consumer Defensive,2008-03-31
+AMT,Real Estate,2007-11-19
+J,Industrials,2007-10-26
+EXPD,Industrials,2007-10-10
+EXPE,Consumer Cyclical,2007-10-02
+ICE,Financial Services,2007-09-26
+MCHP,Technology,2007-09-07
+AKAM,Technology,2007-07-12
+AIZ,Financial Services,2007-04-10
+HST,Real Estate,2007-03-20
+CHRW,Industrials,2007-03-02
+RL,Consumer Cyclical,2007-02-02
+AVB,Real Estate,2007-01-10
+CTSH,Technology,2006-11-17
+CBRE,Real Estate,2006-11-10
+FIS,Technology,2006-11-10
+CME,Financial Services,2006-08-11
+KIM,Real Estate,2006-04-04
+BXP,Real Estate,2006-04-03
+GOOG,Communication Services,2006-04-03
+VRSN,Technology,2006-02-01
+EL,Consumer Defensive,2006-01-05
+AMZN,Consumer Cyclical,2005-11-18
+LEN,Consumer Cyclical,2005-10-04
+AMP,Financial Services,2005-10-03
+PSA,Real Estate,2005-08-19
+TSN,Consumer Defensive,2005-08-10
+STZ,Consumer Defensive,2005-07-01
+DHI,Consumer Cyclical,2005-06-22
+LH,Healthcare,2004-11-01
+TPR,Consumer Cyclical,2004-09-01
+TMO,Healthcare,2004-08-03
+GILD,Healthcare,2004-07-01
+VTRS,Healthcare,2004-04-23
+MTB,Financial Services,2004-02-23
+BIIB,Healthcare,2003-11-13
+PLD,Real Estate,2003-07-17
+GEN,Technology,2003-03-25
+MKC,Consumer Defensive,2003-03-20
+STT,Financial Services,2003-03-14
+VLO,Energy,2002-12-20
+DGX,Healthcare,2002-12-12
+CMCSA,Communication Services,2002-11-19
+TRV,Financial Services,2002-08-21
+ELV,Healthcare,2002-07-25
+EA,Technology,2002-07-22
+EBAY,Consumer Cyclical,2002-07-22
+GS,Financial Services,2002-07-22
+PFG,Financial Services,2002-07-22
+PRU,Financial Services,2002-07-22
+UPS,Industrials,2002-07-22
+SPG,Real Estate,2002-06-26
+WAT,Healthcare,2002-01-02
+EQR,Real Estate,2001-12-03
+NVDA,Technology,2001-11-30
+PPL,Utilities,2001-10-01
+COR,Healthcare,2001-08-30
+ZBH,Healthcare,2001-08-07
+FISV,Technology,2001-04-01
+TXN,Technology,2001-03-12
+CTAS,Industrials,2001-03-01
+SYK,Healthcare,2000-12-12
+MET,Financial Services,2000-12-11
+INTU,Technology,2000-12-05
+EOG,Energy,2000-11-02
+NI,Utilities,2000-11-02
+DVN,Energy,2000-08-30
+SBUX,Consumer Cyclical,2000-06-07
+A,Healthcare,2000-06-05
+ROK,Industrials,2000-03-12
+USB,Financial Services,1999-11-01
+ADI,Technology,1999-10-12
+PNW,Utilities,1999-10-04
+QCOM,Technology,1999-07-22
+VMC,Basic Materials,1999-06-30
+BBY,Consumer Cyclical,1999-06-29
+NTAP,Technology,1999-06-25
+AFL,Financial Services,1999-05-28
+MCK,Healthcare,1999-01-13
+CCL,Consumer Cyclical,1998-12-22
+DHR,Healthcare,1998-11-18
+AES,Utilities,1998-10-02
+PAYX,Industrials,1998-10-01
+WM,Industrials,1998-08-31
+RF,Financial Services,1998-08-28
+COF,Financial Services,1998-07-01
+MCO,Financial Services,1998-07-01
+MAR,Consumer Cyclical,1998-05-29
+BEN,Financial Services,1998-04-30
+NTRS,Financial Services,1998-01-30
+OMC,Communication Services,1997-12-31
+CINF,Financial Services,1997-12-18
+TFC,Financial Services,1997-12-04
+FE,Utilities,1997-11-28
+YUM,Consumer Cyclical,1997-10-06
+KLAC,Technology,1997-09-30
+HBAN,Financial Services,1997-08-28
+PGR,Financial Services,1997-08-04
+APA,Energy,1997-07-28
+EFX,Industrials,1997-06-19
+SCHW,Financial Services,1997-06-02
+CAH,Healthcare,1997-05-27
+ADBE,Technology,1997-05-05
+AZO,Consumer Cyclical,1997-01-02
+AON,Financial Services,1996-04-23
+FITB,Financial Services,1996-03-29
+ALL,Financial Services,1995-07-13
+DRI,Consumer Cyclical,1995-05-31
+L,Financial Services,1995-05-31
+BK,Financial Services,1995-03-31
+AMAT,Technology,1995-03-16
+GLW,Technology,1995-02-27
+BSX,Healthcare,1995-02-24
+PSKY,Communication Services,1994-09-30
+MU,Technology,1994-09-27
+LUV,Industrials,1994-07-01
+UNH,Healthcare,1994-07-01
+MSFT,Technology,1994-06-01
+KEY,Financial Services,1994-03-01
+CSCO,Technology,1993-12-01
+COST,Consumer Defensive,1993-10-01
+MS,Financial Services,1993-07-29
+LIN,Basic Materials,1992-07-01
+AMGN,Healthcare,1992-01-02
+AEE,Utilities,1991-09-19
+ADSK,Technology,1989-12-01
+ORCL,Technology,1989-08-31
+GL,Financial Services,1989-04-30
+ECL,Basic Materials,1989-01-31
+NKE,Consumer Cyclical,1988-11-30
+C,Financial Services,1988-05-31
+PNC,Financial Services,1988-04-30
+HD,Consumer Cyclical,1988-03-31
+AVY,Industrials,1987-12-31
+MRSH,Financial Services,1987-08-30
+SYY,Consumer Defensive,1986-12-31
+MDT,Healthcare,1986-10-31
+ITW,Industrials,1986-02-28
+PH,Industrials,1985-11-30
+DOV,Industrials,1985-10-31
+TJX,Consumer Cyclical,1985-09-30
+CNP,Utilities,1985-07-31
+RVTY,Healthcare,1985-05-31
+APD,Basic Materials,1985-04-30
+NUE,Basic Materials,1985-04-30
+BALL,Consumer Cyclical,1984-10-31
+HAS,Consumer Cyclical,1984-09-30
+PHM,Consumer Cyclical,1984-04-30
+LOW,Consumer Cyclical,1984-02-29
+T,Communication Services,1983-11-30
+VZ,Communication Services,1983-11-30
+CAG,Consumer Defensive,1983-08-31
+AAPL,Technology,1982-11-30
+BF-B,Consumer Defensive,1982-10-31
+SNA,Industrials,1982-09-30
+SWK,Industrials,1982-09-30
+WMT,Consumer Defensive,1982-08-31
+GWW,Industrials,1981-06-30
+MAS,Industrials,1981-06-30
+ADP,Industrials,1981-03-31
+FDX,Industrials,1980-12-31
+PCAR,Industrials,1980-12-31
+AIG,Financial Services,1980-03-31
+WY,Real Estate,1979-10-01
+TXT,Industrials,1978-12-31
+INTC,Technology,1976-12-31
+TGT,Consumer Defensive,1976-12-31
+AXP,Financial Services,1976-06-30
+BAC,Financial Services,1976-06-30
+CI,Healthcare,1976-06-30
+DIS,Communication Services,1976-06-30
+DUK,Utilities,1976-06-30
+NEE,Utilities,1976-06-30
+TAP,Consumer Defensive,1976-06-30
+WFC,Financial Services,1976-06-30
+IFF,Basic Materials,1976-03-31
+JPM,Financial Services,1975-06-30
+WMB,Energy,1975-03-31
+HPQ,Technology,1974-12-31
+GPC,Consumer Cyclical,1973-12-31
+JNJ,Healthcare,1973-06-30
+BAX,Healthcare,1972-09-30
+BDX,Healthcare,1972-09-30
+LLY,Healthcare,1970-12-31
+MCD,Consumer Cyclical,1970-06-30
+NEM,Basic Materials,1969-06-30
+CLX,Consumer Defensive,1969-03-31
+CMI,Industrials,1965-03-31
+EMR,Industrials,1965-03-31
+SHW,Basic Materials,1964-06-30
+ABT,Healthcare,1957-03-04
+ADM,Consumer Defensive,1957-03-04
+AEP,Utilities,1957-03-04
+BA,Industrials,1957-03-04
+BMY,Healthcare,1957-03-04
+CAT,Industrials,1957-03-04
+CL,Consumer Defensive,1957-03-04
+CMS,Utilities,1957-03-04
+COP,Energy,1957-03-04
+CPB,Consumer Defensive,1957-03-04
+CSX,Industrials,1957-03-04
+CVS,Healthcare,1957-03-04
+CVX,Energy,1957-03-04
+DE,Industrials,1957-03-04
+DTE,Utilities,1957-03-04
+ED,Utilities,1957-03-04
+EIX,Utilities,1957-03-04
+ETN,Industrials,1957-03-04
+ETR,Utilities,1957-03-04
+EXC,Utilities,1957-03-04
+F,Consumer Cyclical,1957-03-04
+GD,Industrials,1957-03-04
+GE,Industrials,1957-03-04
+GIS,Consumer Defensive,1957-03-04
+HAL,Energy,1957-03-04
+HIG,Financial Services,1957-03-04
+HON,Industrials,1957-03-04
+HSY,Consumer Defensive,1957-03-04
+IBM,Technology,1957-03-04
+IP,Consumer Cyclical,1957-03-04
+KMB,Consumer Defensive,1957-03-04
+KO,Consumer Defensive,1957-03-04
+KR,Consumer Defensive,1957-03-04
+LMT,Industrials,1957-03-04
+MMM,Industrials,1957-03-04
+MO,Consumer Defensive,1957-03-04
+MRK,Healthcare,1957-03-04
+MSI,Technology,1957-03-04
+NOC,Industrials,1957-03-04
+NSC,Industrials,1957-03-04
+OXY,Energy,1957-03-04
+PEG,Utilities,1957-03-04
+PEP,Consumer Defensive,1957-03-04
+PFE,Healthcare,1957-03-04
+PG,Consumer Defensive,1957-03-04
+PPG,Basic Materials,1957-03-04
+RTX,Industrials,1957-03-04
+SLB,Energy,1957-03-04
+SO,Utilities,1957-03-04
+SPGI,Financial Services,1957-03-04
+UNP,Industrials,1957-03-04
+XEL,Utilities,1957-03-04
+XOM,Energy,1957-03-04
