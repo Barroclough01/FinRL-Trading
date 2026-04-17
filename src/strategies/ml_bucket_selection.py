@@ -82,6 +82,30 @@ MOMENTUM_COLS = [
     "eps_chg", "roe_chg", "gm_chg", "om_chg",
 ]
 
+# datadate → tradedate mapping (first day of next-next month)
+DATADATE_TO_TRADEDATE_MAP = {
+    "03-31": ("06-01", 0),   # Mar 31 → Jun 1 (same year)
+    "06-30": ("09-01", 0),   # Jun 30 → Sep 1 (same year)
+    "09-30": ("12-01", 0),   # Sep 30 → Dec 1 (same year)
+    "12-31": ("03-01", 1),   # Dec 31 → Mar 1 (next year)
+}
+
+
+def datadate_to_tradedate(datadate_str):
+    """Map datadate to tradedate: 03-31→06-01, 06-30→09-01, 09-30→12-01, 12-31→03-01(+1yr)."""
+    if not isinstance(datadate_str, str) or len(datadate_str) < 10:
+        return None
+    mm_dd = datadate_str[5:]  # e.g. "03-31"
+    try:
+        year = int(datadate_str[:4])
+    except ValueError:
+        return None
+    mapping = DATADATE_TO_TRADEDATE_MAP.get(mm_dd)
+    if mapping is None:
+        return None
+    target_mmdd, year_add = mapping
+    return f"{year + year_add}-{target_mmdd}"
+
 
 def build_models():
     models = {
@@ -124,7 +148,7 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31", val_quarters=
 
     train_b = bdf[(~bdf["datadate"].isin(val_dates)) & (bdf["datadate"] <= val_cutoff) & (bdf["y_return"].notna())]
     val_b = bdf[(bdf["datadate"].isin(val_dates)) & (bdf["y_return"].notna())]
-    # Infer on ALL quarters after val_cutoff
+    # Infer on quarters after val_cutoff
     infer_dates = sorted(bdf[bdf["datadate"] > val_cutoff]["datadate"].unique())
     if infer_dates:
         infer_b = bdf[bdf["datadate"].isin(infer_dates)]
@@ -299,8 +323,6 @@ def main():
     parser.add_argument("--val-cutoff", default="2025-12-31", help="Validation end date (last val quarter)")
     parser.add_argument("--val-quarters", type=int, default=3, help="Number of validation quarters (default: 3)")
     parser.add_argument("--output-dir", default=os.path.join(project_root, "data"))
-    parser.add_argument("--survivorship-free", action="store_true",
-                        help="Filter training data by historical SP500 membership per quarter (no filter on inference)")
     parser.add_argument("--latest-snapshot", action="store_true",
                         help="Inference using latest available filing per ticker (fill missing with previous quarter)")
     parser.add_argument("--mixed-vintage", action="store_true",
@@ -309,6 +331,8 @@ def main():
                         help="Reference date for actual return calculation in latest-snapshot mode (default: last quarter end)")
     parser.add_argument("--end-date", default=None,
                         help="End date for return calculation (default: today)")
+    parser.add_argument("--infer-date", default=None,
+                        help="Only infer on this specific datadate (e.g. 2025-12-31). Default: all quarters after val-cutoff")
     args = parser.parse_args()
 
     # Load data
@@ -346,31 +370,18 @@ def main():
     print(f"Date range: {df['datadate'].min()} ~ {df['datadate'].max()}")
     print(f"Val cutoff: {args.val_cutoff}")
 
-    # Survivorship-free filtering: for training/val quarters, keep only tickers
-    # that were actually in SP500 at that time. Inference quarters are NOT filtered.
-    if args.survivorship_free:
-        from data.data_fetcher import get_sp500_members_at_date
-        hist_csv = os.path.join(project_root, "data", "sp500_historical_constituents.csv")
-        hist_df = pd.read_csv(hist_csv)
-        hist_df['date'] = pd.to_datetime(hist_df['date'])
+    # Load SP500 historical membership (used for point-in-time universe filtering)
+    hist_csv = os.path.join(project_root, "data", "sp500_historical_constituents.csv")
+    _hist_df = pd.read_csv(hist_csv)
+    _hist_df['date'] = pd.to_datetime(_hist_df['date'])
 
-        all_quarters = sorted(df["datadate"].unique())
-        membership = {}
-        for q in all_quarters:
-            q_dt = pd.to_datetime(q)
-            valid = hist_df[hist_df['date'] <= q_dt]
-            if not valid.empty:
-                membership[q] = set(valid.iloc[-1]['tickers'].split(','))
-            else:
-                membership[q] = set()
-
-        # Mark rows: True if ticker was in SP500 at that quarter, or if it's an inference quarter
-        before = len(df)
-        is_infer = df["datadate"] > args.val_cutoff
-        is_member = df.apply(lambda r: r['tic'] in membership.get(r['datadate'], set()), axis=1)
-        df = df[is_infer | is_member].copy()
-        removed = before - len(df)
-        print(f"Survivorship-free filter: {before} -> {len(df)} records (removed {removed} non-member rows)")
+    def get_sp500_at(quarter_str):
+        """Return set of SP500 tickers at a given quarter date."""
+        q_dt = pd.to_datetime(quarter_str)
+        valid = _hist_df[_hist_df['date'] <= q_dt]
+        if not valid.empty:
+            return set(t.strip() for t in valid.iloc[-1]['tickers'].split(','))
+        return set()
 
     # Momentum features: price momentum + fundamental QoQ changes
     df = df.sort_values(["tic", "datadate"]).copy()
@@ -521,6 +532,58 @@ def main():
         infer_part["datadate"] = "mixed"
 
         df = pd.concat([train_val_part, infer_part], ignore_index=True)
+
+    # --infer-date: keep only the specified inference quarter (drop other future quarters)
+    if args.infer_date and not args.mixed_vintage:
+        before = len(df)
+        df = df[(df["datadate"] <= args.val_cutoff) | (df["datadate"] == args.infer_date)].copy()
+        print(f"Infer-date filter: keep only {args.infer_date} for inference ({before} -> {len(df)} records)")
+
+    # ---------------------------------------------------------------
+    # Point-in-time SP500 membership filter (Principles A, B, C)
+    #   A: Universe is point-in-time at each tradedate
+    #   B: Features already computed on full data (above)
+    #   C: Same rule for train + val + inference
+    # For each (ticker, datadate), keep only if the ticker was in
+    # SP500 at the corresponding tradedate.
+    # ---------------------------------------------------------------
+    synthetic_dates = {"latest", "mixed"}
+    real_mask = ~df["datadate"].isin(synthetic_dates)
+
+    # Map each real datadate to its tradedate
+    df["_tradedate_pit"] = None
+    df.loc[real_mask, "_tradedate_pit"] = df.loc[real_mask, "datadate"].apply(datadate_to_tradedate)
+
+    # Build keep mask
+    pit_keep = ~real_mask  # always keep synthetic rows (latest-snapshot / mixed-vintage)
+    unique_tradedates = sorted(df.loc[real_mask, "_tradedate_pit"].dropna().unique())
+
+    print(f"\nPoint-in-time SP500 filter ({len(unique_tradedates)} tradedates):")
+
+    for td in unique_tradedates:
+        sp500_members = get_sp500_at(td)
+        td_mask = df["_tradedate_pit"] == td
+        pit_keep = pit_keep | (td_mask & df["tic"].isin(sp500_members))
+
+    # Drop rows with unmappable datadates (non-standard quarter ends)
+    unmappable = real_mask & df["_tradedate_pit"].isna()
+    if unmappable.any():
+        print(f"  Dropped {unmappable.sum()} rows with non-standard datadates")
+
+    before_pit = len(df)
+    df = df[pit_keep].copy()
+    train_count = (df["datadate"] <= args.val_cutoff).sum() if not df.empty else 0
+    infer_count = len(df) - train_count
+    print(f"  {before_pit} -> {len(df)} records ({df['tic'].nunique()} tickers)")
+    print(f"  Train+Val: {train_count} | Inference: {infer_count}")
+
+    # Show last few tradedates for verification
+    for td in unique_tradedates[-4:]:
+        sp500_members = get_sp500_at(td)
+        td_rows = (df["_tradedate_pit"] == td).sum()
+        print(f"  tradedate {td}: {td_rows} stocks (SP500={len(sp500_members)})")
+
+    df = df.drop(columns=["_tradedate_pit"], errors="ignore")
 
     # Sub-sector indicator features: one-hot encode gsector so models can
     # distinguish sectors within each bucket (e.g. Energy vs Real Estate).
