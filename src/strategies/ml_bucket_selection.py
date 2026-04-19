@@ -76,8 +76,8 @@ FEATURE_COLS = [
 
 # Momentum features computed from sequential data (not stored in DB)
 MOMENTUM_COLS = [
-    # Price momentum (from adj_close_q)
-    "ret_1q", "ret_2q", "ret_4q",
+    # Price momentum (from trade_price)
+    "ret_1q", "ret_4q", "ret_accel",
     # Fundamental momentum (QoQ changes)
     "eps_chg", "roe_chg", "gm_chg", "om_chg",
 ]
@@ -250,6 +250,7 @@ def run_bucket(bucket, bdf, feature_cols, val_cutoff="2025-12-31", val_quarters=
 
     # Predict
     infer_b = infer_b.copy()
+    infer_b["tradedate"] = infer_b["datadate"].apply(datadate_to_tradedate)
     infer_b["predicted_return"] = best_model.predict(X_infer_s)
     infer_b["best_model"] = best_name
     for n, m in fitted.items():
@@ -339,7 +340,7 @@ def main():
     conn = sqlite3.connect(args.db)
     _feat_sql = ", ".join(FEATURE_COLS)
     df = pd.read_sql(
-        f"""SELECT ticker as tic, datadate, gsector, adj_close_q,
+        f"""SELECT ticker as tic, datadate, gsector, adj_close_q, trade_price,
            filing_date, accepted_date,
            {_feat_sql}, y_return
            FROM fundamental_data ORDER BY ticker, datadate""",
@@ -383,12 +384,43 @@ def main():
             return set(t.strip() for t in valid.iloc[-1]['tickers'].split(','))
         return set()
 
-    # Momentum features: price momentum + fundamental QoQ changes
+    # Momentum features: price momentum (from trade_price) + fundamental QoQ changes
     df = df.sort_values(["tic", "datadate"]).copy()
     df["adj_close_q"] = pd.to_numeric(df["adj_close_q"], errors="coerce")
-    df["ret_1q"] = df.groupby("tic")["adj_close_q"].pct_change(1)
-    df["ret_2q"] = df.groupby("tic")["adj_close_q"].pct_change(2)
-    df["ret_4q"] = df.groupby("tic")["adj_close_q"].pct_change(4)
+    df["trade_price"] = pd.to_numeric(df["trade_price"], errors="coerce")
+
+    # Fill NULL trade_price (future tradedate) with today's price for momentum calc
+    null_tp_mask = df["trade_price"].isna()
+    if null_tp_mask.any():
+        null_tickers = df.loc[null_tp_mask, "tic"].unique().tolist()
+        print(f"Filling {null_tp_mask.sum()} NULL trade_price ({len(null_tickers)} tickers) with today's price ...")
+        import yfinance as yf
+        yf_tickers = [t.replace(".", "-") for t in null_tickers]
+        from datetime import date, timedelta
+        today = date.today()
+        try:
+            px = yf.download(yf_tickers, start=(today - timedelta(days=5)).isoformat(),
+                             end=(today + timedelta(days=1)).isoformat(),
+                             auto_adjust=True, progress=False)
+            if isinstance(px.columns, pd.MultiIndex):
+                close = px["Close"]
+            else:
+                close = px[["Close"]]
+            filled = 0
+            for tic in null_tickers:
+                yf_t = tic.replace(".", "-")
+                if yf_t in close.columns:
+                    s = close[yf_t].dropna()
+                    if len(s) > 0:
+                        df.loc[(df["tic"] == tic) & null_tp_mask, "trade_price"] = float(s.iloc[-1])
+                        filled += 1
+            print(f"  Filled {filled}/{len(null_tickers)} tickers with today's price")
+        except Exception as e:
+            print(f"  WARNING: yfinance download failed: {e}")
+
+    df["ret_1q"] = df.groupby("tic")["trade_price"].pct_change(1)
+    df["ret_4q"] = df.groupby("tic")["trade_price"].pct_change(4)
+    df["ret_accel"] = df["ret_1q"] - df["ret_4q"] / 4  # momentum acceleration
     for src, dst in [("EPS", "eps_chg"), ("roe", "roe_chg"),
                      ("gross_margin", "gm_chg"), ("operating_margin", "om_chg")]:
         df[src] = pd.to_numeric(df[src], errors="coerce")
@@ -599,7 +631,7 @@ def main():
         bdf = df[df["bucket"] == bucket].copy()
         # Keep only sector dummy columns that have variance within this bucket
         sector_cols = [c for c in bdf.columns if c.startswith("sector_") and bdf[c].sum() > 0]
-        mom_cols = MOMENTUM_COLS if bucket == "growth_tech" else []
+        mom_cols = MOMENTUM_COLS
         bucket_features = FEATURE_COLS + mom_cols + sector_cols
         print(f"\n  [Features for {bucket}]: {len(FEATURE_COLS)} fundamental + {len(mom_cols)} momentum + {len(sector_cols)} sector = {len(bucket_features)}")
         preds, results, importances = run_bucket(bucket, bdf, bucket_features, val_cutoff=args.val_cutoff, val_quarters=args.val_quarters)
