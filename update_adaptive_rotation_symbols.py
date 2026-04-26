@@ -38,17 +38,17 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 BUCKET_TO_GROUP = {
     "growth_tech": "group_a_growth_tech",
-    "cyclical":    "group_b_cyclical",
+    "cyclical": "group_b_cyclical",
     "real_assets": "group_c_real_assets",
-    "defensive":   "group_d_defensive",
+    "defensive": "group_d_defensive",
 }
 
 # Fallback symbols used when a bucket has no ML picks (preserves strategy safety)
 FALLBACK_SYMBOLS = {
     "growth_tech": ["AAPL", "MSFT", "NVDA", "META", "AMZN"],
-    "cyclical":    ["JPM", "GS", "HD", "CAT", "UNP"],
+    "cyclical": ["JPM", "GS", "HD", "CAT", "UNP"],
     "real_assets": ["XOM", "CVX", "COP", "FCX", "GLD"],
-    "defensive":   ["JNJ", "PG", "KO", "UNH", "PEP"],
+    "defensive": ["JNJ", "PG", "KO", "UNH", "PEP"],
 }
 
 
@@ -74,7 +74,9 @@ def get_top_picks(df: pd.DataFrame, top_n: int) -> dict[str, list[str]]:
     """Return {bucket: [ticker, ...]} with top-N per bucket by predicted_return."""
     picks = {}
     for bucket in BUCKET_TO_GROUP:
-        bdf = df[df["bucket"] == bucket].sort_values("predicted_return", ascending=False)
+        bdf = df[df["bucket"] == bucket].sort_values(
+            "predicted_return", ascending=False
+        )
         tickers = bdf["tic"].head(top_n).tolist()
         if not tickers:
             print(f"  WARNING: no picks for {bucket}, using fallback symbols")
@@ -85,37 +87,70 @@ def get_top_picks(df: pd.DataFrame, top_n: int) -> dict[str, list[str]]:
 
 def patch_yaml(yaml_path: str, picks: dict[str, list[str]], dry_run: bool) -> str:
     """
-    Patch asset_groups symbol lists in the YAML using regex line replacement.
-    Returns the patched YAML text (does not write to disk in dry-run mode).
-
-    Strategy: locate each group block, find its `symbols:` section,
-    replace all `      - TICKER` lines until the next top-level key.
+    Patch asset_groups symbol lists in the YAML line by line.
+    Finds each group block, locates its symbols: section, replaces the ticker lines.
+    Robust to any indentation width.
     """
     with open(yaml_path, "r") as f:
-        text = f.read()
+        lines = f.readlines()
 
-    original = text
+    original = "".join(lines)
 
     for bucket, group_key in BUCKET_TO_GROUP.items():
         tickers = picks[bucket]
-        new_symbols_block = "\n".join(f"      - {t}" for t in tickers)
 
-        # Match: group key line, then any lines up to and including `symbols:`,
-        # then capture all `      - TICKER` lines as a block to replace.
-        pattern = (
-            rf"({re.escape(group_key)}:.*?symbols:\s*\n)"  # group header + symbols:
-            rf"((?:      - \S+\n)+)"                        # existing ticker lines
-        )
-        replacement = rf"\g<1>{new_symbols_block}\n"
-        new_text, count = re.subn(pattern, replacement, text, flags=re.DOTALL)
+        # Find the line index of this group key
+        group_line = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith(group_key + ":"):
+                group_line = i
+                break
 
-        if count == 0:
-            print(f"  WARNING: could not find symbol block for {group_key} — skipping")
+        if group_line is None:
+            print(f"  WARNING: could not find group key '{group_key}' — skipping")
             continue
 
-        text = new_text
+        # Find `symbols:` line after group_line
+        symbols_line = None
+        for i in range(group_line + 1, min(group_line + 10, len(lines))):
+            if lines[i].strip() == "symbols:":
+                symbols_line = i
+                break
 
-    return text, original
+        if symbols_line is None:
+            print(f"  WARNING: could not find symbols: under '{group_key}' — skipping")
+            continue
+
+        # Detect indentation from the first existing ticker line
+        indent = "      "  # default 6 spaces
+        if symbols_line + 1 < len(lines):
+            next_line = lines[symbols_line + 1]
+            m = re.match(r"^(\s+)-\s+\S+", next_line)
+            if m:
+                indent = m.group(1)
+
+        # Find the range of ticker lines (lines starting with indent + "- ")
+        start = symbols_line + 1
+        end = start
+        while end < len(lines) and re.match(
+            rf"^{re.escape(indent)}-\s+\S+", lines[end]
+        ):
+            end += 1
+
+        # Build replacement lines — quote tickers that YAML would misparse as booleans
+        YAML_BOOL_TICKERS = {"ON", "NO", "YES", "TRUE", "FALSE", "NULL", "OFF"}
+        new_ticker_lines = [
+            f'{indent}- "{t}"\n'
+            if t.upper() in YAML_BOOL_TICKERS
+            else f"{indent}- {t}\n"
+            for t in tickers
+        ]
+
+        # Splice in
+        lines = lines[:start] + new_ticker_lines + lines[end:]
+
+    patched = "".join(lines)
+    return patched, original
 
 
 def write_output(yaml_path: str, patched_text: str, dry_run: bool) -> str:
@@ -140,24 +175,41 @@ def print_diff_summary(picks: dict[str, list[str]], original_text: str) -> None:
     print("  Symbol Update Summary")
     print("=" * 60)
 
+    orig_lines = original_text.splitlines()
     for bucket, group_key in BUCKET_TO_GROUP.items():
-        # Extract old symbols from original YAML text
-        pattern = (
-            rf"{re.escape(group_key)}:.*?symbols:\s*\n"
-            rf"((?:      - \S+\n)+)"
-        )
-        m = re.search(pattern, original_text, flags=re.DOTALL)
+        # Extract old symbols line by line
         old_tickers = []
-        if m:
-            for line in m.group(1).strip().splitlines():
-                t = line.strip().lstrip("- ").strip()
-                if t:
-                    old_tickers.append(t)
+        group_line = next(
+            (
+                i
+                for i, l in enumerate(orig_lines)
+                if l.strip().startswith(group_key + ":")
+            ),
+            None,
+        )
+        if group_line is not None:
+            sym_line = next(
+                (
+                    i
+                    for i in range(
+                        group_line + 1, min(group_line + 10, len(orig_lines))
+                    )
+                    if orig_lines[i].strip() == "symbols:"
+                ),
+                None,
+            )
+            if sym_line is not None:
+                for l in orig_lines[sym_line + 1 :]:
+                    m = re.match(r"^\s+-\s+(\S+)", l)
+                    if m:
+                        old_tickers.append(m.group(1))
+                    else:
+                        break
 
         new_tickers = picks[bucket]
-        added   = [t for t in new_tickers if t not in old_tickers]
-        removed = [t for t in old_tickers  if t not in new_tickers]
-        kept    = [t for t in new_tickers  if t in old_tickers]
+        added = [t for t in new_tickers if t not in old_tickers]
+        removed = [t for t in old_tickers if t not in new_tickers]
+        kept = [t for t in new_tickers if t in old_tickers]
 
         print(f"\n  {bucket} ({group_key})")
         print(f"    New pool : {', '.join(new_tickers)}")
@@ -174,25 +226,30 @@ def main():
         description="Patch Adaptive Rotation YAML with latest ML bucket picks"
     )
     parser.add_argument(
-        "--predictions", default=None,
-        help="Path to ml_bucket_predictions CSV. Defaults to latest in --data-dir."
+        "--predictions",
+        default=None,
+        help="Path to ml_bucket_predictions CSV. Defaults to latest in --data-dir.",
     )
     parser.add_argument(
-        "--data-dir", default="data",
-        help="Directory to search for latest predictions CSV (default: data/)"
+        "--data-dir",
+        default="data",
+        help="Directory to search for latest predictions CSV (default: data/)",
     )
     parser.add_argument(
         "--config",
-        default="src/strategies/AdaptiveRotationConf_v1.2.1.yaml",
-        help="Path to Adaptive Rotation YAML config"
+        default="src/strategies/AdaptiveRotationConf_v1.2.2.yaml",
+        help="Path to Adaptive Rotation YAML config",
     )
     parser.add_argument(
-        "--top-n", type=int, default=5,
-        help="Number of ML picks to include per bucket (default: 5)"
+        "--top-n",
+        type=int,
+        default=5,
+        help="Number of ML picks to include per bucket (default: 5)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Print what would change without writing any files"
+        "--dry-run",
+        action="store_true",
+        help="Print what would change without writing any files",
     )
     args = parser.parse_args()
 
@@ -236,7 +293,9 @@ def main():
     if not args.dry_run:
         print(f"\nBackup saved : {backup_path}")
         print(f"Config updated: {args.config}")
-        print("\nReady to run: ./deploy.sh --strategy adaptive_rotation --mode backtest ...")
+        print(
+            "\nReady to run: ./deploy.sh --strategy adaptive_rotation --mode backtest ..."
+        )
     else:
         print("\n[dry-run] No files written.")
 

@@ -21,7 +21,7 @@ ACCOUNT=""               # Alpaca account name (paper mode)
 # ── Strategy registry (add new strategies here) ──────────
 # Format: strategy_name|config_path|runner_path
 STRATEGIES="
-adaptive_rotation|src/strategies/AdaptiveRotationConf_v1.2.1.yaml|src/strategies/run_adaptive_rotation_strategy.py
+adaptive_rotation|src/strategies/AdaptiveRotationConf_v1.2.2.yaml|src/strategies/run_adaptive_rotation_strategy.py
 "
 
 resolve_strategy() {
