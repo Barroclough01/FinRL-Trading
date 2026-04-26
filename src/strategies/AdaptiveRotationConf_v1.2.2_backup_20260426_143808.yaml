@@ -43,38 +43,46 @@ asset_groups:
   group_a_growth_tech:
     max_assets: 2
     symbols:
-      - SATS
-      - MCHP
-      - "ON"
-      - ORCL
-      - TXN
+      - AAPL
+      - MSFT
+      - NVDA
+      - META
+      - AMZN
+      - GOOGL
+      - TSLA
 
   group_b_cyclical:
     max_assets: 2
     symbols:
-      - IVZ
-      - ODFL
-      - MAS
-      - TROW
-      - HON
+      - JPM
+      - GS
+      - HD
+      - CAT
+      - UNP
+      - DE
+      - AXP
 
   group_c_real_assets:
     max_assets: 2
     symbols:
-      - LYB
+      - XOM
+      - CVX
+      - COP
       - FCX
-      - ALB
-      - DOW
-      - SLB
+      - BHP
+      - GLD
+      - SLV
 
   group_d_defensive:
     max_assets: 2
     symbols:
-      - ADM
-      - INCY
-      - DVA
-      - UHS
-      - ZTS
+      - JNJ
+      - PG
+      - KO
+      - UNH
+      - NEE
+      - DUK
+      - PEP
 
 # -----------------------
 # Market Regime (Slow)
