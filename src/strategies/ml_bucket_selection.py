@@ -781,15 +781,27 @@ def main():
             latest_members = set(_mv_snap["tickers"].tolist()) if _mv_snap is not None else set()
 
         train_val_part = df[df["datadate"] <= args.val_cutoff].copy()
-        infer_part = df[(df["datadate"] > args.val_cutoff) & (df["tic"].isin(latest_members))].copy()
 
-        # Keep only latest datadate per ticker
-        infer_part = infer_part.sort_values(["tic", "datadate"]).drop_duplicates(subset="tic", keep="last")
+        # Primary: tickers that have already filed Q1 2026
+        infer_q1 = df[(df["datadate"] > args.val_cutoff) & (df["tic"].isin(latest_members))].copy()
+        infer_q1 = infer_q1.sort_values(["tic", "datadate"]).drop_duplicates(subset="tic", keep="last")
+        infer_q1["data_vintage"] = "Q1_2026"
+        have_q1 = set(infer_q1["tic"].unique())
 
-        # Tag vintage for output
-        infer_part["data_vintage"] = infer_part["datadate"].apply(
-            lambda d: "Q1_2026" if d >= "2026-03-01" else "Q4_2025"
+        # Fallback: current members with no Q1 2026 filing — use latest Q4 2025 row
+        infer_q4 = (
+            df[
+                (df["datadate"] <= args.val_cutoff)
+                & (df["tic"].isin(latest_members))
+                & (~df["tic"].isin(have_q1))
+            ]
+            .sort_values(["tic", "datadate"])
+            .drop_duplicates(subset="tic", keep="last")
+            .copy()
         )
+        infer_q4["data_vintage"] = "Q4_2025"
+
+        infer_part = pd.concat([infer_q1, infer_q4], ignore_index=True)
 
         n_q1 = (infer_part["data_vintage"] == "Q1_2026").sum()
         n_q4 = (infer_part["data_vintage"] == "Q4_2025").sum()
