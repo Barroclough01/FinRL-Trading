@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+"""
+refresh_fmp_daily.py
+Weekly refresh of fmp_daily/ OHLCV CSVs for all symbols in the Adaptive Rotation YAML.
+
+- Reads symbol list from AR YAML config (all asset_groups)
+- Checks if today is a valid US trading day (skips silently if not)
+- For each symbol, appends any missing trading days up to today from FMP API
+- Idempotent: safe to run multiple times — will not duplicate rows
+- Logs a summary of what was updated / skipped / failed
+
+Usage:
+    python refresh_fmp_daily.py [--config PATH] [--dry-run] [--force]
+
+    --config   Path to AR YAML (default: src/strategies/AdaptiveRotationConf_v1.2.2.yaml)
+    --dry-run  Show what would be fetched without writing anything
+    --force    Skip market calendar check and run regardless of day
+"""
+
+import argparse
+import os
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+import pandas_market_calendars as mcal
+import yfinance as yf
+import yaml
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+SCRIPT_DIR = Path(__file__).parent
+DEFAULT_CONFIG = SCRIPT_DIR / "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
+FMP_DAILY_DIR = SCRIPT_DIR / "data/fmp_daily"
+OHLCV_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def load_api_key() -> str:
+    """No longer used — kept for compatibility. yfinance needs no API key."""
+    return ""
+
+
+def load_symbols_from_yaml(config_path: Path) -> list[str]:
+    """Extract all ticker symbols from asset_groups in the AR YAML."""
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+
+    symbols = []
+    asset_groups = cfg.get("asset_groups", {})
+    for group_name, group_cfg in asset_groups.items():
+        tickers = group_cfg.get("symbols", [])
+        for t in tickers:
+            ticker = str(t).strip().upper()
+            if ticker and ticker not in symbols:
+                symbols.append(ticker)
+
+    # Also pull benchmark if present
+    benchmark = cfg.get("benchmark", {}).get("excess_return_benchmark")
+    if benchmark and str(benchmark).upper() not in symbols:
+        symbols.append(str(benchmark).upper())
+
+    # Also pull fallback symbols if present
+    fallback = cfg.get("portfolio", {}).get("fallback", {}).get("symbols", [])
+    for t in fallback:
+        ticker = str(t).strip().upper()
+        if ticker and ticker not in symbols:
+            symbols.append(ticker)
+
+    return sorted(symbols)
+
+
+def is_trading_day(check_date: date) -> bool:
+    """Return True if check_date is a valid NYSE trading day."""
+    nyse = mcal.get_calendar("NYSE")
+    schedule = nyse.schedule(
+        start_date=check_date.strftime("%Y-%m-%d"),
+        end_date=check_date.strftime("%Y-%m-%d"),
+    )
+    return not schedule.empty
+
+
+def get_last_csv_date(csv_path: Path) -> date | None:
+    """Return the most recent date in an existing CSV, or None if missing/empty."""
+    if not csv_path.exists():
+        return None
+    try:
+        df = pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])
+        if df.empty:
+            return None
+        return df["date"].max().date()
+    except Exception:
+        return None
+
+
+def fetch_fmp_daily(
+    ticker: str, from_date: date, to_date: date, api_key: str
+) -> pd.DataFrame:
+    """
+    Fetch EOD OHLCV data from yfinance for a single ticker.
+    Returns columns: date, open, high, low, close, volume — sorted ascending.
+    """
+    raw = yf.download(
+        ticker,
+        start=from_date.strftime("%Y-%m-%d"),
+        end=(to_date + timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        ),  # yfinance end is exclusive
+        auto_adjust=True,
+        progress=False,
+    )
+
+    if raw.empty:
+        return pd.DataFrame(columns=OHLCV_COLUMNS)
+
+    # Flatten MultiIndex columns if present (yfinance quirk with single ticker)
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
+
+    raw = raw.rename(
+        columns={
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+        }
+    )
+    raw.index.name = "date"
+    raw = raw.reset_index()
+    raw["date"] = pd.to_datetime(raw["date"]).dt.date
+    df = raw[OHLCV_COLUMNS].sort_values("date").reset_index(drop=True)
+    return df
+
+
+def append_new_rows(csv_path: Path, new_rows: pd.DataFrame, dry_run: bool) -> int:
+    """
+    Append new_rows to csv_path, deduplicating on date.
+    Returns number of rows actually written.
+    """
+    if new_rows.empty:
+        return 0
+
+    if csv_path.exists():
+        existing = pd.read_csv(csv_path, parse_dates=["date"])
+        existing["date"] = pd.to_datetime(existing["date"]).dt.date
+        combined = pd.concat([existing, new_rows], ignore_index=True)
+    else:
+        combined = new_rows.copy()
+
+    combined = (
+        combined.drop_duplicates(subset=["date"])
+        .sort_values("date")
+        .reset_index(drop=True)
+    )
+
+    n_new = len(
+        new_rows[
+            ~new_rows["date"].isin(
+                pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])[
+                    "date"
+                ].dt.date
+                if csv_path.exists()
+                else pd.Series([], dtype="object")
+            )
+        ]
+    )
+
+    if not dry_run:
+        FMP_DAILY_DIR.mkdir(parents=True, exist_ok=True)
+        combined.to_csv(csv_path, index=False)
+
+    return n_new
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Refresh fmp_daily/ OHLCV CSVs from FMP API"
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        action="append",
+        dest="configs",
+        help="Path to AR YAML config (can be specified multiple times; defaults to all configs in APCA_ACCOUNTS env)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be fetched, no writes"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Skip market calendar check"
+    )
+    args = parser.parse_args()
+
+    today = date.today()
+    print(
+        f"=== refresh_fmp_daily.py  [{today}] {'[DRY RUN]' if args.dry_run else ''} ===\n"
+    )
+
+    # --- Market calendar check ---
+    if not args.force:
+        if not is_trading_day(today):
+            print(
+                f"Today ({today}) is not a NYSE trading day. Nothing to do. Use --force to override."
+            )
+            sys.exit(0)
+    else:
+        print("--force: skipping market calendar check\n")
+
+    # --- Load symbols from all configs ---
+    # If no --config flags passed, auto-discover from APCA_ACCOUNTS env
+    if not args.configs:
+        load_dotenv(SCRIPT_DIR / ".env")
+        accounts_str = os.getenv("APCA_ACCOUNTS", "").strip()
+        if accounts_str:
+            discovered = []
+            for name in [a.strip() for a in accounts_str.split(",") if a.strip()]:
+                cfg_val = os.getenv(f"APCA_{name}_CONFIG", "").strip()
+                if cfg_val:
+                    discovered.append(SCRIPT_DIR / cfg_val)
+            args.configs = discovered if discovered else [DEFAULT_CONFIG]
+        else:
+            args.configs = [DEFAULT_CONFIG]
+
+    all_symbols = []
+    for cfg_path in args.configs:
+        if not cfg_path.exists():
+            print(f"ERROR: Config not found: {cfg_path}", file=sys.stderr)
+            sys.exit(1)
+        syms = load_symbols_from_yaml(cfg_path)
+        print(f"Symbols from {cfg_path.name}: {syms}")
+        for s in syms:
+            if s not in all_symbols:
+                all_symbols.append(s)
+
+    symbols = sorted(all_symbols)
+    print(f"\nTotal unique symbols across all configs: {symbols}\n")
+
+    api_key = load_api_key()
+
+    # --- Refresh loop ---
+    results = {"updated": [], "up_to_date": [], "failed": [], "new_file": []}
+
+    for ticker in symbols:
+        csv_path = FMP_DAILY_DIR / f"{ticker}_daily.csv"
+        last_date = get_last_csv_date(csv_path)
+
+        if last_date is None:
+            # New ticker — fetch full history (5 years back)
+            from_date = today - timedelta(days=5 * 365)
+            status_prefix = "[NEW]"
+        elif last_date >= today:
+            print(f"  {ticker:6s} — already up to date (last: {last_date})")
+            results["up_to_date"].append(ticker)
+            continue
+        else:
+            from_date = last_date + timedelta(days=1)
+            status_prefix = "[UPD]"
+
+        print(
+            f"  {ticker:6s} — fetching {from_date} → {today} ...", end=" ", flush=True
+        )
+
+        try:
+            new_rows = fetch_fmp_daily(ticker, from_date, today, api_key)
+
+            if new_rows.empty:
+                print("no data returned (holiday/weekend window?)")
+                results["up_to_date"].append(ticker)
+                continue
+
+            # Deduplicate and write
+            if csv_path.exists():
+                existing_dates = set(
+                    pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])[
+                        "date"
+                    ].dt.date
+                )
+            else:
+                existing_dates = set()
+
+            truly_new = new_rows[~new_rows["date"].isin(existing_dates)]
+            n_new = len(truly_new)
+
+            if n_new == 0:
+                print("no new rows after dedup")
+                results["up_to_date"].append(ticker)
+                continue
+
+            if not args.dry_run:
+                FMP_DAILY_DIR.mkdir(parents=True, exist_ok=True)
+                if csv_path.exists():
+                    existing_df = pd.read_csv(csv_path, parse_dates=["date"])
+                    existing_df["date"] = pd.to_datetime(existing_df["date"]).dt.date
+                    combined = pd.concat([existing_df, truly_new], ignore_index=True)
+                else:
+                    combined = truly_new.copy()
+                combined = (
+                    combined.drop_duplicates(subset=["date"])
+                    .sort_values("date")
+                    .reset_index(drop=True)
+                )
+                combined.to_csv(csv_path, index=False)
+
+            print(
+                f"{status_prefix} +{n_new} rows (last: {new_rows['date'].max()}){' [dry run]' if args.dry_run else ''}"
+            )
+
+            if last_date is None:
+                results["new_file"].append(ticker)
+            else:
+                results["updated"].append(ticker)
+
+        except requests.HTTPError as e:
+            print(f"HTTP ERROR {e.response.status_code}")
+            results["failed"].append((ticker, str(e)))
+        except Exception as e:
+            print(f"ERROR: {e}")
+            results["failed"].append((ticker, str(e)))
+
+    # --- Summary ---
+    print(f"\n{'=' * 50}")
+    print(f"Summary for {today}:")
+    print(f"  New files created : {len(results['new_file'])}  {results['new_file']}")
+    print(f"  Updated           : {len(results['updated'])}  {results['updated']}")
+    print(f"  Already up to date: {len(results['up_to_date'])}")
+    print(f"  Failed            : {len(results['failed'])}")
+    for ticker, err in results["failed"]:
+        print(f"    {ticker}: {err}")
+
+    if results["failed"]:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
