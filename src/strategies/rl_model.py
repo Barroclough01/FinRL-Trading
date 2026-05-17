@@ -1,10 +1,19 @@
 import pandas as pd
 import numpy as np
 import traceback
+import contextlib
+import io
 
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 USE_GPU = (DEVICE == "cuda")
+
+
+def _call_with_optional_stdout_suppression(func, show_stdout, *args, **kwargs):
+    if show_stdout:
+        return func(*args, **kwargs)
+    with contextlib.redirect_stdout(io.StringIO()):
+        return func(*args, **kwargs)
 
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
@@ -38,15 +47,9 @@ n_cpus = cpu_count() - 1
 import numpy as np
 import pandas as pd
 
-# Try to import gymnasium instead of gym for compatibility
-try:
-    import gymnasium as gym
-    from gymnasium.utils import seeding
-    from gymnasium import spaces
-except ImportError:
-    import gym
-    from gym.utils import seeding
-    from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
+from gymnasium.utils import seeding
 
 import matplotlib
 matplotlib.use('Agg')
@@ -62,20 +65,20 @@ def _safe_DRL_prediction(model, environment, deterministic=True):
     test_env, test_obs = environment.get_sb_env()
     test_env.reset()
     n_steps = len(environment.df.index.unique())
-    max_steps = n_steps - 1
+    max_steps = max(n_steps - 1, 0)
 
     account_memory = None
     actions_memory = None
 
-    for i in range(n_steps):
+    for i in range(max_steps):
         action, _ = model.predict(test_obs, deterministic=deterministic)
         test_obs, rewards, dones, info = test_env.step(action)
 
-        # Fetch memories either at last step or when done happens early
-        if (i == max_steps) or dones[0]:
+        # Fetch before the terminal auto-reset clears the portfolio memories.
+        if (i == max_steps - 1) or dones[0]:
             account_memory = test_env.env_method("save_asset_memory")
             actions_memory = test_env.env_method("save_action_memory")
-            if dones[0]:
+            if dones[0] and getattr(environment, "verbose", 0):
                 print("hit end!")
             break
 
@@ -92,7 +95,6 @@ def _safe_DRL_prediction(model, environment, deterministic=True):
 DRLAgent.DRL_prediction = staticmethod(_safe_DRL_prediction)
 
 def prepare_rolling_train(df, date_column, testing_window, max_rolling_window, trade_date):
-    print(trade_date-max_rolling_window, trade_date-testing_window)
     # ensure using correct column name - data_split expects 'date' column
     if 'datadate' in df.columns and 'date' not in df.columns:
         df_temp = df.rename(columns={'datadate': 'date'})
@@ -121,21 +123,27 @@ def prepare_trade_data(df,features_column,label_column,date_column,tic_column,un
     return X_trade,y_trade,trade_tic
 
 
-def train_a2c(agent,USE_GPU ):
+def train_a2c(agent, USE_GPU, total_timesteps=50000, verbose=0):
     #add GPU support 
     #A2C_PARAMS = {"n_steps": 5, "ent_coef": 0.005, "learning_rate": 0.0002}
     if USE_GPU:
         A2C_PARAMS = {"n_steps": 1024, "ent_coef": 0.005, "learning_rate": 0.0002, "device": DEVICE}
     else:
         A2C_PARAMS = {"n_steps": 5, "ent_coef": 0.005, "learning_rate": 0.0002}
-    model_a2c = agent.get_model(model_name="a2c",model_kwargs = A2C_PARAMS)
+    model_a2c = _call_with_optional_stdout_suppression(
+        agent.get_model,
+        verbose,
+        model_name="a2c",
+        model_kwargs=A2C_PARAMS,
+        verbose=verbose,
+    )
     trained_a2c = agent.train_model(model=model_a2c, 
                                 tb_log_name='a2c',
-                                total_timesteps=50000)
+                                total_timesteps=total_timesteps)
     
     return trained_a2c
 
-def train_ppo(agent,USE_GPU ):
+def train_ppo(agent, USE_GPU, total_timesteps=80000, verbose=0):
     if USE_GPU:
         PPO_PARAMS = {
         "n_steps": 2048,
@@ -151,24 +159,36 @@ def train_ppo(agent,USE_GPU ):
         "learning_rate": 0.0001,
         "batch_size": 128,
     }
-    model_ppo = agent.get_model("ppo",model_kwargs = PPO_PARAMS)
+    model_ppo = _call_with_optional_stdout_suppression(
+        agent.get_model,
+        verbose,
+        "ppo",
+        model_kwargs=PPO_PARAMS,
+        verbose=verbose,
+    )
     trained_ppo = agent.train_model(model=model_ppo, 
                              tb_log_name='ppo',
-                             total_timesteps=80000)
+                             total_timesteps=total_timesteps)
 
     return trained_ppo
 
-def train_ddpg(agent,USE_GPU ):
+def train_ddpg(agent, USE_GPU, total_timesteps=50000, verbose=0):
     if USE_GPU:
         DDPG_PARAMS = {"batch_size": 1024, "buffer_size": 100000, "learning_rate": 0.001, "device": DEVICE}
     else:
         DDPG_PARAMS = {"batch_size": 128, "buffer_size": 50000, "learning_rate": 0.001}
 
-    model_ddpg = agent.get_model("ddpg",model_kwargs = DDPG_PARAMS) 
+    model_ddpg = _call_with_optional_stdout_suppression(
+        agent.get_model,
+        verbose,
+        "ddpg",
+        model_kwargs=DDPG_PARAMS,
+        verbose=verbose,
+    )
 
     trained_ddpg = agent.train_model(model=model_ddpg, 
                              tb_log_name='ddpg',
-                             total_timesteps=50000)
+                             total_timesteps=total_timesteps)
 
     return trained_ddpg
 
@@ -228,14 +248,27 @@ def append_return_table(df_predict, unique_datetime, y_trade_return, trade_tic, 
     df_predict.loc[unique_datetime[current_index]][tmp_table.columns] = tmp_table.loc[0]
 
 # remove td3 and sac model
-def run_models(df,date_column, trade_date, env_kwargs, 
-              testing_window=4,
-              max_rolling_window=44):
-    print(f"=== run_models DEBUG ===")
-    print(f"Input df columns: {list(df.columns)}")
-    print(f"Input date_column parameter: {date_column}")
-    print(f"Input df has 'date' column: {'date' in df.columns}")
-    print(f"Input df has 'datadate' column: {'datadate' in df.columns}")
+def run_models(
+    df,
+    date_column,
+    trade_date,
+    env_kwargs,
+    testing_window=4,
+    max_rolling_window=44,
+    model_names=None,
+    timesteps=None,
+    verbose=0,
+):
+    if model_names is None:
+        model_names = ["a2c", "ppo", "ddpg"]
+    if timesteps is None:
+        timesteps = {"a2c": 50000, "ppo": 80000, "ddpg": 50000}
+    if verbose:
+        print(f"=== run_models DEBUG ===")
+        print(f"Input df columns: {list(df.columns)}")
+        print(f"Input date_column parameter: {date_column}")
+        print(f"Input df has 'date' column: {'date' in df.columns}")
+        print(f"Input df has 'datadate' column: {'datadate' in df.columns}")
     
     ## initialize all the result tables
     ## need date as index and unique tic name as columns
@@ -249,19 +282,25 @@ def run_models(df,date_column, trade_date, env_kwargs,
     #print(f"After copy - df_ columns: {list(df_.columns)}")
     
     X_train = prepare_rolling_train(df_, date_column, testing_window, max_rolling_window, trade_date)
-    print(f"After prepare_rolling_train - X_train shape: {X_train.shape if hasattr(X_train, 'shape') else 'No shape'}")
+    if verbose:
+        print(f"After prepare_rolling_train - X_train shape: {X_train.shape if hasattr(X_train, 'shape') else 'No shape'}")
 
     # prepare testing data
     X_test = prepare_rolling_test(df_, date_column, testing_window, max_rolling_window, trade_date)
-    print(f"After prepare_rolling_test - X_test shape: {X_test.shape if hasattr(X_test, 'shape') else 'No shape'}")
+    if verbose:
+        print(f"After prepare_rolling_test - X_test shape: {X_test.shape if hasattr(X_test, 'shape') else 'No shape'}")
     
     e_train_gym = StockPortfolioEnv(df = X_train, **env_kwargs)
     env_train, _ = e_train_gym.get_sb_env()
     agent = DRLAgent(env = env_train)
 
-    a2c_model = train_a2c(agent,USE_GPU )
-    ppo_model = train_ppo(agent,USE_GPU )
-    ddpg_model = train_ddpg(agent,USE_GPU )
+    trained = {"a2c": None, "ppo": None, "ddpg": None}
+    if "a2c" in model_names:
+        trained["a2c"] = train_a2c(agent, USE_GPU, total_timesteps=timesteps.get("a2c", 50000), verbose=verbose)
+    if "ppo" in model_names:
+        trained["ppo"] = train_ppo(agent, USE_GPU, total_timesteps=timesteps.get("ppo", 80000), verbose=verbose)
+    if "ddpg" in model_names:
+        trained["ddpg"] = train_ddpg(agent, USE_GPU, total_timesteps=timesteps.get("ddpg", 50000), verbose=verbose)
     #td3_model = train_td3(agent)
     #sac_model = train_sac(agent)
     
@@ -269,29 +308,21 @@ def run_models(df,date_column, trade_date, env_kwargs,
     max_return = -np.inf
     e_trade_gym = StockPortfolioEnv(df = X_test, **env_kwargs)
 
-    df_daily_return, df_actions = DRLAgent.DRL_prediction(
-    model=a2c_model, environment=e_trade_gym
-)
-    a2c_return =list((df_daily_return.daily_return+1).cumprod())[-1] 
-    if a2c_return > max_return:
-        max_return = a2c_return
-        best_model = a2c_model
-    
-    df_daily_return, df_actions = DRLAgent.DRL_prediction(
-    model=ppo_model, environment=e_trade_gym
-)
-    ppo_return =list((df_daily_return.daily_return+1).cumprod())[-1] 
-    if ppo_return > max_return:
-        max_return = ppo_return
-        best_model = ppo_model
+    trained_models = [trained[name] for name in model_names if trained.get(name) is not None]
+    if len(trained_models) == 1:
+        return trained["a2c"], trained["ppo"], trained["ddpg"], trained_models[0]
 
-    df_daily_return, df_actions = DRLAgent.DRL_prediction(
-    model=ddpg_model, environment=e_trade_gym
-)
-    ddpg_return =list((df_daily_return.daily_return+1).cumprod())[-1] 
-    if ddpg_return > max_return:
-        max_return = ddpg_return
-        best_model = ddpg_model
+    for model_name in ["a2c", "ppo", "ddpg"]:
+        model_obj = trained.get(model_name)
+        if model_obj is None:
+            continue
+        df_daily_return, df_actions = DRLAgent.DRL_prediction(
+            model=model_obj, environment=e_trade_gym
+        )
+        model_return = list((df_daily_return.daily_return + 1).cumprod())[-1]
+        if model_return > max_return:
+            max_return = model_return
+            best_model = model_obj
 
 #    df_daily_return, df_actions = DRLAgent.DRL_prediction(
 #    model=ppo_model, environment=e_trade_gym
@@ -309,7 +340,7 @@ def run_models(df,date_column, trade_date, env_kwargs,
    #     max_return = sac_return
     #    best_model = sac_model
     
-    return a2c_model,ppo_model,ddpg_model,best_model
+    return trained["a2c"], trained["ppo"], trained["ddpg"], best_model
 def get_model_evaluation_table(evaluation_record,trade_date):
     evaluation_list = []
     for d in trade_date:
@@ -537,13 +568,6 @@ def plot_predict_return_distribution(df_predict_best,sector_name,out_path):
 
         plt.title(sector_name+": trade date - "+str(df_predict_best.index[i]),size=15)
     plt.savefig(out_path+str(df_predict_best.index[i])+".png")
-
-
-
-
-
-
-
 
 
 

@@ -37,7 +37,10 @@ import argparse
 import json
 import logging
 import os
+import sqlite3
 import sys
+import urllib.error
+import urllib.request
 from datetime import date
 from pathlib import Path
 
@@ -235,6 +238,93 @@ def dry_run_summary(weights: dict[str, float], account_name: str) -> None:
     print("=" * 60)
 
 
+def notify_status(webhook_url: str | None, payload: dict) -> None:
+    """Send run status to a generic webhook endpoint if configured."""
+    if not webhook_url:
+        return
+
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            logger.info(
+                "Webhook notification sent (status=%s)", getattr(resp, "status", "?")
+            )
+    except (urllib.error.URLError, TimeoutError) as exc:
+        logger.warning("Webhook notification failed: %s", exc)
+
+
+def run_post_run_sanity_checks(
+    run_date: str, accounts: list[dict], results: list[dict], errors: list[dict]
+) -> list[str]:
+    """
+    Validate that key artifacts exist and contain expected rows for each account.
+    Returns a list of failure messages; empty means all checks passed.
+    """
+    failures: list[str] = []
+    account_names = {a["name"] for a in accounts}
+    result_names = {r.get("account") for r in results}
+
+    if errors:
+        failures.append(
+            f"execution reported account errors: {[e['account'] for e in errors]}"
+        )
+
+    missing_accounts = sorted(account_names - result_names)
+    if missing_accounts:
+        failures.append(f"missing execution results for account(s): {missing_accounts}")
+
+    execution_log = Path(f"logs/execution_{run_date}.json")
+    if not execution_log.exists():
+        failures.append(f"missing execution log: {execution_log}")
+
+    dashboard = Path("logs/dashboard.html")
+    if not dashboard.exists():
+        failures.append("missing dashboard output: logs/dashboard.html")
+
+    db_path = Path("data/finrl_trading.db")
+    if not db_path.exists():
+        failures.append("missing SQLite DB: data/finrl_trading.db")
+        return failures
+
+    try:
+        conn = sqlite3.connect(db_path)
+        for account in sorted(account_names):
+            snap = conn.execute(
+                """
+                SELECT COUNT(*) FROM weekly_snapshot
+                WHERE snapshot_date = ? AND account = ?
+                """,
+                (run_date, account),
+            ).fetchone()
+            if not snap or snap[0] < 1:
+                failures.append(
+                    f"weekly_snapshot missing for account={account}, date={run_date}"
+                )
+
+            weights = conn.execute(
+                """
+                SELECT COUNT(*) FROM weekly_weights
+                WHERE snapshot_date = ? AND account = ?
+                """,
+                (run_date, account),
+            ).fetchone()
+            if not weights or weights[0] < 1:
+                failures.append(
+                    f"weekly_weights missing for account={account}, date={run_date}"
+                )
+        conn.close()
+    except sqlite3.Error as exc:
+        failures.append(f"DB sanity check failed: {exc}")
+
+    return failures
+
+
 def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     """
     Run the full paper trading cycle for a single account.
@@ -326,6 +416,12 @@ def main():
         action="store_true",
         help="Print target weights without submitting orders",
     )
+    parser.add_argument(
+        "--notify-webhook",
+        default=os.getenv("PAPER_TRADING_WEBHOOK_URL", "").strip(),
+        help="Webhook URL for success/failure notifications "
+        "(default: PAPER_TRADING_WEBHOOK_URL env)",
+    )
     args = parser.parse_args()
 
     logger.info(f"Paper trading run: {args.date}")
@@ -379,13 +475,58 @@ def main():
         logger.info("Running metrics tracker...")
         import subprocess
 
-        subprocess.run(
+        metrics_proc = subprocess.run(
             [sys.executable, "track_metrics.py", "--date", args.date], cwd=project_root
+        )
+        if metrics_proc.returncode != 0:
+            errors.append(
+                {
+                    "account": "metrics",
+                    "error": f"track_metrics.py failed with return code {metrics_proc.returncode}",
+                }
+            )
+
+        failures = run_post_run_sanity_checks(args.date, accounts, results, errors)
+        if failures:
+            for failure in failures:
+                logger.error("Sanity check failed: %s", failure)
+            notify_status(
+                args.notify_webhook,
+                {
+                    "status": "failed",
+                    "date": args.date,
+                    "accounts": sorted([a["name"] for a in accounts]),
+                    "errors": errors,
+                    "sanity_failures": failures,
+                },
+            )
+            sys.exit(1)
+
+        logger.info("Post-run sanity checks passed")
+        notify_status(
+            args.notify_webhook,
+            {
+                "status": "ok",
+                "date": args.date,
+                "accounts": sorted([a["name"] for a in accounts]),
+                "orders_failed": {
+                    r["account"]: r.get("orders_failed", 0) for r in results
+                },
+            },
         )
 
     if errors:
         logger.error(
             f"{len(errors)} account(s) failed: {[e['account'] for e in errors]}"
+        )
+        notify_status(
+            args.notify_webhook,
+            {
+                "status": "failed",
+                "date": args.date,
+                "accounts": sorted([a["name"] for a in accounts]),
+                "errors": errors,
+            },
         )
         sys.exit(1)
 
