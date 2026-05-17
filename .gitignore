@@ -159,4 +159,24 @@ Thumbs.db
 ehthumbs.db
 Thumbs.db
 
-TODO
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+finrl-env/
+venv/
+.env/
+
+# RL/model/cache outputs
+results/
+*.pkl
+*.pt
+*.pth
+
+# Data archives
+*.7z
+*.zip
+
+# Database files
+*.db
