@@ -38,9 +38,11 @@ valuable for execution quality, slippage, drift, and live-vs-backtest parity.
 
 ## Near-Term Work: Paper Comparison Foundation
 
-### 1. Strategy Decision Records
+### 1. Strategy Decision Records (Completed)
 
 Add a normalized decision record for every account and run date.
+
+**Status: Completed (2026-05-31)**
 
 Record at minimum:
 
@@ -61,17 +63,19 @@ Record at minimum:
 - cash and equity
 - benchmark snapshot
 
-Candidate storage:
+Storage implemented:
 
 - SQLite table: `strategy_decisions`
 - JSONL mirror: `logs/strategy_decisions.jsonl`
 
 The SQLite table is better for reports. The JSONL mirror is better for agent
-inspection and append-only debugging.
+inspection and append-only debugging. Fully integrated into `run_paper_trading.py` and covered by unit tests.
 
-### 2. Weekly Comparison Metrics
+### 2. Weekly Comparison Metrics (Completed)
 
 Add a durable weekly metrics artifact alongside the HTML dashboard.
+
+**Status: Completed (2026-05-31)**
 
 Suggested output:
 
@@ -82,16 +86,18 @@ Metrics:
 
 - cumulative return
 - weekly return
-- volatility
-- Sharpe ratio
+- volatility (annualized)
+- Sharpe ratio (annualized)
 - max drawdown
 - turnover
-- cash exposure
+- cash exposure (average cash weight)
 - hit rate
 - beta to SPY and QQQ
 - tracking error vs SPY and QQQ
 - weeks in fallback
 - realized vs target weight drift
+
+Fully integrated into `track_metrics.py` and covered by unit tests.
 
 ### 3. AR Fallback Diagnostics
 
@@ -282,18 +288,18 @@ include:
 
 ## Suggested Build Order
 
-1. Add strategy decision records.
-2. Add weekly comparison metrics artifacts.
-3. Add explicit AR fallback diagnostics.
-4. Add pre-trade validation.
-5. Add post-trade reconciliation.
-6. Add a live-vs-replay parity check.
-7. Add production kill switch.
-8. Harden tests around order sizing, metrics, and risk gates.
-9. Standardize RL observation/action/reward contracts.
-10. Integrate RL as an offline candidate strategy.
-11. Add RL as a third paper account only after it passes offline gates.
-12. Consider production only after several months of clean paper evidence.
+1. **Add strategy decision records.** (Completed: SQLite and JSONL mirror implemented and tested)
+2. **Add weekly comparison metrics artifacts.** (Completed: JSON and CSV files generated side-by-side)
+3. **Add explicit AR fallback diagnostics.** (Completed: Fallback reasons parsed and logged to decision records)
+4. **Add pre-trade validation.** (Completed: 9-point validation gate implemented and tested)
+5. **Add post-trade reconciliation.** (Completed: Discrepancy checks, alert flags, and JSON reports implemented and tested)
+6. **Add a live-vs-replay parity check.**
+7. **Add production kill switch.**
+8. **Harden tests around order sizing, metrics, and risk gates.** (Completed: Added focused test suite under tests/ with 12 passing tests)
+9. **Standardize RL observation/action/reward contracts.**
+10. **Integrate RL as an offline candidate strategy.**
+11. **Add RL as a third paper account only after it passes offline gates.**
+12. **Consider production only after several months of clean paper evidence.**
 
 ## Open Questions
 

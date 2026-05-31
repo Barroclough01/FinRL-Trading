@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -245,3 +246,418 @@ def test_exception_detection_clarified_status():
     result = detector.detect_exceptions(asset_zscores, pd.Timestamp("2026-05-31"))
     assert result.persistence_rule_status == "disabled_due_to_missing_history"
     assert result.strong_signal_rule_status == "enabled"
+
+
+def test_strategy_decision_records(tmp_path):
+    """Test that strategy decision records can be written and read from SQLite and JSONL mirror."""
+    from run_paper_trading import save_strategy_decision
+
+    # Mock database path and JSONL mirror path
+    db_file = tmp_path / "finrl_trading.db"
+    jsonl_file = tmp_path / "strategy_decisions.jsonl"
+
+    dummy_record = {
+        "config_path": "dummy_config.yaml",
+        "config_hash": "abcdef123456",
+        "regime_state": "risk_on",
+        "active_groups": ["group_a"],
+        "ranked_groups": ["group_a", "group_b"],
+        "fallback_status": False,
+        "fallback_reason": None,
+        "target_weights": {"AAPL": 0.5, "MSFT": 0.5},
+        "pre_trade_positions": [],
+        "order_plan": {"sell": [], "buy": []},
+        "submitted_orders": [],
+        "filled_orders": [],
+        "post_trade_positions": [],
+        "cash": 100000.0,
+        "equity": 100000.0,
+        "benchmark_snapshot": {"spy_close": 500.0},
+    }
+
+    with patch("run_paper_trading.Path") as mock_path:
+        # Side effect to return our tmp_path files
+        def path_side_effect(*args, **kwargs):
+            val = str(args[0])
+            if "finrl_trading.db" in val:
+                return db_file
+            if "strategy_decisions.jsonl" in val:
+                return jsonl_file
+            return Path(*args, **kwargs)
+
+        mock_path.side_effect = path_side_effect
+
+        # Save decision
+        save_strategy_decision("2026-05-31", "test_acc", dummy_record)
+
+        # Verify JSONL mirror
+        assert jsonl_file.exists()
+        with open(jsonl_file) as f:
+            lines = f.readlines()
+        assert len(lines) == 1
+        saved_json = json.loads(lines[0])
+        assert saved_json["account_name"] == "test_acc"
+        assert saved_json["config_hash"] == "abcdef123456"
+        assert saved_json["target_weights"] == {"AAPL": 0.5, "MSFT": 0.5}
+
+        # Verify SQLite DB
+        import sqlite3
+
+        conn = sqlite3.connect(db_file)
+        row = conn.execute(
+            "SELECT run_date, account_name, config_hash, target_weights, cash FROM strategy_decisions"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == "2026-05-31"
+        assert row[1] == "test_acc"
+        assert row[2] == "abcdef123456"
+        assert json.loads(row[3]) == {"AAPL": 0.5, "MSFT": 0.5}
+        assert row[4] == 100000.0
+        conn.close()
+
+
+def test_weekly_comparison_metrics(tmp_path):
+    """Test that weekly comparison metrics can be calculated and saved correctly."""
+    from track_metrics import calculate_comparison_metrics, save_comparison_metrics
+
+    # 1. Create a dummy SQLite DB with snapshot and weights data
+    db_file = tmp_path / "finrl_trading.db"
+    conn = sqlite3.connect(db_file)
+
+    # Create tables
+    conn.executescript("""
+        CREATE TABLE weekly_snapshot (
+            snapshot_date TEXT,
+            account       TEXT,
+            portfolio_value REAL,
+            cash          REAL,
+            weekly_return REAL,
+            cumulative_return REAL,
+            spy_weekly_return REAL,
+            spy_cumulative_return REAL,
+            UNIQUE(snapshot_date, account)
+        );
+        CREATE TABLE weekly_weights (
+            snapshot_date TEXT,
+            account       TEXT,
+            symbol        TEXT,
+            actual_weight REAL,
+            target_weight REAL
+        );
+        CREATE TABLE benchmark_prices (
+            price_date TEXT,
+            spy_close  REAL,
+            qqq_close  REAL
+        );
+    """)
+
+    # Insert snapshot rows (2 weeks of data)
+    conn.execute(
+        "INSERT INTO weekly_snapshot VALUES ('2026-05-15', 'test_acc', 100000.0, 10000.0, 0.0, 0.0, 0.005, 0.0)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot VALUES ('2026-05-22', 'test_acc', 101000.0, 10100.0, 0.01, 0.01, 0.006, 0.005)"
+    )
+
+    # Insert weights rows
+    conn.execute(
+        "INSERT INTO weekly_weights VALUES ('2026-05-15', 'test_acc', 'AAPL', 0.5, 0.5)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_weights VALUES ('2026-05-22', 'test_acc', 'AAPL', 0.48, 0.5)"
+    )
+
+    # Insert benchmark prices (for QQQ returns calculation)
+    conn.execute("INSERT INTO benchmark_prices VALUES ('2026-05-14', 400.0, 300.0)")
+    conn.execute("INSERT INTO benchmark_prices VALUES ('2026-05-22', 402.4, 303.0)")
+
+    conn.commit()
+
+    # Calculate metrics
+    metrics = calculate_comparison_metrics(conn, "2026-05-22")
+    conn.close()
+
+    assert metrics is not None
+    assert "date" in metrics
+    assert metrics["date"] == "2026-05-22"
+    assert "test_acc" in metrics["accounts"]
+
+    acc_stats = metrics["accounts"]["test_acc"]
+    assert acc_stats["weekly_return"] == pytest.approx(0.01)
+    assert acc_stats["cumulative_return"] == pytest.approx(0.01)
+    assert acc_stats["cash_exposure"] == pytest.approx(0.10)  # 10% cash exposure
+    assert acc_stats["weight_drift"] == pytest.approx(0.01)  # average of 0.0 and 0.02
+    assert acc_stats["turnover"] == pytest.approx(
+        0.02
+    )  # |0.48 - 0.5| = 0.02 (from week 1 to week 2)
+
+    # Save files using patch
+    json_file = tmp_path / "comparison_metrics_2026-05-22.json"
+    csv_file = tmp_path / "comparison_metrics_latest.csv"
+
+    with patch("track_metrics.Path") as mock_path:
+
+        def path_side_effect(*args, **kwargs):
+            val = str(args[0])
+            if "comparison_metrics_2026-05-22.json" in val:
+                return json_file
+            if "comparison_metrics_latest.csv" in val:
+                return csv_file
+            return Path(*args, **kwargs)
+
+        mock_path.side_effect = path_side_effect
+
+        save_comparison_metrics(metrics, "2026-05-22")
+
+        assert json_file.exists()
+        assert csv_file.exists()
+
+        # Verify CSV content
+        with open(csv_file) as f:
+            lines = f.readlines()
+        assert len(lines) > 1
+        assert "test_acc" in lines[1]
+
+
+def test_post_trade_reconciliation(tmp_path):
+    """Test that post-trade reconciliation checks can identify discrepancies and save reports correctly."""
+    from run_paper_trading import reconcile_post_trade, save_reconciliation_report
+
+    recon_log_file = tmp_path / "reconciliation_2026-05-31.json"
+
+    # 1. Test clean reconciliation (no discrepancies)
+    clean_record = {
+        "target_weights": {"AAPL": 0.5, "MSFT": 0.5},
+        "post_trade_positions": [
+            {"symbol": "AAPL", "market_value": 50000.0},
+            {"symbol": "MSFT", "market_value": 50000.0},
+        ],
+        "submitted_orders": [
+            {"symbol": "AAPL", "status": "filled"},
+            {"symbol": "MSFT", "status": "filled"},
+        ],
+        "equity": 100000.0,
+        "cash": 0.0,
+    }
+
+    result = reconcile_post_trade("2026-05-31", "clean_acc", clean_record)
+    assert result["reconciled_successfully"]
+    assert not result["discrepancies_found"]
+    assert len(result["alerts"]) == 0
+    assert result["orders_summary"]["submitted"] == 2
+    assert result["orders_summary"]["failed_or_rejected"] == 0
+
+    # 2. Test reconciliation with discrepancies (missing asset, unexpected holding, weight drift, failed order)
+    discrepant_record = {
+        "target_weights": {"AAPL": 0.5, "MSFT": 0.5},
+        "post_trade_positions": [
+            {
+                "symbol": "AAPL",
+                "market_value": 40000.0,
+            },  # Drift = |0.4 - 0.5| = 0.10 (exceeds 2% threshold)
+            {"symbol": "GOOGL", "market_value": 10000.0},  # Unexpected holding
+            # MSFT is missing
+        ],
+        "submitted_orders": [
+            {"symbol": "AAPL", "status": "filled"},
+            {"symbol": "MSFT", "status": "rejected"},  # Failed order
+        ],
+        "equity": 100000.0,
+        "cash": 50000.0,
+    }
+
+    result_fail = reconcile_post_trade("2026-05-31", "fail_acc", discrepant_record)
+    assert not result_fail["reconciled_successfully"]
+    assert result_fail["discrepancies_found"]
+    assert len(result_fail["alerts"]) > 0
+
+    # Check specific alerts
+    alerts_str = " ".join(result_fail["alerts"])
+    assert "missing" in alerts_str
+    assert "Unexpected holding: GOOGL" in alerts_str
+    assert "Weight drift for AAPL" in alerts_str
+    assert "failed or were rejected" in alerts_str
+
+    # Save report using patch
+    with patch("run_paper_trading.Path") as mock_path:
+
+        def path_side_effect(*args, **kwargs):
+            val = str(args[0])
+            if "reconciliation_2026-05-31.json" in val:
+                return recon_log_file
+            return Path(*args, **kwargs)
+
+        mock_path.side_effect = path_side_effect
+
+        save_reconciliation_report("2026-05-31", "fail_acc", result_fail)
+
+        assert recon_log_file.exists()
+        with open(recon_log_file) as f:
+            saved_data = json.load(f)
+        assert "fail_acc" in saved_data["accounts"]
+        assert saved_data["accounts"]["fail_acc"]["discrepancies_found"]
+
+
+@patch("os.getenv")
+@patch("run_paper_trading.load_accounts_from_env")
+@patch("run_paper_trading.run_account")
+def test_production_kill_switch(mock_run_account, mock_load, mock_getenv):
+    """Test that the production kill switch forces dry-run mode."""
+
+    # Simulate TRADING_DISABLED=true
+    def getenv_side_effect(key, default=None):
+        if key == "TRADING_DISABLED":
+            return "true"
+        return default
+
+    mock_getenv.side_effect = getenv_side_effect
+
+    mock_load.return_value = [{"name": "test_acc", "config": "dummy.yaml"}]
+    mock_run_account.return_value = {"account": "test_acc", "dry_run": True}
+
+    # We call main with patched sys.argv, and --dry-run not set originally
+    with patch("sys.argv", ["run_paper_trading.py", "--date", "2026-05-31"]):
+        from run_paper_trading import main
+
+        main()
+
+        # Verify that run_account was called with dry_run = True
+        mock_run_account.assert_called_once_with(
+            {"name": "test_acc", "config": "dummy.yaml"},
+            "2026-05-31",
+            True,  # dry_run should be True!
+        )
+
+
+@patch("run_paper_trading.get_ar_weights")
+@patch("pathlib.Path.exists")
+def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
+    """Test that live-vs-replay parity checks correctly identify discrepancies."""
+    from run_paper_trading import run_parity_checks
+
+    # Mock files
+    db_file = tmp_path / "finrl_trading.db"
+    report_file = tmp_path / "parity_check_2026-05-31.json"
+
+    # Mock exists to return True
+    def exists_side_effect(*args, **kwargs):
+        return True
+
+    mock_exists.side_effect = exists_side_effect
+
+    # Create SQLite tables and insert mock data
+    conn = sqlite3.connect(db_file)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS strategy_decisions (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_date               TEXT NOT NULL,
+            account_name           TEXT NOT NULL,
+            target_weights         TEXT,
+            post_trade_positions   TEXT,
+            equity                 REAL,
+            parity_check           TEXT
+        );
+        CREATE TABLE IF NOT EXISTS weekly_weights (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_date TEXT NOT NULL,
+            account       TEXT NOT NULL,
+            symbol        TEXT NOT NULL,
+            target_weight REAL,
+            actual_weight REAL
+        );
+    """)
+
+    # Case 1: Perfect parity
+    conn.execute(
+        "INSERT INTO strategy_decisions (run_date, account_name, target_weights, post_trade_positions, equity) "
+        "VALUES ('2026-05-31', 'perfect_acc', '{\"AAPL\": 0.5, \"MSFT\": 0.5}', "
+        '\'[{"symbol": "AAPL", "market_value": 50000.0}, {"symbol": "MSFT", "market_value": 50000.0}]\', 100000.0)'
+    )
+    conn.execute(
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'AAPL', 0.5, 0.5)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'MSFT', 0.5, 0.5)"
+    )
+
+    # Case 2: Determinism mismatch
+    conn.execute(
+        "INSERT INTO strategy_decisions (run_date, account_name, target_weights, post_trade_positions, equity) "
+        "VALUES ('2026-05-31', 'mismatch_acc', '{\"AAPL\": 0.5, \"MSFT\": 0.5}', "
+        '\'[{"symbol": "AAPL", "market_value": 50000.0}, {"symbol": "MSFT", "market_value": 50000.0}]\', 100000.0)'
+    )
+    conn.execute(
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'mismatch_acc', 'AAPL', 0.5, 0.5)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'mismatch_acc', 'MSFT', 0.5, 0.5)"
+    )
+
+    conn.commit()
+    conn.close()
+
+    # Mock get_ar_weights: return perfect match for perfect_acc, mismatched for mismatch_acc
+    def get_ar_weights_side_effect(config, run_date, is_replay=False):
+        if "perfect_acc" in config or "perfect" in str(config):
+            return {"AAPL": 0.5, "MSFT": 0.5}
+        else:
+            return {
+                "AAPL": 0.4,
+                "MSFT": 0.6,
+            }  # different weights -> determinism mismatch!
+
+    mock_get_ar_weights.side_effect = get_ar_weights_side_effect
+
+    accounts = [
+        {"name": "perfect_acc", "config": "perfect_config.yaml"},
+        {"name": "mismatch_acc", "config": "mismatch_config.yaml"},
+    ]
+    results = [
+        {"account": "perfect_acc", "target_weights": {"AAPL": 0.5, "MSFT": 0.5}},
+        {"account": "mismatch_acc", "target_weights": {"AAPL": 0.5, "MSFT": 0.5}},
+    ]
+
+    with patch("run_paper_trading.Path") as mock_path:
+
+        def path_side_effect(*args, **kwargs):
+            val = str(args[0])
+            if "finrl_trading.db" in val:
+                return db_file
+            if "parity_check_2026-05-31.json" in val:
+                return report_file
+            return Path(*args, **kwargs)
+
+        mock_path.side_effect = path_side_effect
+
+        run_parity_checks("2026-05-31", accounts, results, dry_run=False)
+
+        # Verify JSON report exists
+        assert report_file.exists()
+        with open(report_file) as f:
+            report_data = json.load(f)
+
+        assert "perfect_acc" in report_data["accounts"]
+        assert "mismatch_acc" in report_data["accounts"]
+
+        assert report_data["accounts"]["perfect_acc"]["reconciled_successfully"]
+        assert not report_data["accounts"]["mismatch_acc"]["reconciled_successfully"]
+        assert (
+            "Determinism mismatch"
+            in report_data["accounts"]["mismatch_acc"]["mismatches"][0]
+        )
+
+        # Verify SQLite strategy_decisions was updated with parity_check JSON
+        conn = sqlite3.connect(db_file)
+        rows = conn.execute(
+            "SELECT account_name, parity_check FROM strategy_decisions"
+        ).fetchall()
+        conn.close()
+
+        assert len(rows) == 2
+        for name, parity_json_str in rows:
+            assert parity_json_str is not None
+            parity_json = json.loads(parity_json_str)
+            if name == "perfect_acc":
+                assert parity_json["reconciled_successfully"]
+            else:
+                assert not parity_json["reconciled_successfully"]

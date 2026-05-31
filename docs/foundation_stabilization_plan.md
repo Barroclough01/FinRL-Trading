@@ -1,6 +1,7 @@
 # Foundation Stabilization Plan
 
 Last updated: 2026-05-31
+Status: **COMPLETED (2026-05-31)**
 
 This document lists the immediate fixes to make before building larger
 production-readiness or RL features. The goal is to make the current paper
@@ -11,12 +12,12 @@ trading system reliable, observable, and testable.
 The repo currently runs, and tracked Python files compile, but the most important
 weekly workflow still depends on fragile operational assumptions:
 
-- strategy weights are parsed from console output
-- metrics can fail per account without failing the process
-- pre-trade validation is incomplete
-- there is no project-level test suite
-- some data refresh failures are treated like missing/new files
-- RL dependency checks are disabled
+- strategy weights are parsed from console output (Fixed: Structured JSON output contract introduced)
+- metrics can fail per account without failing the process (Fixed: Collected snapshot failures and exit nonzero)
+- pre-trade validation is incomplete (Fixed: Added 9-point validation gate logging to logs/)
+- there is no project-level test suite (Fixed: Added robust pytest suite under tests/)
+- some data refresh failures are treated like missing/new files (Fixed: Explicit empty/corrupt CSV validation)
+- RL dependency checks are disabled (Fixed: Restored fail-fast check)
 
 Fixing these does not change the strategy thesis. It makes the system safer to
 iterate on.

@@ -798,6 +798,347 @@ Object.entries(latestData).forEach(([acct, d], i) => {{
 
 
 # ---------------------------------------------------------------------------
+# Weekly Comparison Metrics Calculator
+# ---------------------------------------------------------------------------
+
+
+def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dict:
+    """
+    Calculate comprehensive performance and risk metrics for all accounts and benchmarks.
+    Returns a dict with complete metrics structure.
+    """
+    import numpy as np
+    import pandas as pd
+
+    # 1. Fetch all weekly returns from DB
+    snapshots = conn.execute("""
+        SELECT snapshot_date, account, portfolio_value, cash, weekly_return, cumulative_return, spy_weekly_return, spy_cumulative_return
+        FROM weekly_snapshot
+        ORDER BY snapshot_date ASC
+    """).fetchall()
+
+    if not snapshots:
+        return {}
+
+    # Group by account
+    account_series = {}
+    spy_series = {}  # snapshot_date -> spy_weekly_return
+    dates = sorted(list(set(row[0] for row in snapshots)))
+
+    for row in snapshots:
+        snap_date, account, val, cash, wkly, cum, spy_wkly, spy_cum = row
+        if account not in account_series:
+            account_series[account] = []
+        account_series[account].append(
+            {
+                "date": snap_date,
+                "value": val,
+                "cash": cash,
+                "weekly_return": wkly if wkly is not None else 0.0,
+                "cumulative_return": cum if cum is not None else 0.0,
+            }
+        )
+        if spy_wkly is not None:
+            spy_series[snap_date] = spy_wkly
+
+    # Also build QQQ return series from benchmark_prices
+    qqq_prices = conn.execute("""
+        SELECT price_date, qqq_close FROM benchmark_prices ORDER BY price_date ASC
+    """).fetchall()
+
+    qqq_returns = {}
+    if len(qqq_prices) > 1:
+        for i in range(1, len(qqq_prices)):
+            d1, p1 = qqq_prices[i]
+            d0, p0 = qqq_prices[i - 1]
+            ret = (p1 - p0) / p0 if p0 else 0.0
+
+            # Map d1 to closest date in dates
+            match_date = None
+            d1_parsed = pd.to_datetime(d1).date()
+            for d in dates:
+                d_parsed = pd.to_datetime(d).date()
+                if abs((d_parsed - d1_parsed).days) <= 3:
+                    match_date = d
+                    break
+            if match_date:
+                qqq_returns[match_date] = ret
+
+    spy_ret_list = [spy_series.get(d, 0.0) for d in dates]
+    qqq_ret_list = [qqq_returns.get(d, 0.0) for d in dates]
+
+    results = {"date": run_date, "accounts": {}, "benchmarks": {}}
+
+    # Helper to calculate metrics for a return series
+    def compute_stats(
+        ret_series,
+        ref_spy_series=None,
+        ref_qqq_series=None,
+        values_series=None,
+        cash_series=None,
+    ):
+        n = len(ret_series)
+        if n == 0:
+            return {}
+
+        avg_ret = np.mean(ret_series)
+        std_ret = np.std(ret_series)
+
+        # Annualized Volatility
+        vol = float(std_ret * np.sqrt(52))
+
+        # Annualized Sharpe (assuming Rf = 2% annualized)
+        rf_weekly = 0.02 / 52
+        excess_rets = [r - rf_weekly for r in ret_series]
+        sharpe = (
+            float(np.mean(excess_rets) / std_ret * np.sqrt(52)) if std_ret > 0 else 0.0
+        )
+
+        # Max Drawdown
+        max_dd = 0.0
+        if values_series:
+            peak = values_series[0]
+            for v in values_series:
+                if v > peak:
+                    peak = v
+                dd = (v - peak) / peak if peak > 0 else 0.0
+                if dd < max_dd:
+                    max_dd = dd
+        else:
+            v = 1.0
+            vals = [1.0]
+            for r in ret_series:
+                v *= 1 + r
+                vals.append(v)
+            peak = vals[0]
+            for val in vals:
+                if val > peak:
+                    peak = val
+                dd = (val - peak) / peak if peak > 0 else 0.0
+                if dd < max_dd:
+                    max_dd = dd
+
+        # Hit Rate
+        hit_rate = float(sum(1 for r in ret_series if r > 0) / n) if n > 0 else 0.0
+
+        # Beta to SPY and QQQ
+        beta_spy = 0.0
+        if ref_spy_series and len(ref_spy_series) == n:
+            cov = np.cov(ret_series, ref_spy_series)
+            var_spy = np.var(ref_spy_series)
+            beta_spy = float(cov[0, 1] / var_spy) if var_spy > 0 else 0.0
+
+        beta_qqq = 0.0
+        if ref_qqq_series and len(ref_qqq_series) == n:
+            cov = np.cov(ret_series, ref_qqq_series)
+            var_qqq = np.var(ref_qqq_series)
+            beta_qqq = float(cov[0, 1] / var_qqq) if var_qqq > 0 else 0.0
+
+        # Tracking Error
+        te_spy = 0.0
+        if ref_spy_series and len(ref_spy_series) == n:
+            diff = [r - b for r, b in zip(ret_series, ref_spy_series)]
+            te_spy = float(np.std(diff) * np.sqrt(52))
+
+        te_qqq = 0.0
+        if ref_qqq_series and len(ref_qqq_series) == n:
+            diff = [r - b for r, b in zip(ret_series, ref_qqq_series)]
+            te_qqq = float(np.std(diff) * np.sqrt(52))
+
+        # Cash Exposure
+        avg_cash = float(np.mean(cash_series)) if cash_series else 0.0
+
+        return {
+            "weekly_return": float(ret_series[-1]) if ret_series else 0.0,
+            "cumulative_return": float(values_series[-1] / values_series[0] - 1)
+            if values_series
+            else float(np.prod([1 + r for r in ret_series]) - 1),
+            "volatility": vol,
+            "sharpe_ratio": sharpe,
+            "max_drawdown": max_dd,
+            "cash_exposure": avg_cash,
+            "hit_rate": hit_rate,
+            "beta_spy": beta_spy,
+            "beta_qqq": beta_qqq,
+            "tracking_error_spy": te_spy,
+            "tracking_error_qqq": te_qqq,
+        }
+
+    # 2. Calculate stats for each account
+    for account, series in account_series.items():
+        ret_list = [s["weekly_return"] for s in series]
+        val_list = [s["value"] for s in series]
+
+        cash_weights = []
+        for s in series:
+            val = s["value"]
+            cash_val = s["cash"]
+            cash_weights.append(cash_val / val if val > 0 else 0.0)
+
+        stats = compute_stats(
+            ret_list,
+            ref_spy_series=spy_ret_list[: len(ret_list)],
+            ref_qqq_series=qqq_ret_list[: len(ret_list)],
+            values_series=val_list,
+            cash_series=cash_weights,
+        )
+
+        # Calculate Turnover and Drift
+        weights_data = conn.execute(
+            """
+            SELECT snapshot_date, symbol, actual_weight, target_weight
+            FROM weekly_weights
+            WHERE account = ?
+            ORDER BY snapshot_date ASC
+        """,
+            (account,),
+        ).fetchall()
+
+        weights_by_date = {}
+        target_weights_by_date = {}
+        for row in weights_data:
+            d, sym, act_w, tgt_w = row
+            if d not in weights_by_date:
+                weights_by_date[d] = {}
+                target_weights_by_date[d] = {}
+            weights_by_date[d][sym] = act_w
+            target_weights_by_date[d][sym] = tgt_w
+
+        drifts = []
+        for d in weights_by_date:
+            act = weights_by_date[d]
+            tgt = target_weights_by_date[d]
+            all_syms = set(act.keys()) | set(tgt.keys())
+            drift_val = sum(
+                abs(act.get(sym, 0.0) - tgt.get(sym, 0.0)) for sym in all_syms
+            )
+            drifts.append(drift_val)
+        avg_drift = float(np.mean(drifts)) if drifts else 0.0
+
+        turnovers = []
+        sorted_weight_dates = sorted(list(weights_by_date.keys()))
+        for i in range(1, len(sorted_weight_dates)):
+            d0 = sorted_weight_dates[i - 1]
+            d1 = sorted_weight_dates[i]
+            w0 = weights_by_date[d0]
+            w1 = weights_by_date[d1]
+            all_syms = set(w0.keys()) | set(w1.keys())
+            to_val = sum(abs(w1.get(sym, 0.0) - w0.get(sym, 0.0)) for sym in all_syms)
+            turnovers.append(to_val)
+        avg_turnover = float(np.mean(turnovers)) if turnovers else 0.0
+
+        fallback_count = 0
+        try:
+            decisions = conn.execute(
+                """
+                SELECT fallback_status FROM strategy_decisions
+                WHERE account_name = ?
+            """,
+                (account,),
+            ).fetchall()
+            if decisions:
+                fallback_count = sum(1 for d in decisions if d[0] == 1)
+            else:
+                for d, tgt in target_weights_by_date.items():
+                    if "SPY" in tgt and len(tgt) == 5:
+                        fallback_count += 1
+        except Exception:
+            pass
+
+        stats["turnover"] = avg_turnover
+        stats["weight_drift"] = avg_drift
+        stats["weeks_in_fallback"] = fallback_count
+
+        results["accounts"][account] = stats
+
+    # 3. Calculate stats for benchmarks
+    results["benchmarks"]["SPY"] = compute_stats(
+        spy_ret_list,
+        ref_spy_series=spy_ret_list,
+        ref_qqq_series=qqq_ret_list,
+    )
+    results["benchmarks"]["SPY"]["turnover"] = "N/A"
+    results["benchmarks"]["SPY"]["weight_drift"] = "N/A"
+    results["benchmarks"]["SPY"]["weeks_in_fallback"] = "N/A"
+
+    results["benchmarks"]["QQQ"] = compute_stats(
+        qqq_ret_list,
+        ref_spy_series=spy_ret_list,
+        ref_qqq_series=qqq_ret_list,
+    )
+    results["benchmarks"]["QQQ"]["turnover"] = "N/A"
+    results["benchmarks"]["QQQ"]["weight_drift"] = "N/A"
+    results["benchmarks"]["QQQ"]["weeks_in_fallback"] = "N/A"
+
+    return results
+
+
+def save_comparison_metrics(metrics: dict, run_date: str) -> None:
+    """Save the comparison metrics to JSON and CSV files."""
+    if not metrics:
+        return
+
+    # 1. Save JSON
+    json_path = Path(f"logs/comparison_metrics_{run_date}.json")
+    try:
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(json_path, "w") as f:
+            json.dump(metrics, f, indent=2)
+        logger.info(f"Saved comparison metrics JSON to {json_path}")
+    except Exception as e:
+        logger.error(f"Failed to save comparison metrics JSON: {e}", exc_info=True)
+
+    # 2. Save CSV
+    csv_path = Path("logs/comparison_metrics_latest.csv")
+    try:
+        csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+        rows = []
+        headers = [
+            "account",
+            "weekly_return",
+            "cumulative_return",
+            "volatility",
+            "sharpe_ratio",
+            "max_drawdown",
+            "turnover",
+            "cash_exposure",
+            "hit_rate",
+            "beta_spy",
+            "beta_qqq",
+            "tracking_error_spy",
+            "tracking_error_qqq",
+            "weeks_in_fallback",
+            "weight_drift",
+        ]
+
+        # Process accounts
+        for acc_name, stats in metrics.get("accounts", {}).items():
+            row = {"account": acc_name}
+            for h in headers[1:]:
+                row[h] = stats.get(h, 0.0)
+            rows.append(row)
+
+        # Process benchmarks
+        for bench_name, stats in metrics.get("benchmarks", {}).items():
+            row = {"account": bench_name}
+            for h in headers[1:]:
+                row[h] = stats.get(h, "N/A")
+            rows.append(row)
+
+        # Write CSV
+        import csv
+
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+        logger.info(f"Saved comparison metrics CSV to {csv_path}")
+    except Exception as e:
+        logger.error(f"Failed to save comparison metrics CSV: {e}", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -860,6 +1201,17 @@ def main():
 
     print_cli_report(conn)
     generate_html_dashboard(conn, DASHBOARD_PATH)
+
+    # Calculate and save weekly comparison metrics side-by-side
+    try:
+        logger.info("Calculating weekly comparison metrics...")
+        metrics = calculate_comparison_metrics(conn, args.date)
+        save_comparison_metrics(metrics, args.date)
+    except Exception as e:
+        logger.error(
+            f"Failed to calculate and save comparison metrics: {e}", exc_info=True
+        )
+
     conn.close()
 
     if not args.report_only and failed_accounts:

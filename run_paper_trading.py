@@ -83,7 +83,9 @@ DEFAULT_CONFIG = "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
 # ---------------------------------------------------------------------------
 
 
-def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
+def get_ar_weights(
+    config_path: str, run_date: str, is_replay: bool = False
+) -> dict[str, float]:
     """
     Run Adaptive Rotation strategy for run_date and return target weights dict.
     Returns {ticker: weight} e.g. {"DOW": 0.2143, "LYB": 0.2143, ...}
@@ -91,11 +93,14 @@ def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
     import subprocess
     import json
 
-    logger.info(f"Running Adaptive Rotation for date: {run_date}")
+    logger.info(
+        f"Running Adaptive Rotation for date: {run_date} (is_replay={is_replay})"
+    )
 
     config_name = Path(config_path).stem
+    suffix = "_replay" if is_replay else ""
     json_output_path = os.path.join(
-        project_root, "logs", f"target_weights_{config_name}_{run_date}.json"
+        project_root, "logs", f"target_weights_{config_name}_{run_date}{suffix}.json"
     )
 
     # Ensure output directory exists
@@ -379,6 +384,227 @@ def save_validation_result(
         logger.warning(f"Could not save pre-trade validation log: {e}")
 
 
+def compute_file_hash(path: Path) -> str:
+    """Compute MD5 hash of a file."""
+    import hashlib
+
+    try:
+        return hashlib.md5(path.read_bytes()).hexdigest()
+    except Exception:
+        return ""
+
+
+def save_strategy_decision(run_date: str, account_name: str, record: dict) -> None:
+    """Save normalized decision record to SQLite and JSONL mirror."""
+    db_path = Path("data/finrl_trading.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 1. SQLite Save
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS strategy_decisions (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_date               TEXT NOT NULL,
+                account_name           TEXT NOT NULL,
+                config_path            TEXT,
+                config_hash            TEXT,
+                regime_state           TEXT,
+                active_groups          TEXT, -- JSON array
+                ranked_groups          TEXT, -- JSON array
+                fallback_status        INTEGER DEFAULT 0,
+                fallback_reason        TEXT,
+                target_weights         TEXT, -- JSON object
+                pre_trade_positions    TEXT, -- JSON array
+                order_plan             TEXT, -- JSON object
+                submitted_orders       TEXT, -- JSON array
+                filled_orders          TEXT, -- JSON array
+                post_trade_positions   TEXT, -- JSON array
+                cash                   REAL,
+                equity                 REAL,
+                benchmark_snapshot     TEXT, -- JSON object
+                created_at             TEXT DEFAULT (datetime('now')),
+                UNIQUE(run_date, account_name)
+            );
+        """)
+        conn.commit()
+
+        # Insert or replace
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO strategy_decisions (
+                run_date, account_name, config_path, config_hash, regime_state,
+                active_groups, ranked_groups, fallback_status, fallback_reason,
+                target_weights, pre_trade_positions, order_plan, submitted_orders,
+                filled_orders, post_trade_positions, cash, equity, benchmark_snapshot
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                run_date,
+                account_name,
+                record.get("config_path"),
+                record.get("config_hash"),
+                record.get("regime_state"),
+                json.dumps(record.get("active_groups", [])),
+                json.dumps(record.get("ranked_groups", [])),
+                1 if record.get("fallback_status") else 0,
+                record.get("fallback_reason"),
+                json.dumps(record.get("target_weights", {})),
+                json.dumps(record.get("pre_trade_positions", [])),
+                json.dumps(record.get("order_plan", {})),
+                json.dumps(record.get("submitted_orders", [])),
+                json.dumps(record.get("filled_orders", [])),
+                json.dumps(record.get("post_trade_positions", [])),
+                record.get("cash"),
+                record.get("equity"),
+                json.dumps(record.get("benchmark_snapshot", {})),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        logger.info(
+            f"Saved strategy decision to SQLite for account={account_name}, date={run_date}"
+        )
+    except sqlite3.Error as exc:
+        logger.error(
+            f"Failed to save strategy decision to SQLite: {exc}", exc_info=True
+        )
+
+    # 2. JSONL Mirror Append
+    jsonl_path = Path("logs/strategy_decisions.jsonl")
+    try:
+        jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        record_serialized = {
+            "run_date": run_date,
+            "account_name": account_name,
+            **record,
+        }
+        with open(jsonl_path, "a") as f:
+            f.write(json.dumps(record_serialized, default=str) + "\n")
+        logger.info(f"Appended strategy decision to JSONL mirror: {jsonl_path}")
+    except Exception as e:
+        logger.error(
+            f"Failed to append strategy decision to JSONL mirror: {e}", exc_info=True
+        )
+
+
+def reconcile_post_trade(run_date: str, account_name: str, record: dict) -> dict:
+    """Run post-trade reconciliation checks for an account and return the result."""
+    target_weights = record.get("target_weights", {})
+    post_trade_positions = record.get("post_trade_positions", [])
+    submitted_orders = record.get("submitted_orders", [])
+    equity = record.get("equity", 0.0)
+    cash = record.get("cash", 0.0)
+
+    alerts = []
+    comparison = []
+
+    # Map actual positions for fast lookup
+    actual_weights = {}
+    for pos in post_trade_positions:
+        sym = pos.get("symbol")
+        mv = pos.get("market_value", 0.0)
+        act_w = mv / equity if equity > 0 else 0.0
+        actual_weights[sym] = act_w
+
+    # Union of all symbols in target and actual
+    all_symbols = set(target_weights.keys()) | set(actual_weights.keys())
+
+    for sym in all_symbols:
+        tgt_w = target_weights.get(sym, 0.0)
+        act_w = actual_weights.get(sym, 0.0)
+        drift = abs(act_w - tgt_w)
+
+        comparison.append(
+            {
+                "symbol": sym,
+                "target_weight": tgt_w,
+                "actual_weight": act_w,
+                "drift": drift,
+            }
+        )
+
+        # Alert checks
+        if tgt_w > 0.0 and act_w == 0.0:
+            alerts.append(
+                f"Target asset {sym} is missing from actual portfolio positions."
+            )
+        elif tgt_w == 0.0 and act_w > 0.01:  # allow tiny fractional dust
+            alerts.append(
+                f"Unexpected holding: {sym} has actual weight {act_w:.2%} but target weight is 0.0%."
+            )
+        elif drift > 0.02:
+            alerts.append(
+                f"Weight drift for {sym} ({drift:.2%}) exceeds tolerance threshold of 2.0%."
+            )
+
+    # Orders summary
+    submitted_count = len(submitted_orders)
+    failed_count = sum(
+        1 for o in submitted_orders if o.get("status") in ["rejected", "failed"]
+    )
+    filled_count = sum(1 for o in submitted_orders if o.get("status") == "filled")
+    open_count = sum(
+        1
+        for o in submitted_orders
+        if o.get("status") not in ["filled", "rejected", "failed", "canceled"]
+    )
+
+    if failed_count > 0:
+        alerts.append(
+            f"{failed_count} submitted order(s) failed or were rejected by the broker."
+        )
+
+    reconciled_successfully = len(alerts) == 0
+
+    return {
+        "reconciled_successfully": reconciled_successfully,
+        "discrepancies_found": not reconciled_successfully,
+        "alerts": alerts,
+        "target_vs_actual_weights": comparison,
+        "orders_summary": {
+            "submitted": submitted_count,
+            "filled": filled_count,
+            "open": open_count,
+            "failed_or_rejected": failed_count,
+        },
+        "cash": cash,
+        "equity": equity,
+    }
+
+
+def save_reconciliation_report(
+    run_date: str, account_name: str, recon_result: dict
+) -> None:
+    """Save the post-trade reconciliation report to logs/reconciliation_YYYY-MM-DD.json."""
+    log_path = Path(f"logs/reconciliation_{run_date}.json")
+
+    # Read existing report if it exists
+    data = {}
+    if log_path.exists():
+        try:
+            with open(log_path, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not read existing reconciliation report: {e}")
+
+    # Add/update this account's reconciliation result
+    if "date" not in data:
+        data["date"] = run_date
+    if "accounts" not in data:
+        data["accounts"] = {}
+
+    data["accounts"][account_name] = recon_result
+
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info(f"Reconciliation report saved to {log_path}")
+    except Exception as e:
+        logger.warning(f"Could not save reconciliation report: {e}")
+
+
 def load_accounts_from_env() -> list[dict]:
     """
     Read multi-account config from environment variables.
@@ -604,6 +830,13 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
         dry_run_summary(weights, name)
         return {"account": name, "dry_run": True, "weights": weights}
 
+    # Fetch pre-trade positions
+    try:
+        pre_trade_positions = executor.alpaca.get_positions(account_name=name)
+    except Exception as e:
+        logger.warning(f"Could not fetch pre-trade positions: {e}")
+        pre_trade_positions = []
+
     # Dry-run plan first to check market status
     logger.info("Generating order plan (dry-run)...")
     plan = executor.alpaca.execute_portfolio_rebalance(
@@ -620,6 +853,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
 
     use_opg = os.getenv("USE_OPG", "false").lower() == "true"
 
+    skipped = False
     if market_open:
         logger.info("Market is open — submitting orders now")
         rebalance_result = executor.alpaca.execute_portfolio_rebalance(
@@ -635,9 +869,109 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
         )
     else:
         logger.info("Market closed and USE_OPG not set — skipping submission")
-        return {"account": name, "skipped": True, "weights": weights}
+        skipped = True
+        rebalance_result = {"orders": [], "orders_placed": 0, "orders_failed": 0}
 
-    print_execution_summary(rebalance_result, name)
+    if not skipped:
+        print_execution_summary(rebalance_result, name)
+
+    # Fetch post-trade positions, cash, and equity
+    try:
+        post_trade_positions = executor.alpaca.get_positions(account_name=name)
+        post_info = executor.alpaca.get_account_info(account_name=name)
+        cash = float(post_info.get("cash", 0))
+        equity = float(post_info.get("equity", 0))
+    except Exception as e:
+        logger.warning(f"Could not fetch post-trade account details: {e}")
+        post_trade_positions = []
+        cash = 0.0
+        equity = 0.0
+
+    # Load strategy output JSON to get metadata
+    config_name = Path(config).stem
+    json_output_path = os.path.join(
+        project_root, "logs", f"target_weights_{config_name}_{run_date}.json"
+    )
+    strategy_meta = {}
+    if os.path.exists(json_output_path):
+        try:
+            with open(json_output_path, "r") as f:
+                strategy_meta = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not read strategy JSON output: {e}")
+
+    # Determine fallback reason if fallback triggered
+    fallback_status = strategy_meta.get("fallback_status", False)
+    fallback_reason = None
+    if fallback_status:
+        fallback_reason = "all_groups_negative_excess_return"  # default
+        try:
+            audit_path = Path(strategy_meta.get("audit_file_path", ""))
+            if audit_path.exists():
+                with open(audit_path, "r") as af:
+                    audit_data = json.load(af)
+                regime = audit_data.get("regime", {})
+                if regime.get("fast_risk_off", {}).get("is_active"):
+                    fallback_reason = "fast_risk_off"
+                elif regime.get("effective", {}).get("state") == "risk_off":
+                    fallback_reason = "risk_off_cash_floor"
+                else:
+                    metrics = audit_data.get("group_strength", {}).get("metrics", {})
+                    if metrics:
+                        if all(m.get("excess_return", 0) < 0 for m in metrics.values()):
+                            fallback_reason = "all_groups_negative_excess_return"
+                        else:
+                            fallback_reason = "no_valid_groups"
+        except Exception as e:
+            logger.warning(f"Could not parse fallback reason from audit log: {e}")
+
+    # Fetch benchmark snapshot
+    benchmark_snapshot = {}
+    for bench in ["SPY", "QQQ"]:
+        try:
+            csv_path = Path("data/fmp_daily") / f"{bench}_daily.csv"
+            if csv_path.exists():
+                df = pd.read_csv(csv_path)
+                if not df.empty:
+                    benchmark_snapshot[f"{bench.lower()}_close"] = float(
+                        df["close"].iloc[-1]
+                    )
+                    benchmark_snapshot[f"{bench.lower()}_date"] = str(
+                        df["date"].iloc[-1]
+                    )
+        except Exception as e:
+            logger.warning(f"Could not read benchmark snapshot for {bench}: {e}")
+
+    # Compile the decision record
+    record = {
+        "config_path": config,
+        "config_hash": compute_file_hash(Path(config)),
+        "regime_state": strategy_meta.get("regime_state"),
+        "active_groups": strategy_meta.get("active_groups", []),
+        "ranked_groups": strategy_meta.get("ranked_groups", []),
+        "fallback_status": fallback_status,
+        "fallback_reason": fallback_reason,
+        "target_weights": weights,
+        "pre_trade_positions": pre_trade_positions,
+        "order_plan": plan.get("orders_plan", {}),
+        "submitted_orders": rebalance_result.get("orders", []),
+        "filled_orders": [],
+        "post_trade_positions": post_trade_positions,
+        "cash": cash,
+        "equity": equity,
+        "benchmark_snapshot": benchmark_snapshot,
+    }
+
+    # Save to SQLite and JSONL mirror
+    save_strategy_decision(run_date, name, record)
+
+    # Run post-trade reconciliation and save report
+    logger.info("Running post-trade reconciliation checks...")
+    recon_result = reconcile_post_trade(run_date, name, record)
+    save_reconciliation_report(run_date, name, recon_result)
+
+    if skipped:
+        return {"account": name, "skipped": True, "weights": weights}
 
     return {
         "account": name,
@@ -648,6 +982,253 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
         "orders_placed": rebalance_result.get("orders_placed", 0),
         "orders_failed": rebalance_result.get("orders_failed", 0),
     }
+
+
+def run_parity_checks(
+    run_date: str, accounts: list[dict], results: list[dict], dry_run: bool
+) -> None:
+    """
+    Perform live-vs-replay parity checks for all accounts run on run_date.
+    Saves a consolidated report to logs/parity_check_YYYY-MM-DD.json and
+    updates the SQLite strategy_decisions table with the results.
+    """
+    logger.info("Starting live-vs-replay parity checks...")
+    parity_report = {"date": run_date, "dry_run": dry_run, "accounts": {}}
+
+    db_path = Path("data/finrl_trading.db")
+
+    for account in accounts:
+        name = account["name"]
+        config = account["config"]
+        logger.info(f"Running parity check for account: {name}")
+
+        # 1. Get submitted target weights
+        res_entry = next((r for r in results if r.get("account") == name), None)
+        submitted_weights = {}
+        if res_entry:
+            submitted_weights = res_entry.get("target_weights", {})
+
+        if not submitted_weights and db_path.exists():
+            try:
+                conn = sqlite3.connect(db_path)
+                row = conn.execute(
+                    "SELECT target_weights FROM strategy_decisions WHERE run_date = ? AND account_name = ?",
+                    (run_date, name),
+                ).fetchone()
+                if row and row[0]:
+                    submitted_weights = json.loads(row[0])
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Could not load submitted weights from DB: {e}")
+
+        # 2. Get replay target weights
+        replay_weights = {}
+        determinism_ok = True
+        determinism_msg = "OK"
+        replay_vs_submitted_mae = 0.0
+        try:
+            replay_weights = get_ar_weights(config, run_date, is_replay=True)
+
+            all_syms = set(submitted_weights.keys()) | set(replay_weights.keys())
+            diffs = []
+            for sym in all_syms:
+                sub_w = submitted_weights.get(sym, 0.0)
+                rep_w = replay_weights.get(sym, 0.0)
+                diffs.append(abs(sub_w - rep_w))
+                if abs(sub_w - rep_w) > 1e-5:
+                    determinism_ok = False
+            replay_vs_submitted_mae = float(sum(diffs) / len(diffs)) if diffs else 0.0
+        except Exception as e:
+            logger.error(f"Failed to generate replay weights for {name}: {e}")
+            determinism_ok = False
+            determinism_msg = f"Error during replay generation: {e}"
+            replay_vs_submitted_mae = 1.0
+
+        # 3. Get filled actual weights
+        filled_weights = {}
+        execution_ok = True
+        submitted_vs_actual_mae = 0.0
+        if not dry_run:
+            try:
+                if db_path.exists():
+                    conn = sqlite3.connect(db_path)
+                    row = conn.execute(
+                        "SELECT post_trade_positions, equity FROM strategy_decisions WHERE run_date = ? AND account_name = ?",
+                        (run_date, name),
+                    ).fetchone()
+                    if row and row[0]:
+                        post_trade_positions = json.loads(row[0])
+                        equity = float(row[1]) if row[1] else 0.0
+                        for pos in post_trade_positions:
+                            sym = pos.get("symbol")
+                            mv = pos.get("market_value", 0.0)
+                            act_w = mv / equity if equity > 0 else 0.0
+                            filled_weights[sym] = act_w
+                    conn.close()
+
+                if filled_weights:
+                    all_syms = set(submitted_weights.keys()) | set(
+                        filled_weights.keys()
+                    )
+                    diffs = []
+                    for sym in all_syms:
+                        sub_w = submitted_weights.get(sym, 0.0)
+                        fil_w = filled_weights.get(sym, 0.0)
+                        diffs.append(abs(sub_w - fil_w))
+                        if abs(sub_w - fil_w) > 0.02:  # 2% drift tolerance
+                            execution_ok = False
+                    submitted_vs_actual_mae = (
+                        float(sum(diffs) / len(diffs)) if diffs else 0.0
+                    )
+                else:
+                    # If we expected trades but got none, check if target weights are 100% cash
+                    if submitted_weights and all(
+                        w == 0.0 for w in submitted_weights.values()
+                    ):
+                        execution_ok = True
+                    else:
+                        execution_ok = False
+            except Exception as e:
+                logger.warning(f"Could not load filled weights from DB: {e}")
+                execution_ok = False
+        else:
+            execution_ok = True
+
+        # 4. Get dashboard weights
+        dashboard_target_weights = {}
+        dashboard_actual_weights = {}
+        dashboard_ok = True
+        submitted_vs_dashboard_target_mae = 0.0
+        actual_vs_dashboard_actual_mae = 0.0
+        if not dry_run:
+            try:
+                if db_path.exists():
+                    conn = sqlite3.connect(db_path)
+                    rows = conn.execute(
+                        "SELECT symbol, target_weight, actual_weight FROM weekly_weights WHERE snapshot_date = ? AND account = ?",
+                        (run_date, name),
+                    ).fetchall()
+                    for r in rows:
+                        sym, tgt_w, act_w = r
+                        dashboard_target_weights[sym] = (
+                            tgt_w if tgt_w is not None else 0.0
+                        )
+                        dashboard_actual_weights[sym] = (
+                            act_w if act_w is not None else 0.0
+                        )
+                    conn.close()
+
+                if dashboard_target_weights or dashboard_actual_weights:
+                    all_syms = set(submitted_weights.keys()) | set(
+                        dashboard_target_weights.keys()
+                    )
+                    diffs_tgt = []
+                    for sym in all_syms:
+                        sub_w = submitted_weights.get(sym, 0.0)
+                        dash_tgt_w = dashboard_target_weights.get(sym, 0.0)
+                        diffs_tgt.append(abs(sub_w - dash_tgt_w))
+                        if abs(sub_w - dash_tgt_w) > 1e-5:
+                            dashboard_ok = False
+                    submitted_vs_dashboard_target_mae = (
+                        float(sum(diffs_tgt) / len(diffs_tgt)) if diffs_tgt else 0.0
+                    )
+
+                    all_syms = set(filled_weights.keys()) | set(
+                        dashboard_actual_weights.keys()
+                    )
+                    diffs_act = []
+                    for sym in all_syms:
+                        fil_w = filled_weights.get(sym, 0.0)
+                        dash_act_w = dashboard_actual_weights.get(sym, 0.0)
+                        diffs_act.append(abs(fil_w - dash_act_w))
+                        if abs(fil_w - dash_act_w) > 1e-5:
+                            dashboard_ok = False
+                    actual_vs_dashboard_actual_mae = (
+                        float(sum(diffs_act) / len(diffs_act)) if diffs_act else 0.0
+                    )
+                else:
+                    dashboard_ok = False
+            except Exception as e:
+                logger.warning(f"Could not load dashboard weights from DB: {e}")
+                dashboard_ok = False
+        else:
+            dashboard_ok = True
+
+        # 5. Compile account parity status
+        mismatches = []
+        if not determinism_ok:
+            mismatches.append(
+                f"Determinism mismatch (submitted vs replay): {determinism_msg}"
+            )
+        if not execution_ok and not dry_run:
+            mismatches.append(
+                "Execution drift mismatch (submitted vs filled actual weights > 2.0%)"
+            )
+        if not dashboard_ok and not dry_run:
+            mismatches.append(
+                "Dashboard database mismatch (submitted/actual vs weekly_weights table)"
+            )
+
+        reconciled_successfully = len(mismatches) == 0
+
+        acc_parity = {
+            "reconciled_successfully": reconciled_successfully,
+            "determinism_ok": determinism_ok,
+            "execution_ok": execution_ok,
+            "dashboard_ok": dashboard_ok,
+            "mismatches": mismatches,
+            "metrics": {
+                "replay_vs_submitted_mae": replay_vs_submitted_mae,
+                "submitted_vs_actual_mae": submitted_vs_actual_mae,
+                "submitted_vs_dashboard_target_mae": submitted_vs_dashboard_target_mae,
+                "actual_vs_dashboard_actual_mae": actual_vs_dashboard_actual_mae,
+            },
+            "details": {
+                "replay_weights": replay_weights,
+                "submitted_weights": submitted_weights,
+                "filled_weights": filled_weights,
+                "dashboard_target_weights": dashboard_target_weights,
+                "dashboard_actual_weights": dashboard_actual_weights,
+            },
+        }
+
+        parity_report["accounts"][name] = acc_parity
+
+        # 6. Update SQLite strategy_decisions table with parity_check JSON
+        try:
+            if db_path.exists():
+                conn = sqlite3.connect(db_path)
+                try:
+                    conn.execute(
+                        "ALTER TABLE strategy_decisions ADD COLUMN parity_check TEXT"
+                    )
+                    conn.commit()
+                except sqlite3.OperationalError:
+                    pass
+
+                conn.execute(
+                    "UPDATE strategy_decisions SET parity_check = ? WHERE run_date = ? AND account_name = ?",
+                    (json.dumps(acc_parity), run_date, name),
+                )
+                conn.commit()
+                conn.close()
+                logger.info(
+                    f"Updated SQLite strategy_decisions parity_check for {name}"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to update strategy_decisions parity_check in SQLite: {e}"
+            )
+
+    # Save consolidated JSON report
+    report_path = Path(f"logs/parity_check_{run_date}.json")
+    try:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w") as f:
+            json.dump(parity_report, f, indent=2)
+        logger.info(f"Saved consolidated parity check report to {report_path}")
+    except Exception as e:
+        logger.error(f"Failed to save parity check report: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -679,6 +1260,24 @@ def main():
         "(default: PAPER_TRADING_WEBHOOK_URL env)",
     )
     args = parser.parse_args()
+
+    # Check Production Kill Switch
+    trading_disabled_env = os.getenv("TRADING_DISABLED", "false").lower() == "true"
+    kill_switch_file = Path(".kill_switch")
+    kill_switch_active = trading_disabled_env or kill_switch_file.exists()
+
+    if kill_switch_active:
+        logger.warning("!!!" + "=" * 50 + "!!!")
+        logger.warning("!!! PRODUCTION KILL SWITCH IS ACTIVE !!!")
+        if trading_disabled_env:
+            logger.warning("!!! TRADING_DISABLED=true is set in the environment.")
+        if kill_switch_file.exists():
+            logger.warning("!!! .kill_switch file exists in the directory.")
+        logger.warning(
+            "!!! FORCING DRY-RUN MODE. NO ORDERS WILL BE SUBMITTED TO ALPACA."
+        )
+        logger.warning("!!!" + "=" * 50 + "!!!")
+        args.dry_run = True
 
     logger.info(f"Paper trading run: {args.date}")
 
@@ -770,6 +1369,12 @@ def main():
                 },
             },
         )
+
+    # Run parity checks (for both dry-run and live executions)
+    try:
+        run_parity_checks(args.date, accounts, results, args.dry_run)
+    except Exception as e:
+        logger.error(f"Parity checks failed to run: {e}", exc_info=True)
 
     if errors:
         logger.error(
