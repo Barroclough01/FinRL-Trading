@@ -386,12 +386,9 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
         ORDER BY snapshot_date ASC, account
     """).fetchall()
 
-    benchmark_rows = conn.execute("""
-        SELECT price_date, spy_close FROM benchmark_prices ORDER BY price_date ASC
-    """).fetchall()
-
     # Build per-account time series
     accounts_data = {}
+    spy_by_date = {}
     for r in rows:
         snap_date, account, value, wkly, cum, spy_wkly, spy_cum, pos_json = r
         if account not in accounts_data:
@@ -407,12 +404,17 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
                 "positions": json.loads(pos_json) if pos_json else [],
             }
         )
+        if snap_date not in spy_by_date:
+            spy_by_date[snap_date] = {
+                "date": snap_date,
+                "weekly": spy_wkly,
+                "cumulative": spy_cum,
+            }
 
     # Latest snapshot per account for summary cards
     latest = {acct: data[-1] for acct, data in accounts_data.items()}
 
-    # SPY cumulative series
-    spy_series = [{"date": r[0], "close": r[1]} for r in benchmark_rows]
+    spy_series = [spy_by_date[d] for d in sorted(spy_by_date)]
 
     dates_js = json.dumps(sorted(set(r[0] for r in rows)))
     accounts_js = json.dumps(accounts_data)
@@ -710,10 +712,9 @@ function buildDatasets(key, includeSpy=true) {{
     }});
   }});
   if (includeSpy && spySeries.length > 1) {{
-    const base = spySeries[0].close;
     datasets.push({{
       label: 'SPY',
-      data: spySeries.map(d => ({{x: d.date, y: +((d.close - base)/base*100).toFixed(3)}})),
+      data: spySeries.map(d => ({{x: d.date, y: d[key] != null ? +(d[key]*100).toFixed(3) : null}})),
       borderColor: COLORS.SPY,
       borderDash: [4, 4],
       borderWidth: 1.5,

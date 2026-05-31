@@ -180,3 +180,5 @@ results/
 
 # Database files
 *.db
+
+*.pyc
