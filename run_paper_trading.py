@@ -36,6 +36,7 @@ Usage:
 import argparse
 import json
 import logging
+import math
 import os
 import sqlite3
 import sys
@@ -43,6 +44,7 @@ import urllib.error
 import urllib.request
 from datetime import date
 from pathlib import Path
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Project root setup
@@ -87,9 +89,24 @@ def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
     Returns {ticker: weight} e.g. {"DOW": 0.2143, "LYB": 0.2143, ...}
     """
     import subprocess
-    import re
+    import json
 
     logger.info(f"Running Adaptive Rotation for date: {run_date}")
+
+    config_name = Path(config_path).stem
+    json_output_path = os.path.join(
+        project_root, "logs", f"target_weights_{config_name}_{run_date}.json"
+    )
+
+    # Ensure output directory exists
+    Path(json_output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Delete existing JSON file if it exists to avoid reading stale results
+    if os.path.exists(json_output_path):
+        try:
+            os.remove(json_output_path)
+        except Exception as e:
+            logger.warning(f"Could not remove stale JSON output file: {e}")
 
     result = subprocess.run(
         [
@@ -99,6 +116,8 @@ def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
             config_path,
             "--date",
             run_date,
+            "--json-output",
+            json_output_path,
         ],
         capture_output=True,
         text=True,
@@ -109,27 +128,38 @@ def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
         logger.error(f"AR strategy failed:\n{result.stderr}")
         raise RuntimeError("Adaptive Rotation strategy run failed")
 
-    output = result.stdout
-    logger.debug(f"AR output:\n{output}")
+    # Verify JSON file exists and is readable
+    if not os.path.exists(json_output_path):
+        raise FileNotFoundError(
+            f"Strategy JSON output file missing: {json_output_path}"
+        )
 
-    # Parse weights from output lines like:  "  DOW     :  21.43%"
-    weights = {}
-    in_portfolio = False
-    for line in output.splitlines():
-        if "Target Portfolio" in line:
-            in_portfolio = True
-            continue
-        if in_portfolio:
-            m = re.match(r"\s+(\S+)\s*:\s*([\d.]+)%", line)
-            if m:
-                ticker = m.group(1).strip('"')  # strip quotes from e.g. "ON"
-                weight = float(m.group(2)) / 100.0
-                weights[ticker] = weight
-            elif line.strip() == "" or line.startswith("Audit"):
-                break
+    try:
+        with open(json_output_path, "r") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Strategy JSON output is malformed: {exc}") from exc
 
-    if not weights:
-        raise ValueError("Could not parse any weights from AR strategy output")
+    # Validate keys in the JSON output
+    required_keys = [
+        "target_weights",
+        "cash_weight",
+        "regime_state",
+        "active_groups",
+        "ranked_groups",
+        "fallback_status",
+        "audit_file_path",
+    ]
+    for key in required_keys:
+        if key not in data:
+            raise ValueError(f"Strategy JSON output is missing required key: {key}")
+
+    weights = data["target_weights"]
+
+    # Log some structure details
+    logger.info(
+        f"Strategy run details: Regime={data['regime_state']}, Fallback={data['fallback_status']}, Audit={data['audit_file_path']}"
+    )
 
     total = sum(weights.values())
     logger.info(f"AR target weights ({len(weights)} assets, total={total:.1%}):")
@@ -137,6 +167,216 @@ def get_ar_weights(config_path: str, run_date: str) -> dict[str, float]:
         logger.info(f"  {tic:8s}: {w:.2%}")
 
     return weights
+
+
+def validate_pre_trade(
+    account: dict, run_date: str, target_weights: dict[str, float], executor
+) -> tuple[bool, str | None, str | None, str | None]:
+    """
+    Run pre-trade validation checks for an account.
+    Returns (is_valid, failed_rule, error_message, suggested_fix).
+    """
+    run_date_parsed = pd.to_datetime(run_date).date()
+
+    # 1. target weights are nonempty
+    if not target_weights:
+        return (
+            False,
+            "target weights are nonempty",
+            "Target weights dictionary is empty.",
+            "Ensure the strategy run completed successfully and generated weights.",
+        )
+
+    # 2. all weights are finite numbers
+    for sym, w in target_weights.items():
+        if not math.isfinite(w):
+            return (
+                False,
+                "all weights are finite numbers",
+                f"Weight for {sym} is not a finite number: {w}",
+                "Check the strategy code and data inputs for NaN or Inf values.",
+            )
+
+    # 3. no negative weights unless shorting is explicitly supported
+    # (shorting is not supported in this strategy baseline)
+    for sym, w in target_weights.items():
+        if w < 0:
+            return (
+                False,
+                "no negative weights unless shorting is explicitly supported",
+                f"Negative weight found for {sym}: {w}",
+                "Shorting is not supported. Ensure all strategy target weights are non-negative.",
+            )
+
+    # 4. sum of target weights is within tolerance
+    total_weight = sum(target_weights.values())
+    if total_weight > 1.0001:
+        return (
+            False,
+            "sum of target weights is within tolerance",
+            f"Sum of target weights ({total_weight:.4%}) exceeds 100% plus tolerance.",
+            "Check the strategy portfolio construction and normalization logic.",
+        )
+
+    # 5. no single symbol exceeds configured maximum weight
+    # We use a default limit of 50% for any single position
+    max_single_weight = 0.5
+    for sym, w in target_weights.items():
+        if w > max_single_weight:
+            return (
+                False,
+                "no single symbol exceeds configured maximum weight",
+                f"Weight for {sym} ({w:.2%}) exceeds maximum allowed weight ({max_single_weight:.2%}).",
+                "Verify strategy allocation limits and group constraints.",
+            )
+
+    # 6. all required symbol prices are fresh
+    for sym, w in target_weights.items():
+        if w > 0:
+            csv_path = Path("data/fmp_daily") / f"{sym}_daily.csv"
+            if not csv_path.exists():
+                return (
+                    False,
+                    "all required symbol prices are fresh",
+                    f"Price CSV missing for required symbol {sym}: {csv_path}",
+                    f"Run data backfill or refresh for {sym}.",
+                )
+            try:
+                df = pd.read_csv(csv_path)
+                if df.empty or "date" not in df.columns:
+                    return (
+                        False,
+                        "all required symbol prices are fresh",
+                        f"Price CSV for {sym} is empty or missing 'date' column.",
+                        f"Re-refresh price data for {sym}.",
+                    )
+                last_date_str = df["date"].iloc[-1]
+                last_date = pd.to_datetime(last_date_str).date()
+                if (run_date_parsed - last_date).days > 10:
+                    return (
+                        False,
+                        "all required symbol prices are fresh",
+                        f"Price data for {sym} is stale. Last date: {last_date_str}, Run date: {run_date}",
+                        f"Run data refresh for {sym}.",
+                    )
+            except Exception as e:
+                return (
+                    False,
+                    "all required symbol prices are fresh",
+                    f"Failed to read price data for {sym}: {e}",
+                    f"Check file integrity of {csv_path}.",
+                )
+
+    # 7. SPY and QQQ benchmark data are present
+    for bench in ["SPY", "QQQ"]:
+        csv_path = Path("data/fmp_daily") / f"{bench}_daily.csv"
+        if not csv_path.exists():
+            return (
+                False,
+                "SPY and QQQ benchmark data are present",
+                f"Benchmark CSV missing for {bench}: {csv_path}",
+                f"Run data refresh for {bench}.",
+            )
+        try:
+            df = pd.read_csv(csv_path)
+            if df.empty or "date" not in df.columns:
+                return (
+                    False,
+                    "SPY and QQQ benchmark data are present",
+                    f"Benchmark CSV for {bench} is empty or invalid.",
+                    f"Re-refresh {bench} data.",
+                )
+            last_date_str = df["date"].iloc[-1]
+            last_date = pd.to_datetime(last_date_str).date()
+            if (run_date_parsed - last_date).days > 10:
+                return (
+                    False,
+                    "SPY and QQQ benchmark data are present",
+                    f"Benchmark data for {bench} is stale. Last date: {last_date_str}",
+                    f"Run data refresh for {bench}.",
+                )
+        except Exception as e:
+            return (
+                False,
+                "SPY and QQQ benchmark data are present",
+                f"Failed to read benchmark data for {bench}: {e}",
+                f"Check file integrity of {csv_path}.",
+            )
+
+    # 8. market calendar status is known
+    from src.data.trading_calendar import is_trading_day
+
+    try:
+        _ = is_trading_day(run_date)
+    except Exception as e:
+        return (
+            False,
+            "market calendar status is known",
+            f"Market calendar status is unknown or query failed: {e}",
+            "Ensure calendar libraries are installed and configured properly.",
+        )
+
+    # 9. account cash/equity can be read
+    try:
+        info = executor.alpaca.get_account_info(account_name=account["name"])
+        cash = float(info.get("cash", 0))
+        equity = float(info.get("equity", 0))
+        if cash < 0 or equity <= 0:
+            return (
+                False,
+                "account cash/equity can be read",
+                f"Account {account['name']} has invalid cash (${cash:,.2f}) or equity (${equity:,.2f}).",
+                "Check Alpaca account status and credentials.",
+            )
+    except Exception as e:
+        return (
+            False,
+            "account cash/equity can be read",
+            f"Failed to read Alpaca account info for {account['name']}: {e}",
+            "Check your Alpaca API credentials, network connection, or Alpaca API status.",
+        )
+
+    return True, None, None, None
+
+
+def save_validation_result(
+    run_date: str,
+    account_name: str,
+    valid: bool,
+    failed_rule: str | None,
+    error_msg: str | None,
+    suggested_fix: str | None,
+) -> None:
+    """Save validation status to logs/pre_trade_validation_YYYY-MM-DD.json"""
+    from datetime import datetime
+
+    log_path = Path(f"logs/pre_trade_validation_{run_date}.json")
+
+    # Read existing log if it exists
+    data = {}
+    if log_path.exists():
+        try:
+            with open(log_path, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.warning(f"Could not read existing pre-trade validation log: {e}")
+
+    # Add/update this account's validation result
+    data[account_name] = {
+        "status": "passed" if valid else "failed",
+        "failed_rule": failed_rule,
+        "error_message": error_msg,
+        "suggested_fix": suggested_fix,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "w") as f:
+            json.dump(data, f, indent=2)
+        logger.info(f"Pre-trade validation log saved to {log_path}")
+    except Exception as e:
+        logger.warning(f"Could not save pre-trade validation log: {e}")
 
 
 def load_accounts_from_env() -> list[dict]:
@@ -340,13 +580,29 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     # Step 1: Get target weights
     weights = get_ar_weights(config, run_date)
 
-    if dry_run:
-        dry_run_summary(weights, name)
-        return {"account": name, "dry_run": True, "weights": weights}
-
     # Step 2: Connect and execute
     logger.info(f"Connecting to Alpaca account: {name}")
     executor = get_executor_for_account(account)
+
+    # Run pre-trade validation gate
+    logger.info("Running pre-trade validation gate...")
+    valid, failed_rule, error_msg, suggested_fix = validate_pre_trade(
+        account, run_date, weights, executor
+    )
+    save_validation_result(run_date, name, valid, failed_rule, error_msg, suggested_fix)
+
+    if not valid:
+        logger.error(f"Pre-trade validation FAILED for {name}!")
+        logger.error(f"  Failed Rule: {failed_rule}")
+        logger.error(f"  Error Message: {error_msg}")
+        logger.error(f"  Suggested Fix: {suggested_fix}")
+        raise ValueError(f"Pre-trade validation failed: {error_msg}")
+
+    logger.info("Pre-trade validation passed successfully.")
+
+    if dry_run:
+        dry_run_summary(weights, name)
+        return {"account": name, "dry_run": True, "weights": weights}
 
     # Dry-run plan first to check market status
     logger.info("Generating order plan (dry-run)...")

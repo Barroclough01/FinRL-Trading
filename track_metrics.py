@@ -842,6 +842,7 @@ def main():
                     "target_weights", {}
                 )
 
+        failed_accounts = []
         for account in accounts:
             logger.info(f"Fetching snapshot: {account['name']}")
             try:
@@ -855,10 +856,19 @@ def main():
                     f"Failed to record snapshot for {account['name']}: {e}",
                     exc_info=True,
                 )
+                failed_accounts.append((account["name"], str(e)))
 
     print_cli_report(conn)
     generate_html_dashboard(conn, DASHBOARD_PATH)
     conn.close()
+
+    if not args.report_only and failed_accounts:
+        logger.error(
+            f"Metrics collection failed for {len(failed_accounts)} account(s):"
+        )
+        for name, err in failed_accounts:
+            logger.error(f"  {name}: {err}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

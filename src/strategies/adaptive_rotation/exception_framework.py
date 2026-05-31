@@ -25,30 +25,32 @@ from .config_loader import AdaptiveRotationConfig
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class ExceptionCandidate:
     """Exception detection result for a single asset"""
+
     symbol: str
-    trigger_count: int          # Number of triggers in lookback window
-    lookback_weeks: int         # Window size (K)
-    recent_zscores: List[float] # Z-scores in lookback window
-    trigger_dates: List[str]    # Dates when threshold was exceeded
-    qualifies: bool             # Whether asset qualifies as exception
-    
+    trigger_count: int  # Number of triggers in lookback window
+    lookback_weeks: int  # Window size (K)
+    recent_zscores: List[float]  # Z-scores in lookback window
+    trigger_dates: List[str]  # Dates when threshold was exceeded
+    qualifies: bool  # Whether asset qualifies as exception
+
     # Thresholds
     z_threshold: float = 2.5
     min_trigger_count: int = 2  # M
-    
+
     # Latest metrics
     latest_zscore: float = 0.0
-    
+
     # Strong signal rule (optional)
     strong_signal_qualified: bool = False
     strong_signal_zscore: Optional[float] = None
     strong_signal_return: Optional[float] = None
     strong_signal_benchmark_return: Optional[float] = None
     strong_signal_reason: Optional[str] = None
-    
+
     def __post_init__(self):
         """Validate candidate"""
         # Qualifies if either persistence rule OR strong signal rule is met
@@ -59,23 +61,28 @@ class ExceptionCandidate:
 @dataclass
 class ExceptionDetectionResult:
     """Complete exception detection result"""
-    exceptions: List[ExceptionCandidate]    # Qualified exceptions
+
+    exceptions: List[ExceptionCandidate]  # Qualified exceptions
     candidates: Dict[str, ExceptionCandidate]  # All checked assets
     as_of_date: pd.Timestamp
-    
+
     # Detection parameters
     z_threshold: float
     lookback_weeks: int
     min_trigger_count: int
-    
+
+    # Rule statuses
+    persistence_rule_status: str = "disabled_due_to_missing_history"
+    strong_signal_rule_status: str = "disabled"
+
     def get_qualified_symbols(self) -> List[str]:
         """Get list of qualified exception symbols"""
         return [exc.symbol for exc in self.exceptions]
-    
+
     def get_candidate(self, symbol: str) -> Optional[ExceptionCandidate]:
         """Get candidate info for a specific symbol"""
         return self.candidates.get(symbol)
-    
+
     def has_exceptions(self) -> bool:
         """Check if any exceptions were found"""
         return len(self.exceptions) > 0
@@ -84,6 +91,7 @@ class ExceptionDetectionResult:
 # ============================================================================
 # Exception Detection Logic
 # ============================================================================
+
 
 def check_strong_signal_rule(
     symbol: str,
@@ -97,12 +105,12 @@ def check_strong_signal_rule(
 ) -> Tuple[bool, Optional[float], Optional[float], Optional[str]]:
     """
     Check if asset qualifies under strong signal rule
-    
+
     Strong signal rule requires:
     1. Current Z-score > z_threshold (e.g., 3.5)
     2. 12-week return > multiplier * benchmark 12-week return
     3. Optionally: 12-week return > 0 (positive absolute return)
-    
+
     Args:
         symbol: Asset symbol
         latest_zscore: Current Z-score
@@ -112,40 +120,52 @@ def check_strong_signal_rule(
         return_multiplier: Return multiplier (default 1.5)
         return_lookback_weeks: Lookback period in weeks (default 12)
         require_positive_return: Require positive absolute return (default True)
-    
+
     Returns:
         Tuple of (qualified, asset_return, benchmark_return, reason)
     """
     # Check Z-score threshold
     if latest_zscore < z_threshold:
         return False, None, None, f"Z-score {latest_zscore:.2f} < {z_threshold}"
-    
+
     # Check if sufficient data
-    if len(asset_prices) < return_lookback_weeks or len(benchmark_prices) < return_lookback_weeks:
+    if (
+        len(asset_prices) < return_lookback_weeks
+        or len(benchmark_prices) < return_lookback_weeks
+    ):
         return False, None, None, "Insufficient price data"
-    
+
     # Calculate returns
     try:
         asset_current = asset_prices.iloc[-1]
         asset_past = asset_prices.iloc[-return_lookback_weeks]
         asset_return = (asset_current - asset_past) / asset_past
-        
+
         benchmark_current = benchmark_prices.iloc[-1]
         benchmark_past = benchmark_prices.iloc[-return_lookback_weeks]
         benchmark_return = (benchmark_current - benchmark_past) / benchmark_past
     except (IndexError, ZeroDivisionError) as e:
         return False, None, None, f"Return calculation error: {e}"
-    
+
     # Check positive return requirement
     if require_positive_return and asset_return <= 0:
-        return False, asset_return, benchmark_return, f"Negative return {asset_return:.2%}"
-    
+        return (
+            False,
+            asset_return,
+            benchmark_return,
+            f"Negative return {asset_return:.2%}",
+        )
+
     # Check return multiplier
     required_return = return_multiplier * benchmark_return
     if asset_return <= required_return:
-        return False, asset_return, benchmark_return, \
-            f"Return {asset_return:.2%} <= {return_multiplier}x benchmark {benchmark_return:.2%}"
-    
+        return (
+            False,
+            asset_return,
+            benchmark_return,
+            f"Return {asset_return:.2%} <= {return_multiplier}x benchmark {benchmark_return:.2%}",
+        )
+
     # Qualified!
     reason = f"Z={latest_zscore:.2f}, Return={asset_return:.2%} > {return_multiplier}x{benchmark_return:.2%}"
     return True, asset_return, benchmark_return, reason
@@ -158,15 +178,15 @@ def count_triggers_in_window(
 ) -> Tuple[int, List[pd.Timestamp]]:
     """
     Count how many times Z-score exceeded threshold in lookback window
-    
+
     Args:
         zscores: Z-score time series
         threshold: Threshold value
         lookback_periods: Lookback window size
-    
+
     Returns:
         Tuple of (trigger_count, trigger_dates)
-    
+
     Examples:
         >>> zscores = pd.Series([1.0, 2.6, 2.7, 1.5], index=dates)
         >>> count, dates = count_triggers_in_window(zscores, 2.5, 4)
@@ -174,13 +194,13 @@ def count_triggers_in_window(
     """
     # Get last N periods
     window = zscores.tail(lookback_periods)
-    
+
     # Find where threshold was exceeded
     triggers = window[window > threshold]
-    
+
     trigger_count = len(triggers)
     trigger_dates = triggers.index.tolist()
-    
+
     return trigger_count, trigger_dates
 
 
@@ -192,24 +212,22 @@ def check_mk_persistence(
 ) -> bool:
     """
     Check M/K persistence rule
-    
+
     Args:
         zscores: Z-score time series
         threshold: Threshold value
         lookback_periods: K (window size)
         min_trigger_count: M (minimum triggers)
-    
+
     Returns:
         True if M/K rule is satisfied
-    
+
     Examples:
         >>> # 2 out of 4 rule
         >>> qualifies = check_mk_persistence(zscores, 2.5, 4, 2)
     """
-    trigger_count, _ = count_triggers_in_window(
-        zscores, threshold, lookback_periods
-    )
-    
+    trigger_count, _ = count_triggers_in_window(zscores, threshold, lookback_periods)
+
     return trigger_count >= min_trigger_count
 
 
@@ -231,11 +249,11 @@ def check_asset_exception(
 ) -> ExceptionCandidate:
     """
     Check if a single asset qualifies as exception
-    
+
     Checks both:
     1. Original M/K persistence rule
     2. New strong signal rule (if enabled)
-    
+
     Args:
         symbol: Asset symbol
         zscores: Historical Z-score series
@@ -243,7 +261,7 @@ def check_asset_exception(
         lookback_weeks: K (window size) for persistence rule
         min_trigger_count: M (minimum triggers) for persistence rule
         as_of_date: Current date (uses last date if None)
-        
+
         # Strong signal parameters
         asset_prices: Price series for asset (required for strong signal)
         benchmark_prices: Price series for benchmark (required for strong signal)
@@ -252,10 +270,10 @@ def check_asset_exception(
         strong_signal_return_multiplier: Return multiplier (default 1.5)
         strong_signal_return_lookback: Return lookback weeks (default 12)
         strong_signal_require_positive: Require positive return (default True)
-    
+
     Returns:
         ExceptionCandidate object
-    
+
     Examples:
         >>> candidate = check_asset_exception(
         ...     "AAPL",
@@ -273,40 +291,44 @@ def check_asset_exception(
             asset_prices = asset_prices[asset_prices.index <= as_of_date]
         if benchmark_prices is not None:
             benchmark_prices = benchmark_prices[benchmark_prices.index <= as_of_date]
-    
+
     # Get latest z-score (needed for both persistence and strong signal rules)
     latest_zscore = float(zscores.iloc[-1]) if len(zscores) > 0 else 0.0
-    
+
     # Check persistence rule (requires sufficient Z-score history)
     trigger_count = 0
     trigger_dates = []
     trigger_date_strs = []
     recent_zscores = []
-    
+
     if len(zscores) >= lookback_weeks:
         # Sufficient data for persistence rule
         window = zscores.tail(lookback_weeks)
-        
+
         # Count triggers
         trigger_count, trigger_dates = count_triggers_in_window(
             zscores, z_threshold, lookback_weeks
         )
-        
+
         # Get recent z-scores as list
         recent_zscores = window.tolist()
-        
+
         # Format trigger dates as strings
         trigger_date_strs = [d.strftime("%Y-%m-%d") for d in trigger_dates]
-    
+
     # Check strong signal rule (independent of Z-score history)
     # Strong signal only needs: current Z-score + price history
     strong_qualified = False
     strong_return = None
     strong_benchmark_return = None
     strong_reason = None
-    
-    if strong_signal_enabled and asset_prices is not None and benchmark_prices is not None:
-        strong_qualified, strong_return, strong_benchmark_return, strong_reason = \
+
+    if (
+        strong_signal_enabled
+        and asset_prices is not None
+        and benchmark_prices is not None
+    ):
+        strong_qualified, strong_return, strong_benchmark_return, strong_reason = (
             check_strong_signal_rule(
                 symbol,
                 latest_zscore,
@@ -317,7 +339,8 @@ def check_asset_exception(
                 return_lookback_weeks=strong_signal_return_lookback,
                 require_positive_return=strong_signal_require_positive,
             )
-    
+        )
+
     return ExceptionCandidate(
         symbol=symbol,
         trigger_count=trigger_count,
@@ -340,6 +363,7 @@ def check_asset_exception(
 # Batch Exception Detection
 # ============================================================================
 
+
 def find_exceptions_in_pool(
     asset_zscores: Dict[str, pd.Series],
     z_threshold: float,
@@ -350,7 +374,7 @@ def find_exceptions_in_pool(
 ) -> List[ExceptionCandidate]:
     """
     Scan multiple assets for exceptions
-    
+
     Args:
         asset_zscores: Dict mapping symbol → Z-score series
         z_threshold: Z-score threshold
@@ -358,10 +382,10 @@ def find_exceptions_in_pool(
         min_trigger_count: M (minimum triggers)
         as_of_date: Current date
         candidate_pool: Optional list of symbols to check (checks all if None)
-    
+
     Returns:
         List of ExceptionCandidate objects (only qualified ones)
-    
+
     Examples:
         >>> exceptions = find_exceptions_in_pool(
         ...     {"AAPL": aapl_z, "MSFT": msft_z},
@@ -372,20 +396,20 @@ def find_exceptions_in_pool(
         >>> print(f"Found {len(exceptions)} exceptions")
     """
     exceptions = []
-    
+
     # Determine which symbols to check
     if candidate_pool is not None:
         symbols_to_check = candidate_pool
     else:
         symbols_to_check = list(asset_zscores.keys())
-    
+
     # Check each symbol
     for symbol in symbols_to_check:
         if symbol not in asset_zscores:
             continue
-        
+
         zscores = asset_zscores[symbol]
-        
+
         candidate = check_asset_exception(
             symbol,
             zscores,
@@ -394,14 +418,14 @@ def find_exceptions_in_pool(
             min_trigger_count,
             as_of_date,
         )
-        
+
         # Only include qualified exceptions
         if candidate.qualifies:
             exceptions.append(candidate)
-    
+
     # Sort by latest Z-score (strongest first)
     exceptions.sort(key=lambda x: x.latest_zscore, reverse=True)
-    
+
     return exceptions
 
 
@@ -423,7 +447,7 @@ def check_all_candidates(
 ) -> Dict[str, ExceptionCandidate]:
     """
     Check all candidates and return full results (qualified and non-qualified)
-    
+
     Args:
         asset_zscores: Dict mapping symbol → Z-score series
         z_threshold: Z-score threshold
@@ -431,7 +455,7 @@ def check_all_candidates(
         min_trigger_count: M (minimum triggers)
         as_of_date: Current date
         candidate_pool: Optional list of symbols to check
-        
+
         # Strong signal parameters
         asset_prices: Dict mapping symbol → price series
         benchmark_prices: Benchmark price series (e.g., QQQ)
@@ -440,30 +464,30 @@ def check_all_candidates(
         strong_signal_return_multiplier: Return multiplier
         strong_signal_return_lookback: Return lookback weeks
         strong_signal_require_positive: Require positive return
-    
+
     Returns:
         Dict mapping symbol → ExceptionCandidate
     """
     candidates = {}
-    
+
     # Determine which symbols to check
     if candidate_pool is not None:
         symbols_to_check = candidate_pool
     else:
         symbols_to_check = list(asset_zscores.keys())
-    
+
     # Check each symbol
     for symbol in symbols_to_check:
         if symbol not in asset_zscores:
             continue
-        
+
         zscores = asset_zscores[symbol]
-        
+
         # Get asset prices if available
         symbol_prices = None
         if asset_prices is not None and symbol in asset_prices:
             symbol_prices = asset_prices[symbol]
-        
+
         candidate = check_asset_exception(
             symbol,
             zscores,
@@ -479,9 +503,9 @@ def check_all_candidates(
             strong_signal_return_lookback=strong_signal_return_lookback,
             strong_signal_require_positive=strong_signal_require_positive,
         )
-        
+
         candidates[symbol] = candidate
-    
+
     return candidates
 
 
@@ -489,27 +513,28 @@ def check_all_candidates(
 # High-Level API
 # ============================================================================
 
+
 class ExceptionDetector:
     """
     Detects exceptional assets using M/K persistence rule
-    
+
     Examples:
         >>> detector = ExceptionDetector(
         ...     z_threshold=2.5,
         ...     lookback_weeks=4,
         ...     min_trigger_count=2
         ... )
-        >>> 
+        >>>
         >>> result = detector.detect_exceptions(
         ...     asset_zscores=zscores_dict,
         ...     as_of_date=pd.Timestamp("2024-02-01")
         ... )
-        >>> 
+        >>>
         >>> print(f"Found {len(result.exceptions)} exceptions")
         >>> for exc in result.exceptions:
         ...     print(f"  {exc.symbol}: {exc.trigger_count}/{exc.lookback_weeks}")
     """
-    
+
     def __init__(
         self,
         z_threshold: float = 2.5,
@@ -524,12 +549,12 @@ class ExceptionDetector:
     ):
         """
         Initialize exception detector
-        
+
         Args:
             z_threshold: Z-score threshold for persistence rule
             lookback_weeks: K (window size) for persistence rule
             min_trigger_count: M (minimum triggers to qualify) for persistence rule
-            
+
             # Strong signal parameters
             strong_signal_enabled: Enable strong signal single-trigger rule
             strong_signal_z_threshold: Z-score threshold for strong signal (default 3.5)
@@ -541,14 +566,14 @@ class ExceptionDetector:
         self.z_threshold = z_threshold
         self.lookback_weeks = lookback_weeks
         self.min_trigger_count = min_trigger_count
-        
+
         # Strong signal parameters
         self.strong_signal_enabled = strong_signal_enabled
         self.strong_signal_z_threshold = strong_signal_z_threshold
         self.strong_signal_return_multiplier = strong_signal_return_multiplier
         self.strong_signal_return_lookback = strong_signal_return_lookback
         self.strong_signal_require_positive = strong_signal_require_positive
-    
+
     def detect_exceptions(
         self,
         asset_zscores: Dict[str, pd.Series],
@@ -560,18 +585,18 @@ class ExceptionDetector:
     ) -> ExceptionDetectionResult:
         """
         Detect all exceptional assets
-        
+
         Checks both:
         1. M/K persistence rule (original)
         2. Strong signal rule (if enabled and price data provided)
-        
+
         Args:
             asset_zscores: Dict mapping symbol → Z-score series
             as_of_date: Current decision date
             candidate_pool: Optional list of symbols to check
             asset_prices: Dict mapping symbol → price series (for strong signal)
             benchmark_prices: Benchmark price series (for strong signal, e.g., QQQ)
-        
+
         Returns:
             ExceptionDetectionResult object
         """
@@ -592,16 +617,26 @@ class ExceptionDetector:
             strong_signal_return_lookback=self.strong_signal_return_lookback,
             strong_signal_require_positive=self.strong_signal_require_positive,
         )
-        
+
         # Filter to qualified exceptions
         exceptions = [
-            candidate for candidate in all_candidates.values()
-            if candidate.qualifies
+            candidate for candidate in all_candidates.values() if candidate.qualifies
         ]
-        
+
         # Sort by latest Z-score
         exceptions.sort(key=lambda x: x.latest_zscore, reverse=True)
-        
+
+        # Determine rule statuses
+        has_history = (
+            any(len(z) >= self.lookback_weeks for z in asset_zscores.values())
+            if asset_zscores
+            else False
+        )
+        persistence_status = (
+            "enabled" if has_history else "disabled_due_to_missing_history"
+        )
+        strong_status = "enabled" if self.strong_signal_enabled else "disabled"
+
         return ExceptionDetectionResult(
             exceptions=exceptions,
             candidates=all_candidates,
@@ -609,28 +644,36 @@ class ExceptionDetector:
             z_threshold=self.z_threshold,
             lookback_weeks=self.lookback_weeks,
             min_trigger_count=self.min_trigger_count,
+            persistence_rule_status=persistence_status,
+            strong_signal_rule_status=strong_status,
         )
-    
+
     @classmethod
     def from_config(cls, config: AdaptiveRotationConfig) -> "ExceptionDetector":
         """
         Create detector from configuration
-        
+
         Args:
             config: Strategy configuration
-        
+
         Returns:
             ExceptionDetector instance
         """
         # Get strong signal config (with defaults if not present)
-        strong_signal_cfg = getattr(config.exception, 'strong_signal', None)
-        
+        strong_signal_cfg = getattr(config.exception, "strong_signal", None)
+
         if strong_signal_cfg is not None:
-            strong_signal_enabled = getattr(strong_signal_cfg, 'enabled', False)
-            strong_signal_z_threshold = getattr(strong_signal_cfg, 'z_threshold', 3.5)
-            strong_signal_return_multiplier = getattr(strong_signal_cfg, 'return_multiplier', 1.5)
-            strong_signal_return_lookback = getattr(strong_signal_cfg, 'return_lookback_weeks', 12)
-            strong_signal_require_positive = getattr(strong_signal_cfg, 'require_positive_return', True)
+            strong_signal_enabled = getattr(strong_signal_cfg, "enabled", False)
+            strong_signal_z_threshold = getattr(strong_signal_cfg, "z_threshold", 3.5)
+            strong_signal_return_multiplier = getattr(
+                strong_signal_cfg, "return_multiplier", 1.5
+            )
+            strong_signal_return_lookback = getattr(
+                strong_signal_cfg, "return_lookback_weeks", 12
+            )
+            strong_signal_require_positive = getattr(
+                strong_signal_cfg, "require_positive_return", True
+            )
         else:
             # Default: disabled
             strong_signal_enabled = False
@@ -638,7 +681,7 @@ class ExceptionDetector:
             strong_signal_return_multiplier = 1.5
             strong_signal_return_lookback = 12
             strong_signal_require_positive = True
-        
+
         return cls(
             z_threshold=config.exception.z_threshold,
             lookback_weeks=config.exception.lookback_weeks,
@@ -653,68 +696,62 @@ class ExceptionDetector:
 
 if __name__ == "__main__":
     """Quick test of exception detection"""
-    
+
     print("Testing Exception Detection")
     print("=" * 60)
-    
+
     # Create sample data
     dates = pd.date_range("2024-01-01", "2024-12-31", freq="W-FRI")
-    
+
     # Asset with consistent high Z-scores (should qualify)
     strong_asset = pd.Series(
-        [2.6, 2.7, 2.8, 2.9, 2.7, 2.6] + [2.0] * (len(dates) - 6),
-        index=dates
+        [2.6, 2.7, 2.8, 2.9, 2.7, 2.6] + [2.0] * (len(dates) - 6), index=dates
     )
-    
+
     # Asset with sporadic high Z-scores (should NOT qualify - only 1 trigger)
     sporadic_asset = pd.Series(
-        [2.6, 2.0, 2.1, 2.2] + [1.5] * (len(dates) - 4),
-        index=dates
+        [2.6, 2.0, 2.1, 2.2] + [1.5] * (len(dates) - 4), index=dates
     )
-    
+
     # Asset with moderate Z-scores (should NOT qualify)
     moderate_asset = pd.Series(
-        [2.0, 2.1, 2.2, 2.3] + [1.8] * (len(dates) - 4),
-        index=dates
+        [2.0, 2.1, 2.2, 2.3] + [1.8] * (len(dates) - 4), index=dates
     )
-    
+
     zscores_dict = {
         "STRONG": strong_asset,
         "SPORADIC": sporadic_asset,
         "MODERATE": moderate_asset,
     }
-    
+
     # Test detection
-    detector = ExceptionDetector(
-        z_threshold=2.5,
-        lookback_weeks=4,
-        min_trigger_count=2
-    )
-    
+    detector = ExceptionDetector(z_threshold=2.5, lookback_weeks=4, min_trigger_count=2)
+
     test_date = pd.Timestamp("2024-02-01")
-    
+
     result = detector.detect_exceptions(
-        asset_zscores=zscores_dict,
-        as_of_date=test_date
+        asset_zscores=zscores_dict, as_of_date=test_date
     )
-    
+
     print(f"\n[Test Date: {test_date.date()}]")
     print(f"\nDetection Parameters:")
     print(f"  Z-threshold: {result.z_threshold}")
     print(f"  Lookback: {result.lookback_weeks} weeks")
     print(f"  Min triggers: {result.min_trigger_count}")
-    
+
     print(f"\nQualified Exceptions ({len(result.exceptions)}):")
     for exc in result.exceptions:
         print(f"  {exc.symbol}")
         print(f"    Triggers: {exc.trigger_count}/{exc.lookback_weeks}")
         print(f"    Latest Z-score: {exc.latest_zscore:.2f}")
         print(f"    Trigger Dates: {exc.trigger_dates}")
-    
+
     print(f"\nAll Candidates:")
     for symbol, candidate in result.candidates.items():
         status = "✓ QUALIFIED" if candidate.qualifies else "✗ Not Qualified"
-        print(f"  {symbol}: {candidate.trigger_count}/{candidate.lookback_weeks} {status}")
-    
-    print(f"\n{'='*60}")
+        print(
+            f"  {symbol}: {candidate.trigger_count}/{candidate.lookback_weeks} {status}"
+        )
+
+    print(f"\n{'=' * 60}")
     print("[PASS] Exception detection test complete!")

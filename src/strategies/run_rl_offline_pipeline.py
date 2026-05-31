@@ -182,7 +182,9 @@ def _evaluate_gate(summary_df: pd.DataFrame, gate: dict) -> tuple[bool, dict]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Offline RL train/eval + acceptance gate")
+    parser = argparse.ArgumentParser(
+        description="Offline RL train/eval + acceptance gate"
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
         "--skip-train",
@@ -210,9 +212,8 @@ def main() -> None:
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
-    # _check_required_modules()
-
     if not args.skip_train:
+        _check_required_modules()
         _run_training(
             seed=args.seed,
             models=args.models,

@@ -91,13 +91,36 @@ def get_last_csv_date(csv_path: Path) -> date | None:
     """Return the most recent date in an existing CSV, or None if missing/empty."""
     if not csv_path.exists():
         return None
+
+    # Check if file is completely empty (0 bytes)
+    if csv_path.stat().st_size == 0:
+        raise ValueError(f"File is empty (0 bytes) at path: {csv_path}")
+
     try:
+        # Try reading only the header first to see if 'date' column is present
+        header_df = pd.read_csv(csv_path, nrows=0)
+        if "date" not in header_df.columns:
+            raise ValueError(
+                f"CSV is missing required 'date' column at path: {csv_path}"
+            )
+
         df = pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])
         if df.empty:
-            return None
-        return df["date"].max().date()
-    except Exception:
-        return None
+            raise ValueError(f"CSV is empty (no data rows) at path: {csv_path}")
+
+        max_val = df["date"].max()
+        if pd.isnull(max_val):
+            raise ValueError(
+                f"CSV has null values in 'date' column at path: {csv_path}"
+            )
+
+        return max_val.date()
+    except Exception as exc:
+        if isinstance(exc, ValueError):
+            raise exc
+        raise ValueError(
+            f"Corrupt CSV or unreadable file: {exc} at path: {csv_path}"
+        ) from exc
 
 
 def fetch_fmp_daily(
@@ -255,7 +278,12 @@ def main():
 
     for ticker in symbols:
         csv_path = FMP_DAILY_DIR / f"{ticker}_daily.csv"
-        last_date = get_last_csv_date(csv_path)
+        try:
+            last_date = get_last_csv_date(csv_path)
+        except Exception as e:
+            print(f"ERROR: Failed to read existing data for {ticker} - {e}")
+            results["failed"].append((ticker, f"Unreadable existing CSV: {e}"))
+            continue
 
         if last_date is None:
             # New ticker — fetch full history (5 years back)
