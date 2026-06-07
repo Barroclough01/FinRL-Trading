@@ -105,6 +105,57 @@ def test_invalid_target_weights_fail_validation():
 @patch("pathlib.Path.exists")
 @patch("pandas.read_csv")
 @patch("src.data.trading_calendar.is_trading_day")
+def test_negative_cash_passes_when_equity_positive(
+    mock_is_trading_day, mock_read_csv, mock_path_exists
+):
+    """Negative cash on a margin paper account should not block validation."""
+    account = {"name": "AR", "config": "dummy_config.yaml"}
+    executor = MagicMock()
+    executor.alpaca.get_account_info.return_value = {
+        "cash": -383.70,
+        "equity": 988233.87,
+    }
+    mock_is_trading_day.return_value = True
+    mock_path_exists.return_value = True
+    mock_read_csv.return_value = pd.DataFrame(
+        {"date": ["2026-06-05"], "close": [500.0]}
+    )
+
+    valid, failed_rule, error_msg, _ = validate_pre_trade(
+        account, "2026-06-05", {"SPY": 0.14, "QQQ": 0.14}, executor
+    )
+    assert valid
+    assert failed_rule is None
+    assert error_msg is None
+
+
+@patch("pathlib.Path.exists")
+@patch("pandas.read_csv")
+@patch("src.data.trading_calendar.is_trading_day")
+def test_zero_equity_fails_validation(
+    mock_is_trading_day, mock_read_csv, mock_path_exists
+):
+    """Zero or negative equity should still block validation."""
+    account = {"name": "AR", "config": "dummy_config.yaml"}
+    executor = MagicMock()
+    executor.alpaca.get_account_info.return_value = {"cash": 0, "equity": 0}
+    mock_is_trading_day.return_value = True
+    mock_path_exists.return_value = True
+    mock_read_csv.return_value = pd.DataFrame(
+        {"date": ["2026-06-05"], "close": [500.0]}
+    )
+
+    valid, failed_rule, error_msg, _ = validate_pre_trade(
+        account, "2026-06-05", {"SPY": 0.14}, executor
+    )
+    assert not valid
+    assert failed_rule == "account cash/equity can be read"
+    assert "invalid equity" in error_msg
+
+
+@patch("pathlib.Path.exists")
+@patch("pandas.read_csv")
+@patch("src.data.trading_calendar.is_trading_day")
 def test_stale_prices_fail_validation(
     mock_is_trading_day, mock_read_csv, mock_path_exists
 ):
@@ -313,6 +364,68 @@ def test_strategy_decision_records(tmp_path):
         assert row[2] == "abcdef123456"
         assert json.loads(row[3]) == {"AAPL": 0.5, "MSFT": 0.5}
         assert row[4] == 100000.0
+        conn.close()
+
+
+def test_strategy_decision_records_with_timestamps(tmp_path):
+    """Test that pandas Timestamps in order records serialize to SQLite."""
+    from run_paper_trading import save_strategy_decision
+
+    db_file = tmp_path / "finrl_trading.db"
+    jsonl_file = tmp_path / "strategy_decisions.jsonl"
+
+    dummy_record = {
+        "config_path": "dummy_config.yaml",
+        "config_hash": "abcdef123456",
+        "regime_state": "fast_risk_off",
+        "active_groups": ["group_a"],
+        "ranked_groups": ["group_a"],
+        "fallback_status": False,
+        "fallback_reason": None,
+        "target_weights": {"SATS": 0.2333},
+        "pre_trade_positions": [],
+        "order_plan": {"sell": [], "buy": []},
+        "submitted_orders": [
+            {
+                "order_id": "abc-123",
+                "status": "accepted",
+                "symbol": "SATS",
+                "quantity": 751.06,
+                "side": "sell",
+                "submitted_at": pd.Timestamp("2026-06-05 18:08:39"),
+                "filled_at": None,
+            }
+        ],
+        "filled_orders": [],
+        "post_trade_positions": [],
+        "cash": -468.93,
+        "equity": 1139861.42,
+        "benchmark_snapshot": {"spy_close": 500.0},
+    }
+
+    with patch("run_paper_trading.Path") as mock_path:
+
+        def path_side_effect(*args, **kwargs):
+            val = str(args[0])
+            if "finrl_trading.db" in val:
+                return db_file
+            if "strategy_decisions.jsonl" in val:
+                return jsonl_file
+            return Path(*args, **kwargs)
+
+        mock_path.side_effect = path_side_effect
+
+        save_strategy_decision("2026-06-05", "FinRL", dummy_record)
+
+        conn = sqlite3.connect(db_file)
+        row = conn.execute(
+            "SELECT submitted_orders FROM strategy_decisions WHERE account_name = 'FinRL'"
+        ).fetchone()
+        assert row is not None
+        orders = json.loads(row[0])
+        assert len(orders) == 1
+        assert orders[0]["symbol"] == "SATS"
+        assert "2026-06-05" in orders[0]["submitted_at"]
         conn.close()
 
 

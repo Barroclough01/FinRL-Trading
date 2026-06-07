@@ -97,7 +97,7 @@ Both accounts funded with $1,000,000 paper capital. Credentials stored in `.env`
 - Reads target weights from `logs/execution_YYYY-MM-DD.json`
 - Prints CLI performance report (cumulative return, weekly return, vs SPY, vs each other)
 - Generates HTML dashboard at `logs/dashboard.html`
-- Baselined 2026-05-10: FinRL=$1,091,207.58, AR=$1,000,000.00 (both weekly/cum=0.00%)
+- Latest snapshot 2026-05-29: FinRL=$1,139,861.42 (+4.46% cum), AR=$1,010,839.29 (+1.08% cum)
 - Run via: `python track_metrics.py [--report-only] [--date YYYY-MM-DD]`
 
 #### `run_paper_trading.ps1` — Windows PowerShell wrapper
@@ -183,9 +183,27 @@ cd C:\Users\paxto\stock-trading\qlib
 4. **Friday**: `explorer.exe logs/dashboard.html` to view updated performance dashboard
 5. **Quarterly (~July 2026)**: re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py` → download any new symbols
 
+## Current Roadmap Phase
+
+Paper shadow-trading / evidence collection (see `docs/paper_to_production_roadmap.md`).
+
+**Completed foundation work (2026-05-31):**
+- Structured JSON strategy output, pre-trade validation, post-trade reconciliation
+- Strategy decision records (SQLite + JSONL), weekly comparison metrics
+- Live-vs-replay parity checks, production kill switch (`TRADING_DISABLED` / `.kill_switch`)
+- Test suite: 17 tests in `tests/test_weekly_workflow.py`
+
+**Paper comparison status (through 2026-05-29):**
+- FinRL: +4.46% cumulative (ML-picked tech, higher turnover)
+- AR: +1.08% cumulative (still in fallback — `all_groups_negative_excess_return`)
+- SPY: +2.30%, QQQ: +3.43%
+
+**Known incident (2026-06-05):** Both accounts failed on the first run after foundation work shipped. FinRL orders were placed but decision-record save crashed on pandas Timestamp serialization; AR was blocked by an overly strict negative-cash validation rule. Both bugs fixed 2026-06-07.
+
 ## Immediate Next Steps (in priority order)
 
-1. **MONITOR**: First real comparison data point next Friday 2026-05-15 — check both Alpaca accounts and dashboard
-2. **WATCH**: AR baseline account — expect it to exit fallback mode (SPY/QQQ/etc.) after a few weeks of history warm-up on the original symbols
-3. **DEFERRED**: RD-Agent in WSL for automated factor discovery feeding into Qlib
-4. **DEFERRED**: RL model (`src/strategies/rl_model.py`) — not yet integrated or tested
+1. **VERIFY**: Next Friday run completes end-to-end — decision records, reconciliation, metrics
+2. **WATCH**: AR baseline — still in fallback after 4 weeks; mega-cap groups persistently underperform QQQ trend filter
+3. **QUARTERLY (~July 2026)**: Re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py`
+4. **DEFERRED**: RL integration (offline gate failed Sharpe 0.75 vs 0.80 on 2026-05-17)
+5. **DEFERRED**: RD-Agent in WSL for automated factor discovery feeding into Qlib

@@ -307,6 +307,75 @@ Artifacts:
 - Reconciliation report: None
 - Strategy decision records: `src/strategies/output/audit/adaptive_rotation/audit_2026-05-29.json`
 
+### Week Of 2026-06-05
+
+Run status:
+
+- Price refresh: Success
+- FinRL account execution: **Failed** (orders placed, decision-record save crashed)
+- AR account execution: **Failed** (pre-trade validation blocked on negative cash)
+- Metrics tracker: Not run (no successful account results)
+- Dashboard regenerated: No new snapshot data
+- Any failed or skipped step: Both accounts failed due to foundation-code bugs (fixed 2026-06-07)
+
+Market context:
+
+- Notable market regime: `fast_risk_off` (both accounts)
+- FinRL target: SATS/MCHP/ON at 23.33% each (70% invested)
+- AR target: SPY/QQQ/IAU/XLU/XLV fallback at 14% each (70% invested)
+
+Strategy results:
+
+| Account | Weekly Return | Cumulative Return | Notes |
+| --- | ---: | ---: | --- |
+| FinRL | N/A | N/A | Orders placed (3 sells, 1 buy) but run failed before metrics |
+| AR | N/A | N/A | Blocked by pre-trade validation |
+| SPY | N/A | N/A | No metrics snapshot this week |
+
+AR diagnostics:
+
+- Regime: `fast_risk_off`
+- Fallback used: Yes (would have been `fast_risk_off` or fallback allocation)
+- Pre-trade block reason: Negative cash ($-383.70) with healthy equity ($988,233.87)
+
+FinRL diagnostics:
+
+- Regime: `fast_risk_off`, no fallback
+- Orders placed: SATS sell, MCHP sell, ORCL sell, ON buy
+- Crash reason: `Object of type Timestamp is not JSON serializable` in `save_strategy_decision`
+
+Execution quality:
+
+- FinRL orders submitted: 4 (SATS sell, MCHP sell, ORCL sell, ON buy) — confirmed
+  open in Alpaca as of 2026-06-07, unfilled while market closed
+- AR orders submitted: 0 (blocked before order planning); last AR orders dated 2026-05-29
+- Reconciliation issues: Run did not complete; no reconciliation reports generated
+
+Data quality:
+
+- Stale symbols: None
+- Missing prices: None
+- Pre-trade validation: FinRL passed; AR failed on cash rule (overly strict, now fixed)
+
+Decision notes:
+
+- Keep running unchanged: Yes, after bug fixes verified on next Friday run
+- Change needed: Fixed Timestamp serialization and negative-cash validation (2026-06-07)
+- Investigation needed: Monitor FinRL June 5 pending orders at next market open; confirm
+  fills before next Friday rebalance
+- Production-readiness lesson: New observability code must be tested against real Alpaca order response shapes
+- RL-readiness lesson: Decision records are only useful once serialization handles all broker field types
+
+Artifacts:
+
+- Execution log: `logs/execution_2026-06-05.json` (errors only)
+- Parity check: `logs/parity_check_2026-06-05.json` (failed — no submitted weights recorded)
+- Pre-trade validation: `logs/pre_trade_validation_2026-06-05.json`
+- Strategy decision records: None (save crashed)
+- Reconciliation report: None
+
+---
+
 ## Running Watch List
 
 - Confirm SPY dashboard stays aligned to weekly snapshot dates.

@@ -326,12 +326,20 @@ def validate_pre_trade(
         info = executor.alpaca.get_account_info(account_name=account["name"])
         cash = float(info.get("cash", 0))
         equity = float(info.get("equity", 0))
-        if cash < 0 or equity <= 0:
+        # Negative cash is normal on Alpaca margin/paper accounts (unsettled
+        # proceeds, fully-invested portfolios). Only block when equity is zero
+        # or negative, which indicates a broken or unreadable account.
+        if equity <= 0:
             return (
                 False,
                 "account cash/equity can be read",
-                f"Account {account['name']} has invalid cash (${cash:,.2f}) or equity (${equity:,.2f}).",
+                f"Account {account['name']} has invalid equity (${equity:,.2f}).",
                 "Check Alpaca account status and credentials.",
+            )
+        if cash < 0:
+            logger.warning(
+                f"Account {account['name']} has negative cash (${cash:,.2f}); "
+                "this is normal for margin/unsettled paper accounts."
             )
     except Exception as e:
         return (
@@ -445,19 +453,19 @@ def save_strategy_decision(run_date: str, account_name: str, record: dict) -> No
                 record.get("config_path"),
                 record.get("config_hash"),
                 record.get("regime_state"),
-                json.dumps(record.get("active_groups", [])),
-                json.dumps(record.get("ranked_groups", [])),
+                json.dumps(record.get("active_groups", []), default=str),
+                json.dumps(record.get("ranked_groups", []), default=str),
                 1 if record.get("fallback_status") else 0,
                 record.get("fallback_reason"),
-                json.dumps(record.get("target_weights", {})),
-                json.dumps(record.get("pre_trade_positions", [])),
-                json.dumps(record.get("order_plan", {})),
-                json.dumps(record.get("submitted_orders", [])),
-                json.dumps(record.get("filled_orders", [])),
-                json.dumps(record.get("post_trade_positions", [])),
+                json.dumps(record.get("target_weights", {}), default=str),
+                json.dumps(record.get("pre_trade_positions", []), default=str),
+                json.dumps(record.get("order_plan", {}), default=str),
+                json.dumps(record.get("submitted_orders", []), default=str),
+                json.dumps(record.get("filled_orders", []), default=str),
+                json.dumps(record.get("post_trade_positions", []), default=str),
                 record.get("cash"),
                 record.get("equity"),
-                json.dumps(record.get("benchmark_snapshot", {})),
+                json.dumps(record.get("benchmark_snapshot", {}), default=str),
             ),
         )
         conn.commit()

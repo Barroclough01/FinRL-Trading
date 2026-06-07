@@ -1010,7 +1010,7 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             tgt = target_weights_by_date[d]
             all_syms = set(act.keys()) | set(tgt.keys())
             drift_val = sum(
-                abs(act.get(sym, 0.0) - tgt.get(sym, 0.0)) for sym in all_syms
+                abs((act.get(sym) or 0.0) - (tgt.get(sym) or 0.0)) for sym in all_syms
             )
             drifts.append(drift_val)
         avg_drift = float(np.mean(drifts)) if drifts else 0.0
@@ -1023,7 +1023,7 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             w0 = weights_by_date[d0]
             w1 = weights_by_date[d1]
             all_syms = set(w0.keys()) | set(w1.keys())
-            to_val = sum(abs(w1.get(sym, 0.0) - w0.get(sym, 0.0)) for sym in all_syms)
+            to_val = sum(abs((w1.get(sym) or 0.0) - (w0.get(sym) or 0.0)) for sym in all_syms)
             turnovers.append(to_val)
         avg_turnover = float(np.mean(turnovers)) if turnovers else 0.0
 

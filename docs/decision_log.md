@@ -2,6 +2,33 @@
 
 This file records project decisions that should be easy to revisit later.
 
+## 2026-06-07: Fix June 5 Run Failures (Timestamp + Negative Cash)
+
+Decision:
+
+Fix two bugs exposed by the 2026-06-05 weekly run: pandas Timestamp serialization
+in strategy decision records, and overly strict negative-cash pre-trade validation.
+
+Reasoning:
+
+The FinRL account placed orders successfully but crashed when saving decision
+records because Alpaca order responses include `submitted_at`/`filled_at` as pandas
+Timestamps. The SQLite insert path called `json.dumps()` without `default=str`
+(only the JSONL mirror had it).
+
+The AR account was blocked because pre-trade rule 9 rejected `cash < 0`. Alpaca
+margin/paper accounts routinely show small negative cash when fully invested —
+historical weekly snapshots show both accounts with negative cash (-$47 to -$469)
+during successful runs. Equity was healthy at $988K.
+
+Implementation details:
+
+- Added `default=str` to all `json.dumps()` calls in `save_strategy_decision()`.
+- Changed pre-trade rule 9 to only block when `equity <= 0`; log a warning for
+  negative cash instead of failing.
+- Added 3 tests: Timestamp serialization, negative-cash pass, zero-equity fail.
+- Test suite now 17 passing.
+
 ## 2026-05-31: Treat Current Period as Evidence Collection
 
 Decision:

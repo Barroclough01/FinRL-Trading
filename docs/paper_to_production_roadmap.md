@@ -1,6 +1,6 @@
 # Paper Trading to Production and RL Roadmap
 
-Last updated: 2026-05-31
+Last updated: 2026-06-07
 
 This document tracks the path from the current dual-account paper comparison to
 either production trading or a reinforcement learning strategy layer.
@@ -42,7 +42,7 @@ valuable for execution quality, slippage, drift, and live-vs-backtest parity.
 
 Add a normalized decision record for every account and run date.
 
-**Status: Completed (2026-05-31)**
+**Status: Completed (2026-05-31); first successful live persistence pending next weekly run**
 
 Record at minimum:
 
@@ -293,13 +293,32 @@ include:
 3. **Add explicit AR fallback diagnostics.** (Completed: Fallback reasons parsed and logged to decision records)
 4. **Add pre-trade validation.** (Completed: 9-point validation gate implemented and tested)
 5. **Add post-trade reconciliation.** (Completed: Discrepancy checks, alert flags, and JSON reports implemented and tested)
-6. **Add a live-vs-replay parity check.**
-7. **Add production kill switch.**
-8. **Harden tests around order sizing, metrics, and risk gates.** (Completed: Added focused test suite under tests/ with 12 passing tests)
+6. **Add a live-vs-replay parity check.** (Completed: `run_parity_checks()` in `run_paper_trading.py`, reports at `logs/parity_check_YYYY-MM-DD.json`)
+7. **Add production kill switch.** (Completed: `TRADING_DISABLED=true` env var or `.kill_switch` file forces dry-run)
+8. **Harden tests around order sizing, metrics, and risk gates.** (Completed: 17 passing tests in `tests/test_weekly_workflow.py`)
 9. **Standardize RL observation/action/reward contracts.**
 10. **Integrate RL as an offline candidate strategy.**
 11. **Add RL as a third paper account only after it passes offline gates.**
 12. **Consider production only after several months of clean paper evidence.**
+
+## Operational Notes (2026-06-07)
+
+The 2026-06-05 weekly run exposed two bugs in newly shipped foundation code:
+
+1. **Timestamp serialization** — Alpaca order responses include pandas `Timestamp`
+   fields (`submitted_at`, `filled_at`). `save_strategy_decision()` SQLite inserts
+   called `json.dumps()` without `default=str`, crashing after orders were placed.
+   Fixed: all `json.dumps()` calls in `save_strategy_decision()` now use
+   `default=str`.
+
+2. **Negative cash validation** — Pre-trade rule 9 rejected accounts with
+   `cash < 0`, but Alpaca margin/paper accounts routinely show small negative cash
+   when fully invested (AR had -$383.70 with $988K equity). Historical snapshots
+   confirm both accounts often carry negative cash. Fixed: only block when
+   `equity <= 0`; log a warning for negative cash.
+
+Next weekly run should produce the first complete decision records, reconciliation
+reports, and updated metrics artifacts.
 
 ## Open Questions
 
