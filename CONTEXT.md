@@ -202,8 +202,12 @@ Paper shadow-trading / evidence collection (see `docs/paper_to_production_roadma
 
 ## Immediate Next Steps (in priority order)
 
+See `docs/paper_to_production_roadmap.md` → **Path Forward** for the full plan.
+
 1. **VERIFY**: Next Friday run completes end-to-end — decision records, reconciliation, metrics
-2. **WATCH**: AR baseline — still in fallback after 4 weeks; mega-cap groups persistently underperform QQQ trend filter
-3. **QUARTERLY (~July 2026)**: Re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py`
-4. **DEFERRED**: RL integration (offline gate failed Sharpe 0.75 vs 0.80 on 2026-05-17)
-5. **DEFERRED**: RD-Agent in WSL for automated factor discovery feeding into Qlib
+2. **RESOLVE**: FinRL June 5 pending orders (confirm fills or cancel before next rebalance)
+3. **MONITOR**: Keep FinRL vs AR comparison unchanged; collect evidence through June/July
+4. **WATCH**: AR baseline — still in fallback; mega-cap groups underperform QQQ trend filter
+5. **NEXT CODE SPRINT** (after one clean run): hard risk gate, order idempotency, alerting
+6. **QUARTERLY (~July 2026)**: Re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py`
+7. **DEFERRED**: RL integration, production capital, AR fallback changes

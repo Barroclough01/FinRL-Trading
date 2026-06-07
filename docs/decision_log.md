@@ -2,6 +2,29 @@
 
 This file records project decisions that should be easy to revisit later.
 
+## 2026-06-07: Always Run Metrics After Live Paper Trading
+
+Decision:
+
+Run `track_metrics.py` after every live paper trading session, regardless of
+whether any account completed trading successfully. Fall back to `--report-only`
+if the full snapshot run fails.
+
+Reasoning:
+
+On 2026-06-05 both accounts failed during execution, so `run_paper_trading.py`
+skipped metrics entirely (`if results:` guard). The dashboard went stale and
+appeared blank even though the database held valid snapshots through May 29.
+Alpaca snapshots may still succeed when post-order bookkeeping fails.
+
+Implementation details:
+
+- Added `run_metrics_tracker()` in `run_paper_trading.py`.
+- Full `--date` run first; `--report-only` fallback on nonzero exit.
+- Sanity checks and success notifications remain gated on successful trading
+  results; metrics resilience is independent of trading outcome.
+- Documented the full path forward in `docs/paper_to_production_roadmap.md`.
+
 ## 2026-06-07: Fix June 5 Run Failures (Timestamp + Negative Cash)
 
 Decision:

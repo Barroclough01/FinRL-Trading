@@ -320,6 +320,68 @@ The 2026-06-05 weekly run exposed two bugs in newly shipped foundation code:
 Next weekly run should produce the first complete decision records, reconciliation
 reports, and updated metrics artifacts.
 
+## Path Forward (as of 2026-06-07)
+
+### Phase: Paper evidence collection (current)
+
+The foundation build order (items 1–8) is complete in code. The next step is
+operational validation: prove the weekly workflow produces complete artifacts on
+a live run before starting production-readiness or RL work.
+
+### Immediate (this week)
+
+1. **Validate the next Friday live run end-to-end.**
+   Confirm decision records, reconciliation reports, weekly snapshots, dashboard,
+   and comparison metrics all update after a successful (or partially successful)
+   execution.
+
+2. **Resolve FinRL June 5 pending orders.**
+   Four orders (SATS/MCHP/ORCL sells, ON buy) were submitted before the
+   decision-record crash. Confirm fills or cancel before the next rebalance.
+
+3. **Keep the comparison running unchanged.**
+   Do not alter AR fallback logic or swap benchmarks mid-experiment. Collect
+   weeks of FinRL vs AR vs SPY evidence.
+
+4. **Monitor, don't build.**
+   Resist RL integration or production work until several clean weekly runs
+   establish operational confidence.
+
+### Short-term engineering (after one clean weekly run)
+
+| Priority | Work | Rationale |
+| --- | --- | --- |
+| 1 | Metrics on partial/total failure | **Completed (2026-06-07):** `run_metrics_tracker()` always runs after live sessions; falls back to `--report-only` if full snapshot fails. |
+| 2 | Hard pre-trade risk gate | Extend validation with max turnover, drawdown pause, max order notional, drift-from-holdings checks. |
+| 3 | Order idempotency | Prevent duplicate submissions on retry. |
+| 4 | Alerting | Webhook returned 403 on June 5; failures need a reliable notification channel. |
+| 5 | Explicit production config | Separate prod credentials and YAML from paper comparison accounts. |
+
+Items 1 (metrics resilience) ships in the same session as this doc update.
+Items 2–5 are the next development sprint after operational validation.
+
+### Medium-term (roadmap items 9–12)
+
+1. Standardize RL observation/action/reward contracts.
+2. Integrate RL as an offline candidate (offline gate failed Sharpe 0.75 vs 0.80
+   on 2026-05-17).
+3. Add RL as a third paper account only after offline gate passes.
+4. Consider production only after months of clean paper evidence.
+
+### Calendar / strategy (not code)
+
+| When | Task |
+| --- | --- |
+| ~July 2026 | Quarterly ML refresh: `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py` |
+| Ongoing | Track whether AR exits fallback (mega-caps vs QQQ trend filter) |
+| Open | Decide if QQQ is too demanding a benchmark for the AR baseline |
+
+### Explicitly deferred
+
+- RL training on live weekly data (too few observations).
+- Production capital (operational safeguards incomplete).
+- Changing AR fallback behavior (breaks baseline comparison).
+
 ## Open Questions
 
 - Should AR compare group strength against QQQ, SPY, or a blended benchmark?

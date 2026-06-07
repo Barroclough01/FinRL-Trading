@@ -611,6 +611,96 @@ def test_post_trade_reconciliation(tmp_path):
         assert saved_data["accounts"]["fail_acc"]["discrepancies_found"]
 
 
+@patch("subprocess.run")
+def test_run_metrics_tracker_full_success(mock_subprocess_run):
+    """Full metrics run success should not invoke report-only fallback."""
+    from run_paper_trading import run_metrics_tracker
+
+    mock_subprocess_run.return_value = MagicMock(returncode=0)
+
+    ok, err = run_metrics_tracker("2026-06-06", project_root)
+
+    assert ok
+    assert err is None
+    assert mock_subprocess_run.call_count == 1
+    assert mock_subprocess_run.call_args_list[0][0][0] == [
+        sys.executable,
+        "track_metrics.py",
+        "--date",
+        "2026-06-06",
+    ]
+
+
+@patch("subprocess.run")
+def test_run_metrics_tracker_report_only_fallback(mock_subprocess_run):
+    """Failed full metrics run should fall back to --report-only."""
+    from run_paper_trading import run_metrics_tracker
+
+    mock_subprocess_run.side_effect = [
+        MagicMock(returncode=1),
+        MagicMock(returncode=0),
+    ]
+
+    ok, err = run_metrics_tracker("2026-06-06", project_root)
+
+    assert ok
+    assert err is not None
+    assert "report-only" in err.lower() or "existing data" in err.lower()
+    assert mock_subprocess_run.call_count == 2
+    assert mock_subprocess_run.call_args_list[1][0][0] == [
+        sys.executable,
+        "track_metrics.py",
+        "--report-only",
+    ]
+
+
+@patch("subprocess.run")
+def test_run_metrics_tracker_both_fail(mock_subprocess_run):
+    """Metrics should fail only when both full and report-only runs fail."""
+    from run_paper_trading import run_metrics_tracker
+
+    mock_subprocess_run.side_effect = [
+        MagicMock(returncode=1),
+        MagicMock(returncode=1),
+    ]
+
+    ok, err = run_metrics_tracker("2026-06-06", project_root)
+
+    assert not ok
+    assert err is not None
+    assert mock_subprocess_run.call_count == 2
+
+
+@patch("run_paper_trading.run_metrics_tracker")
+@patch("run_paper_trading.run_parity_checks")
+@patch("run_paper_trading.notify_status")
+@patch("run_paper_trading.load_accounts_from_env")
+@patch("run_paper_trading.run_account")
+def test_metrics_runs_when_all_accounts_fail(
+    mock_run_account,
+    mock_load,
+    mock_notify,
+    mock_parity,
+    mock_metrics,
+):
+    """Metrics tracker should run even when every account fails."""
+    mock_load.return_value = [
+        {"name": "FinRL", "config": "dummy1.yaml"},
+        {"name": "AR", "config": "dummy2.yaml"},
+    ]
+    mock_run_account.side_effect = RuntimeError("account failed")
+    mock_metrics.return_value = (True, None)
+
+    with patch("sys.argv", ["run_paper_trading.py", "--date", "2026-06-06"]):
+        with patch("sys.exit") as mock_exit:
+            from run_paper_trading import main
+
+            main()
+
+            mock_metrics.assert_called_once()
+            mock_exit.assert_called_once_with(1)
+
+
 @patch("os.getenv")
 @patch("run_paper_trading.load_accounts_from_env")
 @patch("run_paper_trading.run_account")

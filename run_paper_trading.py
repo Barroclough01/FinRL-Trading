@@ -799,6 +799,50 @@ def run_post_run_sanity_checks(
     return failures
 
 
+def run_metrics_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]:
+    """
+    Run track_metrics.py after a live paper trading session.
+
+    Always attempts a full snapshot run first. If that fails (e.g. one or more
+    account snapshots could not be recorded), falls back to --report-only so the
+    dashboard and comparison metrics are still regenerated from existing DB data.
+
+    Returns (success, error_message).
+    """
+    import subprocess
+
+    logger.info("Running metrics tracker (full snapshot)...")
+    full_proc = subprocess.run(
+        [sys.executable, "track_metrics.py", "--date", run_date],
+        cwd=project_root,
+    )
+    if full_proc.returncode == 0:
+        logger.info("Metrics tracker completed successfully.")
+        return True, None
+
+    logger.warning(
+        "Full metrics run failed (exit %s); refreshing dashboard from existing DB...",
+        full_proc.returncode,
+    )
+    report_proc = subprocess.run(
+        [sys.executable, "track_metrics.py", "--report-only"],
+        cwd=project_root,
+    )
+    if report_proc.returncode == 0:
+        logger.info(
+            "Dashboard and comparison metrics regenerated via --report-only fallback."
+        )
+        return True, (
+            f"Full metrics snapshot failed (exit {full_proc.returncode}); "
+            "dashboard refreshed from existing data only."
+        )
+
+    return False, (
+        f"track_metrics.py failed: full run exit {full_proc.returncode}, "
+        f"report-only exit {report_proc.returncode}"
+    )
+
+
 def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     """
     Run the full paper trading cycle for a single account.
@@ -1333,22 +1377,17 @@ def main():
         except Exception as e:
             logger.warning(f"Could not save execution log: {e}")
 
-    # Run metrics tracker
+    # Run metrics tracker (always on live runs, even if all accounts failed)
+    metrics_warning = None
+    if not args.dry_run:
+        metrics_ok, metrics_error = run_metrics_tracker(args.date, project_root)
+        if not metrics_ok:
+            errors.append({"account": "metrics", "error": metrics_error})
+        elif metrics_error:
+            metrics_warning = metrics_error
+            logger.warning(metrics_error)
+
     if not args.dry_run and results:
-        logger.info("Running metrics tracker...")
-        import subprocess
-
-        metrics_proc = subprocess.run(
-            [sys.executable, "track_metrics.py", "--date", args.date], cwd=project_root
-        )
-        if metrics_proc.returncode != 0:
-            errors.append(
-                {
-                    "account": "metrics",
-                    "error": f"track_metrics.py failed with return code {metrics_proc.returncode}",
-                }
-            )
-
         failures = run_post_run_sanity_checks(args.date, accounts, results, errors)
         if failures:
             for failure in failures:
