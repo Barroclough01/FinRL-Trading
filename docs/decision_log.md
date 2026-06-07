@@ -2,6 +2,30 @@
 
 This file records project decisions that should be easy to revisit later.
 
+## 2026-06-07: Quick Wins Before Next Live Run
+
+Decision:
+
+Ship four pre-Friday improvements: per-account audit files, Discord webhook
+formatting, metrics fallback date alignment, and git hygiene for tracked
+`__pycache__` files.
+
+Reasoning:
+
+Dual-account runs overwrote a shared `audit_YYYY-MM-DD.json`, corrupting
+fallback-reason diagnostics. Discord webhooks rejected arbitrary JSON payloads
+(403). Metrics `--report-only` fallback omitted `--date`. Compiled Python
+artifacts were tracked despite `.gitignore` rules.
+
+Implementation details:
+
+- Added `--audit-suffix` to `run_adaptive_rotation_strategy.py`; paper trading
+  passes account name.
+- `format_webhook_body()` formats Discord payloads with a `content` field.
+- `run_metrics_tracker()` passes `--date` to the report-only fallback.
+- Removed tracked `__pycache__` files from git index.
+- Added June 6 dry-run journal entry.
+
 ## 2026-06-07: Always Run Metrics After Live Paper Trading
 
 Decision:

@@ -376,6 +376,37 @@ Artifacts:
 
 ---
 
+### Week Of 2026-06-06 (dry-run validation)
+
+Run status:
+
+- Price refresh: Not run (dry-run only)
+- FinRL account execution: Dry-run success (pre-trade validation passed)
+- AR account execution: Dry-run success (pre-trade validation passed, negative-cash warning logged)
+- Metrics tracker: Not run (dry-run mode)
+- Dashboard regenerated: No (dry-run)
+- Any failed or skipped step: None — post-fix validation run
+
+Market context:
+
+- Notable market regime: `fast_risk_off` (both accounts)
+- FinRL target: SATS/MCHP/ON at 23.33% each
+- AR target: SPY/QQQ/IAU/XLU/XLV fallback at 14% each
+
+Decision notes:
+
+- Keep running unchanged: Yes — fixes for Timestamp serialization and negative-cash
+  validation confirmed working
+- Change needed: None before next live Friday run
+- Production-readiness lesson: Dry-run after bug fixes catches regressions before market open
+
+Artifacts:
+
+- Pre-trade validation: `logs/pre_trade_validation_2026-06-06.json`
+- Parity check: `logs/parity_check_2026-06-06.json`
+
+---
+
 ## Running Watch List
 
 - Confirm SPY dashboard stays aligned to weekly snapshot dates.

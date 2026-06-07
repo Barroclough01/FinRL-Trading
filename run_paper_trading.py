@@ -84,7 +84,10 @@ DEFAULT_CONFIG = "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
 
 
 def get_ar_weights(
-    config_path: str, run_date: str, is_replay: bool = False
+    config_path: str,
+    run_date: str,
+    is_replay: bool = False,
+    account_name: str | None = None,
 ) -> dict[str, float]:
     """
     Run Adaptive Rotation strategy for run_date and return target weights dict.
@@ -113,17 +116,21 @@ def get_ar_weights(
         except Exception as e:
             logger.warning(f"Could not remove stale JSON output file: {e}")
 
+    cmd = [
+        sys.executable,
+        "src/strategies/run_adaptive_rotation_strategy.py",
+        "--config",
+        config_path,
+        "--date",
+        run_date,
+        "--json-output",
+        json_output_path,
+    ]
+    if account_name:
+        cmd.extend(["--audit-suffix", account_name])
+
     result = subprocess.run(
-        [
-            sys.executable,
-            "src/strategies/run_adaptive_rotation_strategy.py",
-            "--config",
-            config_path,
-            "--date",
-            run_date,
-            "--json-output",
-            json_output_path,
-        ],
+        cmd,
         capture_output=True,
         text=True,
         cwd=project_root,
@@ -712,16 +719,51 @@ def dry_run_summary(weights: dict[str, float], account_name: str) -> None:
     print("=" * 60)
 
 
+def format_webhook_body(webhook_url: str, payload: dict) -> bytes:
+    """Format notification payload for Discord or generic JSON webhooks."""
+    if "discord.com/api/webhooks" in webhook_url or "discordapp.com/api/webhooks" in webhook_url:
+        status = str(payload.get("status", "unknown")).upper()
+        run_date = payload.get("date", "")
+        accounts = payload.get("accounts", [])
+        lines = [
+            f"**Paper Trading {status}** — {run_date}",
+            f"Accounts: {', '.join(accounts) if accounts else 'n/a'}",
+        ]
+        if payload.get("orders_failed"):
+            failed = ", ".join(
+                f"{acct}={count}"
+                for acct, count in payload["orders_failed"].items()
+                if count
+            )
+            if failed:
+                lines.append(f"Orders failed: {failed}")
+        for err in payload.get("errors", []):
+            acct = err.get("account", "?")
+            msg = str(err.get("error", ""))[:500]
+            lines.append(f"• **{acct}**: {msg}")
+        for failure in payload.get("sanity_failures", []):
+            lines.append(f"• Sanity: {str(failure)[:500]}")
+        content = "\n".join(lines)
+        if len(content) > 1900:
+            content = content[:1900] + "…"
+        return json.dumps({"content": content}).encode("utf-8")
+
+    return json.dumps(payload).encode("utf-8")
+
+
 def notify_status(webhook_url: str | None, payload: dict) -> None:
     """Send run status to a generic webhook endpoint if configured."""
     if not webhook_url:
         return
 
-    body = json.dumps(payload).encode("utf-8")
+    body = format_webhook_body(webhook_url, payload)
     req = urllib.request.Request(
         webhook_url,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "FinRL-Trading-PaperBot/1.0",
+        },
         method="POST",
     )
     try:
@@ -729,6 +771,15 @@ def notify_status(webhook_url: str | None, payload: dict) -> None:
             logger.info(
                 "Webhook notification sent (status=%s)", getattr(resp, "status", "?")
             )
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            pass
+        logger.warning(
+            "Webhook notification failed: HTTP %s %s", exc.code, detail or exc.reason
+        )
     except (urllib.error.URLError, TimeoutError) as exc:
         logger.warning("Webhook notification failed: %s", exc)
 
@@ -825,7 +876,7 @@ def run_metrics_tracker(run_date: str, project_root: Path) -> tuple[bool, str | 
         full_proc.returncode,
     )
     report_proc = subprocess.run(
-        [sys.executable, "track_metrics.py", "--report-only"],
+        [sys.executable, "track_metrics.py", "--report-only", "--date", run_date],
         cwd=project_root,
     )
     if report_proc.returncode == 0:
@@ -856,7 +907,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     logger.info(f"{'=' * 50}")
 
     # Step 1: Get target weights
-    weights = get_ar_weights(config, run_date)
+    weights = get_ar_weights(config, run_date, account_name=name)
 
     # Step 2: Connect and execute
     logger.info(f"Connecting to Alpaca account: {name}")
@@ -1079,7 +1130,9 @@ def run_parity_checks(
         determinism_msg = "OK"
         replay_vs_submitted_mae = 0.0
         try:
-            replay_weights = get_ar_weights(config, run_date, is_replay=True)
+            replay_weights = get_ar_weights(
+                config, run_date, is_replay=True, account_name=name
+            )
 
             all_syms = set(submitted_weights.keys()) | set(replay_weights.keys())
             diffs = []

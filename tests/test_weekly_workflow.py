@@ -651,7 +651,72 @@ def test_run_metrics_tracker_report_only_fallback(mock_subprocess_run):
         sys.executable,
         "track_metrics.py",
         "--report-only",
+        "--date",
+        "2026-06-06",
     ]
+
+
+def test_discord_webhook_body_format():
+    """Discord webhooks require a content field, not arbitrary JSON."""
+    from run_paper_trading import format_webhook_body
+
+    body = format_webhook_body(
+        "https://discord.com/api/webhooks/123/token",
+        {
+            "status": "failed",
+            "date": "2026-06-06",
+            "accounts": ["FinRL", "AR"],
+            "errors": [{"account": "AR", "error": "validation failed"}],
+        },
+    )
+    payload = json.loads(body.decode("utf-8"))
+    assert "content" in payload
+    assert "Paper Trading FAILED" in payload["content"]
+    assert "FinRL" in payload["content"]
+    assert "AR" in payload["content"]
+
+
+def test_generic_webhook_body_format():
+    """Non-Discord webhooks should receive the raw JSON payload."""
+    from run_paper_trading import format_webhook_body
+
+    original = {"status": "ok", "date": "2026-06-06", "accounts": ["FinRL"]}
+    body = format_webhook_body("https://example.com/hook", original)
+    assert json.loads(body.decode("utf-8")) == original
+
+
+@patch("subprocess.run")
+def test_get_ar_weights_passes_audit_suffix(mock_run):
+    """Account name should be passed as --audit-suffix to avoid audit file collisions."""
+    dummy_json = {
+        "target_weights": {"SPY": 0.5},
+        "cash_weight": 0.5,
+        "regime_state": "risk_on",
+        "active_groups": [],
+        "ranked_groups": [],
+        "fallback_status": True,
+        "audit_file_path": "/dummy/audit_2026-06-06_AR.json",
+    }
+
+    def side_effect(*args, **kwargs):
+        cmd = kwargs.get("args") or args[0]
+        assert "--audit-suffix" in cmd
+        assert "AR" in cmd
+        json_path_idx = cmd.index("--json-output") + 1
+        with open(cmd[json_path_idx], "w") as f:
+            json.dump(dummy_json, f)
+        res = MagicMock()
+        res.returncode = 0
+        return res
+
+    mock_run.side_effect = side_effect
+
+    weights = get_ar_weights(
+        "src/strategies/AdaptiveRotationConf_baseline.yaml",
+        "2026-06-06",
+        account_name="AR",
+    )
+    assert weights == {"SPY": 0.5}
 
 
 @patch("subprocess.run")
@@ -800,14 +865,15 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
     conn.close()
 
     # Mock get_ar_weights: return perfect match for perfect_acc, mismatched for mismatch_acc
-    def get_ar_weights_side_effect(config, run_date, is_replay=False):
-        if "perfect_acc" in config or "perfect" in str(config):
+    def get_ar_weights_side_effect(
+        config, run_date, is_replay=False, account_name=None
+    ):
+        if account_name == "perfect_acc":
             return {"AAPL": 0.5, "MSFT": 0.5}
-        else:
-            return {
-                "AAPL": 0.4,
-                "MSFT": 0.6,
-            }  # different weights -> determinism mismatch!
+        return {
+            "AAPL": 0.4,
+            "MSFT": 0.6,
+        }  # different weights -> determinism mismatch!
 
     mock_get_ar_weights.side_effect = get_ar_weights_side_effect
 

@@ -32,6 +32,7 @@ def run_single_date(
     as_of_date: str,
     data_dir: str = None,
     json_output_path: str = None,
+    audit_suffix: str | None = None,
 ):
     """
     Run strategy for a single date
@@ -94,7 +95,10 @@ def run_single_date(
     output_dir = Path(config.paths.audit_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    audit_file = output_dir / f"audit_{as_of_date}.json"
+    if audit_suffix:
+        audit_file = output_dir / f"audit_{as_of_date}_{audit_suffix}.json"
+    else:
+        audit_file = output_dir / f"audit_{as_of_date}.json"
     audit_log.to_json(str(audit_file))
     print(f"\nAudit log saved to: {audit_file}")
 
@@ -764,6 +768,13 @@ Examples:
         help="Path to save structured JSON output",
     )
 
+    parser.add_argument(
+        "--audit-suffix",
+        type=str,
+        default=None,
+        help="Optional suffix for audit log filename (e.g. account name)",
+    )
+
     # Backtest mode
     parser.add_argument("--backtest", action="store_true", help="Run in backtest mode")
 
@@ -812,6 +823,7 @@ Examples:
                 as_of_date=args.date,
                 data_dir=args.data_dir,
                 json_output_path=args.json_output,
+                audit_suffix=args.audit_suffix,
             )
 
         else:
