@@ -1,8 +1,9 @@
 # Strategy Decision Records Design and Implementation Plan
 
-Last updated: 2026-05-31
+Last updated: 2026-06-12
+Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 
-This document outlines the design and implementation plan for **Strategy Decision Records** (Task 1 in the Near-Term Paper Comparison Foundation). The goal is to capture a complete, high-fidelity audit trail for every strategy execution, enabling deep post-trade analysis, historical replays, and offline RL training.
+This document records the implemented strategy decision-record flow for Task 1 in the Near-Term Paper Comparison Foundation. The weekly paper-trading run now persists records to SQLite and `logs/strategy_decisions.jsonl` for every account/date.
 
 ## Requirements
 

@@ -16,6 +16,9 @@ sys.path.insert(0, str(project_root))
 import src.data.trading_calendar
 from run_paper_trading import (
     get_ar_weights,
+    get_rl_candidate_weights,
+    get_target_weights,
+    reconcile_post_trade,
     run_post_run_sanity_checks,
     validate_pre_trade,
 )
@@ -57,6 +60,48 @@ def test_structured_strategy_output_parsing(mock_run):
         "src/strategies/AdaptiveRotationConf_v1.2.2.yaml", "2026-05-31"
     )
     assert weights == {"SATS": 0.25, "MCHP": 0.25, "ON": 0.25, "ORCL": 0.25}
+
+
+@patch("run_paper_trading.get_rl_candidate_weights")
+def test_get_target_weights_prefers_rl_candidate_csv(mock_get_rl_candidate_weights):
+    """The paper-trading helper should route CSV RL exports through the candidate path."""
+    mock_get_rl_candidate_weights.return_value = {"A": 0.6, "B": 0.4}
+
+    weights = get_target_weights("results/drl_weight.csv", "2026-05-31")
+
+    assert weights == {"A": 0.6, "B": 0.4}
+    mock_get_rl_candidate_weights.assert_called_once_with(
+        "results/drl_weight.csv", "2026-05-31"
+    )
+
+
+@patch("subprocess.run")
+def test_rl_candidate_weights_dispatch(mock_run):
+    """RL candidate weights should be readable through the paper-trading helper."""
+    dummy_json = {
+        "target_weights": {"A": 0.6, "B": 0.4},
+        "cash_weight": 0.0,
+        "regime_state": "rl_candidate",
+        "active_groups": [],
+        "ranked_groups": [],
+        "fallback_status": False,
+        "audit_file_path": "/dummy/audit.json",
+    }
+
+    def side_effect(*args, **kwargs):
+        cmd = args[0]
+        json_path_idx = cmd.index("--json-output") + 1
+        json_path = cmd[json_path_idx]
+        Path(json_path).write_text(json.dumps(dummy_json), encoding="utf-8")
+        res = MagicMock()
+        res.returncode = 0
+        return res
+
+    mock_run.side_effect = side_effect
+
+    weights = get_rl_candidate_weights("results/drl_weight.csv", "2026-05-31")
+
+    assert weights == {"A": 0.6, "B": 0.4}
 
 
 def test_invalid_target_weights_fail_validation():
@@ -217,6 +262,22 @@ def test_post_run_sanity_checks_detect_missing_rows(mock_exists, mock_connect):
     failures = run_post_run_sanity_checks("2026-05-31", accounts, results, errors)
     assert len(failures) > 0
     assert any("weekly_snapshot missing" in f for f in failures)
+
+
+def test_reconcile_post_trade_accepts_string_numeric_fields():
+    """String-valued equity/market_value should be coerced to floats during reconciliation."""
+    record = {
+        "equity": "1000.0",
+        "cash": "100.0",
+        "target_weights": {"AAPL": 1.0},
+        "post_trade_positions": [{"symbol": "AAPL", "market_value": "1000.0"}],
+        "submitted_orders": [],
+    }
+
+    result = reconcile_post_trade("2026-06-12", "test_acc", record)
+
+    assert result["reconciled_successfully"] is True
+    assert result["target_vs_actual_weights"][0]["actual_weight"] == 1.0
 
 
 def test_corrupted_csv_fails_refresh(tmp_path):

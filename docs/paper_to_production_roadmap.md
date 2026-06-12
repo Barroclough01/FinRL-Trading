@@ -1,6 +1,6 @@
 # Paper Trading to Production and RL Roadmap
 
-Last updated: 2026-06-07
+Last updated: 2026-06-12
 
 This document tracks the path from the current dual-account paper comparison to
 either production trading or a reinforcement learning strategy layer.
@@ -42,7 +42,7 @@ valuable for execution quality, slippage, drift, and live-vs-backtest parity.
 
 Add a normalized decision record for every account and run date.
 
-**Status: Completed (2026-05-31); first successful live persistence pending next weekly run**
+**Status: Completed and verified in the current weekly workflow (2026-06-12)**
 
 Record at minimum:
 
@@ -75,7 +75,7 @@ inspection and append-only debugging. Fully integrated into `run_paper_trading.p
 
 Add a durable weekly metrics artifact alongside the HTML dashboard.
 
-**Status: Completed (2026-05-31)**
+**Status: Completed and written to durable artifacts in logs/ (verified 2026-06-12)**
 
 Suggested output:
 

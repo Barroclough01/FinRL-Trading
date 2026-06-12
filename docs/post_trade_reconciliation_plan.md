@@ -1,8 +1,9 @@
 # Post-Trade Reconciliation Design and Implementation Plan
 
-Last updated: 2026-05-31
+Last updated: 2026-06-12
+Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 
-This document outlines the design and implementation plan for the **Post-Trade Reconciliation** (Task 5 in the roadmap). The goal is to verify that the orders submitted to the broker successfully align with the strategy's target weights, and to generate a detailed audit report (`logs/reconciliation_YYYY-MM-DD.json`) that highlights any discrepancies or execution failures.
+This document records the implemented post-trade reconciliation flow for Task 5 in the roadmap. The current weekly run now writes `logs/reconciliation_YYYY-MM-DD.json` and compares target weights, actual positions, cash/equity, and order outcomes after execution.
 
 ## Requirements
 

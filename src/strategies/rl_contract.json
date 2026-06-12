@@ -1,0 +1,61 @@
+{
+  "contract_version": 1,
+  "observation_space": [
+    "recent_returns",
+    "volatility",
+    "covariance_features",
+    "regime_state",
+    "group_strength_metrics",
+    "benchmark_state",
+    "fundamental_features",
+    "current_holdings",
+    "cash_weight",
+    "realized_drift"
+  ],
+  "action_space": "target_portfolio_weights",
+  "reward_function": {
+    "name": "risk_adjusted_weighted_return",
+    "description": "Portfolio return minus turnover, drawdown, volatility, and concentration penalties.",
+    "penalties": {
+      "turnover_penalty": 0.01,
+      "drawdown_penalty": 0.02,
+      "volatility_penalty": 0.01,
+      "concentration_penalty": 0.005
+    }
+  },
+  "transaction_cost_model": {
+    "name": "linear_pct_notional",
+    "description": "Apply a linear transaction cost based on notional turnover.",
+    "cost_rate": 0.001
+  },
+  "turnover_penalty": 0.01,
+  "drawdown_penalty": 0.02,
+  "train_eval_split": {
+    "type": "walk_forward",
+    "minimum_windows": 5,
+    "minimum_days_per_window": 20
+  },
+  "walk_forward_windows": {
+    "enabled": true,
+    "minimum_windows": 5,
+    "minimum_days_per_window": 20
+  },
+  "model_artifact_metadata": {
+    "required": [
+      "model_name",
+      "seed",
+      "train_window",
+      "eval_window",
+      "config_hash",
+      "metrics_snapshot"
+    ]
+  },
+  "acceptance_gate": {
+    "minimum_sharpe": 0.8,
+    "maximum_drawdown": -0.3,
+    "minimum_annualized_return": 0.1,
+    "maximum_turnover": 0.35,
+    "minimum_improvement_vs_spy": 0.0,
+    "minimum_improvement_vs_qqq": 0.0
+  }
+}

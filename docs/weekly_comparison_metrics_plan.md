@@ -1,8 +1,9 @@
 # Weekly Comparison Metrics Design and Implementation Plan
 
-Last updated: 2026-05-31
+Last updated: 2026-06-12
+Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 
-This document outlines the design and implementation plan for the **Weekly Comparison Metrics** (Task 2 in the Near-Term Paper Comparison Foundation). The goal is to generate durable weekly metrics artifacts (`logs/comparison_metrics_YYYY-MM-DD.json` and `logs/comparison_metrics_latest.csv`) that evaluate all paper trading accounts and benchmarks side-by-side.
+This document records the implemented weekly comparison metrics flow for Task 2 in the Near-Term Paper Comparison Foundation. The current workflow writes durable metrics outputs under `logs/` for each account and benchmark.
 
 ## Requirements
 

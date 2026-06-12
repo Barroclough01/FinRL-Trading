@@ -181,6 +181,93 @@ def get_ar_weights(
     return weights
 
 
+def get_rl_candidate_weights(
+    weights_path: str,
+    run_date: str,
+) -> dict[str, float]:
+    """
+    Run the RL candidate strategy adapter for run_date and return target weights.
+    Returns {ticker: weight} from the structured JSON output written by
+    src/strategies/run_rl_candidate_strategy.py.
+    """
+    import subprocess
+
+    logger.info(f"Running RL candidate strategy for date: {run_date}")
+
+    weights_name = Path(weights_path).stem
+    json_output_path = os.path.join(
+        project_root, "logs", f"rl_candidate_weights_{weights_name}_{run_date}.json"
+    )
+
+    Path(json_output_path).parent.mkdir(parents=True, exist_ok=True)
+    if os.path.exists(json_output_path):
+        try:
+            os.remove(json_output_path)
+        except Exception as exc:
+            logger.warning(f"Could not remove stale RL candidate output file: {exc}")
+
+    cmd = [
+        sys.executable,
+        "src/strategies/run_rl_candidate_strategy.py",
+        "--weights-path",
+        weights_path,
+        "--date",
+        run_date,
+        "--json-output",
+        json_output_path,
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
+    if result.returncode != 0:
+        logger.error(f"RL candidate strategy failed:\n{result.stderr}")
+        raise RuntimeError("RL candidate strategy run failed")
+
+    if not os.path.exists(json_output_path):
+        raise FileNotFoundError(
+            f"RL candidate strategy JSON output file missing: {json_output_path}"
+        )
+
+    try:
+        with open(json_output_path, "r") as handle:
+            data = json.load(handle)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"RL candidate strategy JSON output is malformed: {exc}"
+        ) from exc
+
+    required_keys = [
+        "target_weights",
+        "cash_weight",
+        "regime_state",
+        "active_groups",
+        "ranked_groups",
+        "fallback_status",
+        "audit_file_path",
+    ]
+    for key in required_keys:
+        if key not in data:
+            raise ValueError(
+                f"RL candidate strategy JSON output is missing required key: {key}"
+            )
+
+    weights = data["target_weights"]
+
+    logger.info(
+        f"RL candidate target weights ({len(weights)} assets, total={sum(weights.values()):.1%}):"
+    )
+    for tic, w in sorted(weights.items(), key=lambda item: -item[1]):
+        logger.info(f"  {tic:8s}: {w:.2%}")
+
+    return weights
+
+
+def get_target_weights(config_path: str, run_date: str) -> dict[str, float]:
+    """Resolve target weights from either AR config or an RL candidate CSV export."""
+    if str(config_path).lower().endswith(".csv"):
+        return get_rl_candidate_weights(config_path, run_date)
+    return get_ar_weights(config_path, run_date)
+
+
 def validate_pre_trade(
     account: dict, run_date: str, target_weights: dict[str, float], executor
 ) -> tuple[bool, str | None, str | None, str | None]:
@@ -508,8 +595,12 @@ def reconcile_post_trade(run_date: str, account_name: str, record: dict) -> dict
     target_weights = record.get("target_weights", {})
     post_trade_positions = record.get("post_trade_positions", [])
     submitted_orders = record.get("submitted_orders", [])
-    equity = record.get("equity", 0.0)
-    cash = record.get("cash", 0.0)
+    try:
+        equity = float(record.get("equity", 0.0) or 0.0)
+        cash = float(record.get("cash", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        equity = 0.0
+        cash = 0.0
 
     alerts = []
     comparison = []
@@ -518,7 +609,10 @@ def reconcile_post_trade(run_date: str, account_name: str, record: dict) -> dict
     actual_weights = {}
     for pos in post_trade_positions:
         sym = pos.get("symbol")
-        mv = pos.get("market_value", 0.0)
+        try:
+            mv = float(pos.get("market_value", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            mv = 0.0
         act_w = mv / equity if equity > 0 else 0.0
         actual_weights[sym] = act_w
 
@@ -721,7 +815,10 @@ def dry_run_summary(weights: dict[str, float], account_name: str) -> None:
 
 def format_webhook_body(webhook_url: str, payload: dict) -> bytes:
     """Format notification payload for Discord or generic JSON webhooks."""
-    if "discord.com/api/webhooks" in webhook_url or "discordapp.com/api/webhooks" in webhook_url:
+    if (
+        "discord.com/api/webhooks" in webhook_url
+        or "discordapp.com/api/webhooks" in webhook_url
+    ):
         status = str(payload.get("status", "unknown")).upper()
         run_date = payload.get("date", "")
         accounts = payload.get("accounts", [])
@@ -1163,10 +1260,16 @@ def run_parity_checks(
                     ).fetchone()
                     if row and row[0]:
                         post_trade_positions = json.loads(row[0])
-                        equity = float(row[1]) if row[1] else 0.0
+                        try:
+                            equity = float(row[1]) if row[1] not in (None, "") else 0.0
+                        except (TypeError, ValueError):
+                            equity = 0.0
                         for pos in post_trade_positions:
                             sym = pos.get("symbol")
-                            mv = pos.get("market_value", 0.0)
+                            try:
+                                mv = float(pos.get("market_value", 0.0) or 0.0)
+                            except (TypeError, ValueError):
+                                mv = 0.0
                             act_w = mv / equity if equity > 0 else 0.0
                             filled_weights[sym] = act_w
                     conn.close()

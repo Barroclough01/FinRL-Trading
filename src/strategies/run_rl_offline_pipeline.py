@@ -14,8 +14,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.strategies.rl_contract import load_rl_contract
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GATE_PATH = PROJECT_ROOT / "src/strategies/rl_acceptance_gate.json"
+DEFAULT_RL_CONTRACT_PATH = PROJECT_ROOT / "src/strategies/rl_contract.json"
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "results"
 DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 REQUIRED_MODULES = {
@@ -198,6 +201,12 @@ def main() -> None:
         help="Path to RL acceptance gate JSON",
     )
     parser.add_argument(
+        "--rl-contract",
+        type=Path,
+        default=DEFAULT_RL_CONTRACT_PATH,
+        help="Path to the RL contract JSON document",
+    )
+    parser.add_argument(
         "--results-dir",
         type=Path,
         default=DEFAULT_RESULTS_DIR,
@@ -226,6 +235,7 @@ def main() -> None:
         )
 
     gate = _load_gate(args.gate_config)
+    rl_contract = load_rl_contract(args.rl_contract)
     summary_df, source_dir = _load_summaries(args.results_dir)
     passed, evaluation = _evaluate_gate(summary_df, gate)
 
@@ -234,6 +244,7 @@ def main() -> None:
     payload = {
         "date": date.today().isoformat(),
         "source_results_dir": str(source_dir),
+        "rl_contract": rl_contract,
         **evaluation,
     }
     with report_path.open("w") as f:
