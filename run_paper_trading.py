@@ -1555,6 +1555,23 @@ def main():
         elif metrics_error:
             metrics_warning = metrics_error
             logger.warning(metrics_error)
+        
+        # Run RL offline tracking after live metrics
+        logger.info("Running RL offline tracking...")
+        try:
+            import subprocess
+            rl_proc = subprocess.run(
+                [sys.executable, "track_rl_offline.py", "--date", args.date],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+            )
+            if rl_proc.returncode == 0:
+                logger.info("RL offline tracking completed successfully")
+            else:
+                logger.warning(f"RL offline tracking failed: {rl_proc.stderr}")
+        except Exception as e:
+            logger.warning(f"Could not run RL offline tracking: {e}")
 
     if not args.dry_run and results:
         failures = run_post_run_sanity_checks(args.date, accounts, results, errors)
