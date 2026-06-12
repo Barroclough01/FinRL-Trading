@@ -14,9 +14,12 @@ from pathlib import Path
 
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from src.strategies.rl_contract import load_rl_contract
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GATE_PATH = PROJECT_ROOT / "src/strategies/rl_acceptance_gate.json"
 DEFAULT_RL_CONTRACT_PATH = PROJECT_ROOT / "src/strategies/rl_contract.json"
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "results"

@@ -261,11 +261,21 @@ def get_rl_candidate_weights(
     return weights
 
 
-def get_target_weights(config_path: str, run_date: str) -> dict[str, float]:
+def get_target_weights(
+    config_path: str,
+    run_date: str,
+    is_replay: bool = False,
+    account_name: str | None = None,
+) -> dict[str, float]:
     """Resolve target weights from either AR config or an RL candidate CSV export."""
     if str(config_path).lower().endswith(".csv"):
         return get_rl_candidate_weights(config_path, run_date)
-    return get_ar_weights(config_path, run_date)
+    return get_ar_weights(
+        config_path,
+        run_date,
+        is_replay=is_replay,
+        account_name=account_name,
+    )
 
 
 def validate_pre_trade(
@@ -1004,7 +1014,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     logger.info(f"{'=' * 50}")
 
     # Step 1: Get target weights
-    weights = get_ar_weights(config, run_date, account_name=name)
+    weights = get_target_weights(config, run_date)
 
     # Step 2: Connect and execute
     logger.info(f"Connecting to Alpaca account: {name}")
@@ -1227,8 +1237,11 @@ def run_parity_checks(
         determinism_msg = "OK"
         replay_vs_submitted_mae = 0.0
         try:
-            replay_weights = get_ar_weights(
-                config, run_date, is_replay=True, account_name=name
+            replay_weights = get_target_weights(
+                config,
+                run_date,
+                is_replay=True,
+                account_name=name,
             )
 
             all_syms = set(submitted_weights.keys()) | set(replay_weights.keys())

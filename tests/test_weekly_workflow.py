@@ -23,6 +23,7 @@ from run_paper_trading import (
     validate_pre_trade,
 )
 import track_metrics
+from src.strategies.rl_candidate_strategy import load_rl_candidate_weights
 from refresh_fmp_daily import get_last_csv_date
 
 
@@ -102,6 +103,22 @@ def test_rl_candidate_weights_dispatch(mock_run):
     weights = get_rl_candidate_weights("results/drl_weight.csv", "2026-05-31")
 
     assert weights == {"A": 0.6, "B": 0.4}
+
+
+def test_load_rl_candidate_weights_filters_unavailable_symbols(tmp_path):
+    """RL candidate weights should only keep symbols with local price data."""
+    weights_path = tmp_path / "rl_weights.csv"
+    weights_path.write_text(
+        "trade_date,gvkey,weights\n2026-06-12,A,0.50\n2026-06-12,AAPL,0.50\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "AAPL_daily.csv").write_text(
+        "date,close\n2026-06-12,1\n", encoding="utf-8"
+    )
+
+    weights = load_rl_candidate_weights(str(weights_path), data_dir=tmp_path)
+
+    assert weights == {"AAPL": 1.0}
 
 
 def test_invalid_target_weights_fail_validation():
