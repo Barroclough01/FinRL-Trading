@@ -491,6 +491,16 @@ def main():
     conn.close()
     logger.info("RL offline tracking complete")
 
+    # Regenerate dashboard to include the new/updated RL data points
+    logger.info("Regenerating dashboard to include RL data...")
+    try:
+        import subprocess
+        cmd = [sys.executable, "track_metrics.py", "--report-only", "--date", args.date]
+        subprocess.run(cmd, cwd=project_root)
+        logger.info("Dashboard regeneration complete")
+    except Exception as e:
+        logger.warning(f"Could not regenerate dashboard: {e}")
+
 
 if __name__ == "__main__":
     main()

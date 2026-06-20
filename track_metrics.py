@@ -577,6 +577,8 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
     background: var(--surface);
     padding: 24px;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 400px;
   }}
 
   table {{
@@ -593,6 +595,10 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
     padding: 0 12px 10px 0;
     border-bottom: 1px solid var(--border);
     font-weight: 400;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
   }}
 
   td {{

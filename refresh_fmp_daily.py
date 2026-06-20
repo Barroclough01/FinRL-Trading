@@ -268,8 +268,29 @@ def main():
             if s not in all_symbols:
                 all_symbols.append(s)
 
+    # Auto-discover symbols from RL weights file (results/drl_weight.csv) if it exists
+    drl_weight_path = SCRIPT_DIR / "results/drl_weight.csv"
+    if drl_weight_path.exists():
+        try:
+            drl_df = pd.read_csv(drl_weight_path)
+            rl_symbols = []
+            if "gvkey" in drl_df.columns:
+                # Long format: gvkey contains tickers
+                rl_symbols = drl_df["gvkey"].dropna().unique().tolist()
+            elif "date" in drl_df.columns:
+                # Wide format: columns except date are tickers
+                rl_symbols = [col for col in drl_df.columns if col != "date"]
+            
+            print(f"Found {len(rl_symbols)} symbols in DRL weights file.")
+            for t in rl_symbols:
+                ticker = str(t).strip().upper()
+                if ticker and ticker not in all_symbols:
+                    all_symbols.append(ticker)
+        except Exception as e:
+            print(f"WARNING: Could not parse RL symbols from {drl_weight_path}: {e}")
+
     symbols = sorted(all_symbols)
-    print(f"\nTotal unique symbols across all configs: {symbols}\n")
+    print(f"\nTotal unique symbols across all configs and DRL weights: {len(symbols)} symbols\n")
 
     api_key = load_api_key()
 
