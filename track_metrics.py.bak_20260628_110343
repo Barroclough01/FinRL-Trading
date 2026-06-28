@@ -381,8 +381,7 @@ def print_cli_report(conn: sqlite3.Connection) -> None:
 def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None:
     rows = conn.execute("""
         SELECT snapshot_date, account, portfolio_value, weekly_return,
-               cumulative_return, spy_weekly_return, spy_cumulative_return, positions_json,
-               cash
+               cumulative_return, spy_weekly_return, spy_cumulative_return, positions_json
         FROM weekly_snapshot
         ORDER BY snapshot_date ASC, account
     """).fetchall()
@@ -391,14 +390,13 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
     accounts_data = {}
     spy_by_date = {}
     for r in rows:
-        snap_date, account, value, wkly, cum, spy_wkly, spy_cum, pos_json, cash_val = r
+        snap_date, account, value, wkly, cum, spy_wkly, spy_cum, pos_json = r
         if account not in accounts_data:
             accounts_data[account] = []
         accounts_data[account].append(
             {
                 "date": snap_date,
                 "value": value,
-                "cash": cash_val or 0.0,
                 "weekly": wkly,
                 "cumulative": cum,
                 "spy_weekly": spy_wkly,
@@ -793,25 +791,7 @@ Object.entries(latestData).forEach(([acct, d], i) => {{
       <div class="section-title" style="margin-bottom:16px;color:${{color}}">${{acct}} — Current Positions</div>
       <table>
         <thead><tr><th>Symbol</th><th>Value</th><th>Weight</th><th>Unreal. P&L</th></tr></thead>
-        <tbody>
-        ${{rows}}
-        ${{(() => {{
-          const cashVal = d.cash || 0;
-          if (cashVal <= 0) return '';
-          const cashW = cashVal / d.value * 100;
-          return `<tr style="opacity:0.6">
-            <td>CASH</td>
-            <td>$${{cashVal.toLocaleString('en-US', {{minimumFractionDigits:2, maximumFractionDigits:2}})}}</td>
-            <td>
-              ${{cashW.toFixed(1)}}%
-              <div class="weight-bar"><div class="weight-fill" style="width:${{Math.min(cashW*2,100)}}%;background:var(--muted)"></div></div>
-            </td>
-            <td class="neu">—</td>
-          </tr>`;
-        }})()
-        }}
-        ${{!rows && cashVal <= 0 ? '<tr><td colspan="4" style="color:var(--muted)">No positions</td></tr>' : ''}}
-      </tbody>
+        <tbody>${{rows || '<tr><td colspan="4" style="color:var(--muted)">No positions</td></tr>'}}</tbody>
       </table>
     </div>`;
 }});
