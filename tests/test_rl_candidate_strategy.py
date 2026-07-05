@@ -17,7 +17,12 @@ def test_load_rl_candidate_weights_uses_latest_date(tmp_path):
         ]
     ).to_csv(sample, index=False)
 
-    weights = load_rl_candidate_weights(sample, target_date="2024-01-12")
+    # Create dummy daily file for C so it doesn't get skipped
+    (tmp_path / "C_daily.csv").touch()
+
+    weights = load_rl_candidate_weights(
+        sample, target_date="2024-01-12", data_dir=tmp_path
+    )
 
     assert list(weights.keys()) == ["C"]
     assert weights["C"] == 1.0
@@ -32,8 +37,12 @@ def test_rl_candidate_strategy_returns_target_weight_contract(tmp_path):
         ]
     ).to_csv(sample, index=False)
 
+    # Create dummy daily files for A and B so they don't get skipped
+    (tmp_path / "A_daily.csv").touch()
+    (tmp_path / "B_daily.csv").touch()
+
     strategy = RLCandidateStrategy(
-        StrategyConfig(name="rl_candidate"), weights_path=sample
+        StrategyConfig(name="rl_candidate"), weights_path=sample, data_dir=tmp_path
     )
     result = strategy.generate_weights({}, target_date="2024-01-05")
 

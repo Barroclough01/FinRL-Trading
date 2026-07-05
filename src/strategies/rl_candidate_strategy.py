@@ -60,9 +60,15 @@ def load_rl_candidate_weights(
 class RLCandidateStrategy(BaseStrategy):
     """Small adapter that turns RL output into the same target-weight contract as AR/FinRL."""
 
-    def __init__(self, config: StrategyConfig, weights_path: str | None = None):
+    def __init__(
+        self,
+        config: StrategyConfig,
+        weights_path: str | None = None,
+        data_dir: str | None = None,
+    ):
         super().__init__(config)
         self.weights_path = weights_path or "results/drl_weight.csv"
+        self.data_dir = data_dir or "data/fmp_daily"
 
     def generate_weights(
         self, data: dict, target_date: str | None = None
@@ -70,7 +76,7 @@ class RLCandidateStrategy(BaseStrategy):
         weights = load_rl_candidate_weights(
             self.weights_path,
             target_date=target_date,
-            data_dir="data/fmp_daily",
+            data_dir=self.data_dir,
         )
         frame = pd.DataFrame(
             [(symbol, weight) for symbol, weight in sorted(weights.items())],

@@ -437,9 +437,10 @@ class AlpacaManager:
             market_value = float(position['market_value'])
             current_weights[symbol] = (market_value / portfolio_value) if portfolio_value > 0 else 0.0
 
-        # Filter与规范化: 仅保留可交易标的；负权重视为0；必要时归一化到<=1
+        # Filter and normalization: keep only tradable assets, clamp weights to >=0
         filtered_targets: Dict[str, float] = {}
         raw_targets = target_weights or {}
+        original_sum = 0.0
         for s, w in raw_targets.items():
             try:
                 w_float = float(w)
@@ -449,19 +450,28 @@ class AlpacaManager:
             if w_float < 0:
                 self.logger.info(f"Negative weight for {s} -> clamped to 0")
                 w_float = 0.0
+            else:
+                original_sum += w_float
+
             if self._is_symbol_tradable(s):
                 filtered_targets[s] = w_float
             else:
                 self.logger.info(f"Skipping non-tradable or inactive asset: {s}")
 
+        original_sum = min(1.0, original_sum)
         sum_w = sum(filtered_targets.values())
         used_target_weights: Dict[str, float]
         if sum_w > 1.0001:
-            # 若权重和>1，按总和进行缩放归一化
             used_target_weights = {s: (w / sum_w) for s, w in filtered_targets.items()}
             self.logger.info(f"Target weights sum {sum_w:.6f} > 1; normalized to 1.0 proportionally")
+        elif sum_w > 0 and (original_sum - sum_w) > 0.001:
+            scale_factor = original_sum / sum_w
+            used_target_weights = {s: (w * scale_factor) for s, w in filtered_targets.items()}
+            self.logger.info(
+                f"Target weights sum fell from {original_sum:.6f} to {sum_w:.6f} due to skipped/non-tradable assets; "
+                f"normalized remaining weights to sum to {original_sum:.6f} (scale factor {scale_factor:.6f})"
+            )
         else:
-            # 和<=1则保留，允许剩余现金
             used_target_weights = dict(filtered_targets)
 
         all_symbols = set(current_weights.keys()) | set(used_target_weights.keys())

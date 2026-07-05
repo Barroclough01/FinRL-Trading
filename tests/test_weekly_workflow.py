@@ -1008,3 +1008,56 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
                 assert parity_json["reconciled_successfully"]
             else:
                 assert not parity_json["reconciled_successfully"]
+
+
+@patch("src.trading.alpaca_manager.AlpacaManager._is_market_open")
+@patch("src.trading.alpaca_manager.AlpacaManager.get_positions")
+@patch("src.trading.alpaca_manager.AlpacaManager.get_portfolio_value")
+@patch("src.trading.alpaca_manager.AlpacaManager._is_symbol_tradable")
+@patch("src.trading.alpaca_manager.AlpacaManager._is_symbol_fractionable")
+@patch("src.trading.alpaca_manager.AlpacaManager.get_account_info")
+@patch("src.trading.alpaca_manager.AlpacaManager._get_latest_price")
+def test_alpaca_manager_normalization_with_skipped_assets(
+    mock_get_price,
+    mock_get_acct_info,
+    mock_is_fractionable,
+    mock_is_tradable,
+    mock_get_portfolio_val,
+    mock_get_positions,
+    mock_is_market_open,
+):
+    """Test that AlpacaManager normalizes remaining weights when some assets are skipped/non-tradable."""
+    from src.trading.alpaca_manager import AlpacaManager, AlpacaAccount
+
+    # Create manager
+    acc = AlpacaAccount(name="test_acc", api_key="key", api_secret="sec")
+    manager = AlpacaManager([acc])
+
+    # Mock dependencies
+    mock_is_market_open.return_value = True
+    mock_get_portfolio_val.return_value = 100000.0
+    mock_get_positions.return_value = []
+    mock_get_acct_info.return_value = {"buying_power": "100000.0"}
+    mock_get_price.return_value = 100.0
+    mock_is_fractionable.return_value = True
+
+    # SATS is non-tradable, TXN and MCHP are tradable
+    def is_tradable_side_effect(symbol):
+        return symbol in ["TXN", "MCHP"]
+
+    mock_is_tradable.side_effect = is_tradable_side_effect
+
+    target_weights = {"SATS": 0.3333, "TXN": 0.3333, "MCHP": 0.3333}
+
+    # Execute rebalance plan (dry_run=True so no actual orders are placed)
+    result = manager.execute_portfolio_rebalance(
+        target_weights=target_weights, account_name="test_acc", dry_run=True
+    )
+
+    # The remaining target weights (TXN, MCHP) should be scaled up to sum to min(1.0, original_sum) = 0.9999
+    # TXN target weight should be: 0.3333 * (0.9999 / 0.6666) = 0.50
+    # MCHP target weight should be: 0.3333 * (0.9999 / 0.6666) = 0.50
+    res_weights = result["target_weights"]
+    assert "SATS" not in res_weights
+    assert res_weights["TXN"] == pytest.approx(0.50, abs=1e-4)
+    assert res_weights["MCHP"] == pytest.approx(0.50, abs=1e-4)

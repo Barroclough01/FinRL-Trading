@@ -391,7 +391,15 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
     accounts_data = {}
     spy_by_date = {}
     for r in rows:
-        snap_date, account, value, wkly, cum, spy_wkly, spy_cum, pos_json, cash_val = r
+        snap_date = r[0]
+        account = r[1]
+        value = r[2]
+        wkly = r[3]
+        cum = r[4]
+        spy_wkly = r[5]
+        spy_cum = r[6]
+        pos_json = r[7]
+        cash_val = r[8] if len(r) > 8 else 0.0
         if account not in accounts_data:
             accounts_data[account] = []
         accounts_data[account].append(
@@ -1049,7 +1057,9 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             w0 = weights_by_date[d0]
             w1 = weights_by_date[d1]
             all_syms = set(w0.keys()) | set(w1.keys())
-            to_val = sum(abs((w1.get(sym) or 0.0) - (w0.get(sym) or 0.0)) for sym in all_syms)
+            to_val = sum(
+                abs((w1.get(sym) or 0.0) - (w0.get(sym) or 0.0)) for sym in all_syms
+            )
             turnovers.append(to_val)
         avg_turnover = float(np.mean(turnovers)) if turnovers else 0.0
 
