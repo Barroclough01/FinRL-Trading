@@ -507,6 +507,12 @@ def main():
     parser.add_argument("--ddpg-timesteps", type=int, default=50000)
     parser.add_argument("--max-windows", type=int, default=0, help="0 means all windows")
     parser.add_argument("--max-universe", type=int, default=0, help="0 means no cap; otherwise cap stable universe size")
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=None,
+        help="Retry from this quarterly-window index instead of saved progress.",
+    )
     parser.add_argument("--quiet", action="store_true", help="Reduce debug logs")
     args = parser.parse_args()
 
@@ -533,7 +539,13 @@ def main():
     global_min_date = pd.to_datetime(df["date"]).min()
 
     prog = load_progress()
-    start_idx = max(1, prog.get("last_idx", -1) + 1)
+    start_idx = (
+        args.start_index
+        if args.start_index is not None
+        else max(1, prog.get("last_idx", -1) + 1)
+    )
+    if start_idx < 1:
+        raise ValueError("--start-index must be at least 1")
     df_dict = prog.get("df_dict")
     if not isinstance(df_dict, dict):
         df_dict = {"trade_date": [], "gvkey": [], "weights": []}

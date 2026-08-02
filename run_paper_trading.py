@@ -278,8 +278,25 @@ def get_target_weights(
     )
 
 
+def allows_cash_fallback(config_path: str) -> bool:
+    """Return whether an AR configuration intentionally uses cash fallback."""
+    if str(config_path).lower().endswith(".csv"):
+        return False
+
+    from src.strategies.adaptive_rotation.config_loader import load_config
+
+    config = load_config(config_path)
+    fallback = config.portfolio.fallback
+    return bool(fallback and fallback.enabled and not fallback.symbols)
+
+
 def validate_pre_trade(
-    account: dict, run_date: str, target_weights: dict[str, float], executor
+    account: dict,
+    run_date: str,
+    target_weights: dict[str, float],
+    executor,
+    *,
+    allow_cash_target: bool = False,
 ) -> tuple[bool, str | None, str | None, str | None]:
     """
     Run pre-trade validation checks for an account.
@@ -287,8 +304,8 @@ def validate_pre_trade(
     """
     run_date_parsed = pd.to_datetime(run_date).date()
 
-    # 1. target weights are nonempty
-    if not target_weights:
+    # 1. target weights are nonempty unless an explicit cash fallback applies.
+    if not target_weights and not allow_cash_target:
         return (
             False,
             "target weights are nonempty",
@@ -1023,7 +1040,11 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     # Run pre-trade validation gate
     logger.info("Running pre-trade validation gate...")
     valid, failed_rule, error_msg, suggested_fix = validate_pre_trade(
-        account, run_date, weights, executor
+        account,
+        run_date,
+        weights,
+        executor,
+        allow_cash_target=allows_cash_fallback(config),
     )
     save_validation_result(run_date, name, valid, failed_rule, error_msg, suggested_fix)
 
@@ -1259,16 +1280,22 @@ def run_parity_checks(
             determinism_msg = f"Error during replay generation: {e}"
             replay_vs_submitted_mae = 1.0
 
-        # 3. Get filled actual weights
+        # 3. Get the immediate post-submission broker snapshot. Orders commonly
+        # remain open here, so this is evidence of execution progress rather
+        # than a final filled portfolio.
         filled_weights = {}
         execution_ok = True
+        execution_pending = False
+        submitted_orders = []
         submitted_vs_actual_mae = 0.0
         if not dry_run:
             try:
                 if db_path.exists():
                     conn = sqlite3.connect(db_path)
                     row = conn.execute(
-                        "SELECT post_trade_positions, equity FROM strategy_decisions WHERE run_date = ? AND account_name = ?",
+                        "SELECT post_trade_positions, equity, submitted_orders "
+                        "FROM strategy_decisions "
+                        "WHERE run_date = ? AND account_name = ?",
                         (run_date, name),
                     ).fetchone()
                     if row and row[0]:
@@ -1285,7 +1312,20 @@ def run_parity_checks(
                                 mv = 0.0
                             act_w = mv / equity if equity > 0 else 0.0
                             filled_weights[sym] = act_w
+                        if len(row) > 2 and row[2]:
+                            submitted_orders = json.loads(row[2])
                     conn.close()
+
+                pending_statuses = {
+                    "accepted",
+                    "new",
+                    "pending_new",
+                    "partially_filled",
+                }
+                execution_pending = any(
+                    str(order.get("status", "")).lower() in pending_statuses
+                    for order in submitted_orders
+                )
 
                 if filled_weights:
                     all_syms = set(submitted_weights.keys()) | set(
@@ -1296,7 +1336,7 @@ def run_parity_checks(
                         sub_w = submitted_weights.get(sym, 0.0)
                         fil_w = filled_weights.get(sym, 0.0)
                         diffs.append(abs(sub_w - fil_w))
-                        if abs(sub_w - fil_w) > 0.02:  # 2% drift tolerance
+                        if abs(sub_w - fil_w) > 0.02 and not execution_pending:
                             execution_ok = False
                     submitted_vs_actual_mae = (
                         float(sum(diffs) / len(diffs)) if diffs else 0.0
@@ -1381,7 +1421,9 @@ def run_parity_checks(
             mismatches.append(
                 f"Determinism mismatch (submitted vs replay): {determinism_msg}"
             )
-        if not execution_ok and not dry_run:
+        if execution_pending and not dry_run:
+            mismatches.append("Orders remain open; awaiting a later broker snapshot")
+        elif not execution_ok and not dry_run:
             mismatches.append(
                 "Execution drift mismatch (submitted vs filled actual weights > 2.0%)"
             )
@@ -1396,6 +1438,7 @@ def run_parity_checks(
             "reconciled_successfully": reconciled_successfully,
             "determinism_ok": determinism_ok,
             "execution_ok": execution_ok,
+            "execution_pending": execution_pending,
             "dashboard_ok": dashboard_ok,
             "mismatches": mismatches,
             "metrics": {

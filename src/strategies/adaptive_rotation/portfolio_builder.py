@@ -268,11 +268,11 @@ def build_fallback_portfolio(
     """
     Build fallback portfolio when no groups qualify
     
-    Fallback strategy allocates equal weight to benchmark ETFs (SPY, QQQ)
-    to maintain market exposure and avoid missing rallies.
+    An empty fallback symbol list represents a fully cash defensive state.
     
     Args:
-        fallback_symbols: List of fallback symbols (e.g., ["SPY", "QQQ"])
+        fallback_symbols: List of defensive fallback symbols. An empty list
+            holds cash.
         risk_budget: Total risk budget from regime
         regime_state: Current regime state
         as_of_date: Current date
@@ -282,12 +282,12 @@ def build_fallback_portfolio(
     
     Examples:
         >>> portfolio = build_fallback_portfolio(
-        ...     fallback_symbols=["SPY", "QQQ"],
+        ...     fallback_symbols=[],
         ...     risk_budget=1.0,
         ...     regime_state="risk_on",
         ...     as_of_date=pd.Timestamp("2024-01-01")
         ... )
-        >>> print(portfolio.weights)  # {"SPY": 0.5, "QQQ": 0.5}
+        >>> print(portfolio.cash_weight)  # 1.0
     """
     # Equal weight allocation
     n_symbols = len(fallback_symbols)
@@ -498,7 +498,13 @@ class PortfolioBuilder:
             if fallback_config is not None and fallback_config.enabled:
                 use_fallback = True
                 fallback_symbols = fallback_config.symbols
-                warnings.append(f"No active groups selected - using fallback: {', '.join(fallback_symbols)}")
+                if fallback_symbols:
+                    warnings.append(
+                        "No active groups selected - using defensive fallback: "
+                        f"{', '.join(fallback_symbols)}"
+                    )
+                else:
+                    warnings.append("No active groups selected - holding cash")
             else:
                 warnings.append("No active groups selected")
         

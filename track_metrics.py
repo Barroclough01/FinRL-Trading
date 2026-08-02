@@ -278,9 +278,16 @@ def record_snapshot(
         ),
     )
 
-    # Weekly weights
-    for pos in alpaca["positions"]:
-        sym = pos["symbol"]
+    # Store the union so target-only assets are explicitly represented with a
+    # zero actual weight and unexpected holdings have a zero target weight.
+    positions_by_symbol = {pos["symbol"]: pos for pos in alpaca["positions"]}
+    symbols = sorted(set(positions_by_symbol) | set(target_weights))
+    conn.execute(
+        "DELETE FROM weekly_weights WHERE snapshot_date=? AND account=?",
+        (snapshot_date, account["name"]),
+    )
+    for sym in symbols:
+        pos = positions_by_symbol.get(sym, {})
         conn.execute(
             """
             INSERT OR REPLACE INTO weekly_weights
@@ -291,9 +298,9 @@ def record_snapshot(
                 snapshot_date,
                 account["name"],
                 sym,
-                target_weights.get(sym),
-                pos["actual_weight"],
-                pos["market_value"],
+                target_weights.get(sym, 0.0),
+                pos.get("actual_weight", 0.0),
+                pos.get("market_value", 0.0),
             ),
         )
 
@@ -386,6 +393,20 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
         FROM weekly_snapshot
         ORDER BY snapshot_date ASC, account
     """).fetchall()
+    weight_rows = conn.execute(
+        """
+        SELECT snapshot_date, account, symbol, target_weight, actual_weight, market_value
+        FROM weekly_weights
+        """
+    ).fetchall()
+
+    weights_by_snapshot = {}
+    for snap_date, account, symbol, target_weight, actual_weight, market_value in weight_rows:
+        weights_by_snapshot.setdefault((snap_date, account), {})[symbol] = {
+            "target_weight": target_weight or 0.0,
+            "actual_weight": actual_weight or 0.0,
+            "market_value": market_value or 0.0,
+        }
 
     # Build per-account time series
     accounts_data = {}
@@ -402,6 +423,25 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
         cash_val = r[8] if len(r) > 8 else 0.0
         if account not in accounts_data:
             accounts_data[account] = []
+        actual_positions = {
+            position["symbol"]: position
+            for position in (json.loads(pos_json) if pos_json else [])
+        }
+        snapshot_weights = weights_by_snapshot.get((snap_date, account), {})
+        positions = []
+        for symbol in sorted(set(actual_positions) | set(snapshot_weights)):
+            position = actual_positions.get(symbol, {"symbol": symbol})
+            stored_weight = snapshot_weights.get(symbol, {})
+            position["target_weight"] = stored_weight.get("target_weight", 0.0)
+            position["actual_weight"] = stored_weight.get(
+                "actual_weight", position.get("actual_weight", 0.0)
+            )
+            position["market_value"] = stored_weight.get(
+                "market_value", position.get("market_value", 0.0)
+            )
+            position.setdefault("unrealized_pl", 0.0)
+            positions.append(position)
+
         accounts_data[account].append(
             {
                 "date": snap_date,
@@ -411,7 +451,7 @@ def generate_html_dashboard(conn: sqlite3.Connection, output_path: Path) -> None
                 "cumulative": cum,
                 "spy_weekly": spy_wkly,
                 "spy_cumulative": spy_cum,
-                "positions": json.loads(pos_json) if pos_json else [],
+                "positions": positions,
             }
         )
         if snap_date not in spy_by_date:
@@ -789,6 +829,7 @@ Object.entries(latestData).forEach(([acct, d], i) => {{
     return `<tr>
       <td>${{p.symbol}}</td>
       <td>$${{p.market_value.toLocaleString('en-US', {{maximumFractionDigits:0}})}}</td>
+      <td>${{(p.target_weight*100).toFixed(1)}}%</td>
       <td>
         ${{(p.actual_weight*100).toFixed(1)}}%
         <div class="weight-bar"><div class="weight-fill" style="width:${{Math.min(p.actual_weight*100*2,100)}}%;background:${{color}}"></div></div>
@@ -800,7 +841,7 @@ Object.entries(latestData).forEach(([acct, d], i) => {{
     <div class="positions-table">
       <div class="section-title" style="margin-bottom:16px;color:${{color}}">${{acct}} — Current Positions</div>
       <table>
-        <thead><tr><th>Symbol</th><th>Value</th><th>Weight</th><th>Unreal. P&L</th></tr></thead>
+        <thead><tr><th>Symbol</th><th>Value</th><th>Target</th><th>Actual</th><th>Unreal. P&L</th></tr></thead>
         <tbody>
         ${{rows}}
         ${{(() => {{

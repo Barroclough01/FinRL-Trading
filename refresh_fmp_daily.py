@@ -12,7 +12,7 @@ Weekly refresh of fmp_daily/ OHLCV CSVs for all symbols in the Adaptive Rotation
 Usage:
     python refresh_fmp_daily.py [--config PATH] [--dry-run] [--force]
 
-    --config   Path to AR YAML (default: src/strategies/AdaptiveRotationConf_v1.2.2.yaml)
+    --config   Path to AR YAML (default: AdaptiveRotationConf_v1.2.2.yaml)
     --dry-run  Show what would be fetched without writing anything
     --force    Skip market calendar check and run regardless of day
 """
@@ -20,13 +20,14 @@ Usage:
 import argparse
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
 import pandas_market_calendars as mcal
-import yfinance as yf
+import requests
 import yaml
+import yfinance as yf
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ SCRIPT_DIR = Path(__file__).parent
 DEFAULT_CONFIG = SCRIPT_DIR / "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
 FMP_DAILY_DIR = SCRIPT_DIR / "data/fmp_daily"
 OHLCV_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
+REQUIRED_BENCHMARK_SYMBOLS = ("SPY", "QQQ")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,6 +76,10 @@ def load_symbols_from_yaml(config_path: Path) -> list[str]:
         if ticker and ticker not in symbols:
             symbols.append(ticker)
 
+    for ticker in REQUIRED_BENCHMARK_SYMBOLS:
+        if ticker not in symbols:
+            symbols.append(ticker)
+
     return sorted(symbols)
 
 
@@ -104,7 +110,12 @@ def get_last_csv_date(csv_path: Path) -> date | None:
                 f"CSV is missing required 'date' column at path: {csv_path}"
             )
 
-        df = pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])
+        # Pandas accepts these lists, but its stubs exclude ordinary strings.
+        df = pd.read_csv(  # ty: ignore[no-matching-overload]
+            csv_path,
+            usecols=["date"],
+            parse_dates=["date"],
+        )
         if df.empty:
             raise ValueError(f"CSV is empty (no data rows) at path: {csv_path}")
 
@@ -141,7 +152,9 @@ def fetch_fmp_daily(
     )
 
     if raw.empty:
-        return pd.DataFrame(columns=OHLCV_COLUMNS)
+        return pd.DataFrame(
+            {column: pd.Series(dtype="object") for column in OHLCV_COLUMNS}
+        )
 
     # Flatten MultiIndex columns if present (yfinance quirk with single ticker)
     if isinstance(raw.columns, pd.MultiIndex):
@@ -172,10 +185,12 @@ def append_new_rows(csv_path: Path, new_rows: pd.DataFrame, dry_run: bool) -> in
         return 0
 
     if csv_path.exists():
-        existing = pd.read_csv(csv_path, parse_dates=["date"])
+        existing = pd.read_csv(csv_path)
         existing["date"] = pd.to_datetime(existing["date"]).dt.date
+        existing_dates = existing["date"]
         combined = pd.concat([existing, new_rows], ignore_index=True)
     else:
+        existing_dates = pd.Series([], dtype="object")
         combined = new_rows.copy()
 
     combined = (
@@ -184,17 +199,7 @@ def append_new_rows(csv_path: Path, new_rows: pd.DataFrame, dry_run: bool) -> in
         .reset_index(drop=True)
     )
 
-    n_new = len(
-        new_rows[
-            ~new_rows["date"].isin(
-                pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])[
-                    "date"
-                ].dt.date
-                if csv_path.exists()
-                else pd.Series([], dtype="object")
-            )
-        ]
-    )
+    n_new = len(new_rows[~new_rows["date"].isin(existing_dates)])
 
     if not dry_run:
         FMP_DAILY_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,7 +222,10 @@ def main():
         type=Path,
         action="append",
         dest="configs",
-        help="Path to AR YAML config (can be specified multiple times; defaults to all configs in APCA_ACCOUNTS env)",
+        help=(
+            "Path to AR YAML config (repeatable; defaults to configs from "
+            "APCA_ACCOUNTS)"
+        ),
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would be fetched, no writes"
@@ -228,16 +236,14 @@ def main():
     args = parser.parse_args()
 
     today = date.today()
-    print(
-        f"=== refresh_fmp_daily.py  [{today}] {'[DRY RUN]' if args.dry_run else ''} ===\n"
-    )
+    mode = " [DRY RUN]" if args.dry_run else ""
+    print(f"=== refresh_fmp_daily.py  [{today}]{mode} ===\n")
 
     # --- Market calendar check ---
     if not args.force:
         if not is_trading_day(today):
-            print(
-                f"Today ({today}) is not a NYSE trading day. Nothing to do. Use --force to override."
-            )
+            print(f"Today ({today}) is not a NYSE trading day. Nothing to do.")
+            print("Use --force to override.")
             sys.exit(0)
     else:
         print("--force: skipping market calendar check\n")
@@ -280,7 +286,7 @@ def main():
             elif "date" in drl_df.columns:
                 # Wide format: columns except date are tickers
                 rl_symbols = [col for col in drl_df.columns if col != "date"]
-            
+
             print(f"Found {len(rl_symbols)} symbols in DRL weights file.")
             for t in rl_symbols:
                 ticker = str(t).strip().upper()
@@ -290,7 +296,8 @@ def main():
             print(f"WARNING: Could not parse RL symbols from {drl_weight_path}: {e}")
 
     symbols = sorted(all_symbols)
-    print(f"\nTotal unique symbols across all configs and DRL weights: {len(symbols)} symbols\n")
+    print("\nTotal unique symbols across all configs and DRL weights: ")
+    print(f"{len(symbols)} symbols\n")
 
     api_key = load_api_key()
 
@@ -332,11 +339,8 @@ def main():
 
             # Deduplicate and write
             if csv_path.exists():
-                existing_dates = set(
-                    pd.read_csv(csv_path, usecols=["date"], parse_dates=["date"])[
-                        "date"
-                    ].dt.date
-                )
+                existing = pd.read_csv(csv_path)
+                existing_dates = set(pd.to_datetime(existing["date"]).dt.date)
             else:
                 existing_dates = set()
 
@@ -363,8 +367,10 @@ def main():
                 )
                 combined.to_csv(csv_path, index=False)
 
+            dry_run_suffix = " [dry run]" if args.dry_run else ""
+            last_new_date = new_rows["date"].max()
             print(
-                f"{status_prefix} +{n_new} rows (last: {new_rows['date'].max()}){' [dry run]' if args.dry_run else ''}"
+                f"{status_prefix} +{n_new} rows (last: {last_new_date}){dry_run_suffix}"
             )
 
             if last_date is None:

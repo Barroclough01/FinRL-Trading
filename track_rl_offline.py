@@ -24,18 +24,16 @@ import logging
 import os
 import sqlite3
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import numpy as np
+from dotenv import load_dotenv
 
 project_root = os.path.abspath(os.path.dirname(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
     sys.path.insert(0, os.path.join(project_root, "src"))
-
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -86,7 +84,7 @@ def get_price_on_date(symbol: str, target_date: str) -> float:
 
 def load_rl_weights(weights_path: str, target_date: str) -> dict:
     """Load RL target weights from CSV on or before target_date.
-    
+
     Supports two formats:
     1. Wide format: date,AAPL,MSFT,GOOGL,...
     2. Long format: trade_date,gvkey,weights (one row per symbol-date)
@@ -96,22 +94,22 @@ def load_rl_weights(weights_path: str, target_date: str) -> dict:
         return {}
 
     df = pd.read_csv(weights_path)
-    
+
     # Detect format based on columns
     if "trade_date" in df.columns and "gvkey" in df.columns and "weights" in df.columns:
         # Long format: trade_date, gvkey, weights
         df["date"] = pd.to_datetime(df["trade_date"])
         df = df[["date", "gvkey", "weights"]].copy()
         df = df[df["date"] <= target_date].copy()
-        
+
         if df.empty:
             logger.warning(f"No RL weights available on or before {target_date}")
             return {}
-        
+
         # Get latest date
         latest_date = df["date"].max()
         latest_df = df[df["date"] == latest_date].copy()
-        
+
         # Build weights dict
         weights = {}
         for _, row in latest_df.iterrows():
@@ -119,18 +117,18 @@ def load_rl_weights(weights_path: str, target_date: str) -> dict:
             weight = float(row["weights"])
             if weight > 0:
                 weights[symbol] = weight
-        
+
         return weights
-    
+
     elif "date" in df.columns:
         # Wide format: date, AAPL, MSFT, ...
         df["date"] = pd.to_datetime(df["date"])
         df = df[df["date"] <= target_date].copy()
-        
+
         if df.empty:
             logger.warning(f"No RL weights available on or before {target_date}")
             return {}
-        
+
         latest_row = df.sort_values("date").iloc[-1]
         weights = {}
         for col in df.columns:
@@ -138,11 +136,14 @@ def load_rl_weights(weights_path: str, target_date: str) -> dict:
                 w = latest_row[col]
                 if pd.notna(w) and w != 0:
                     weights[col] = float(w)
-        
+
         return weights
-    
+
     else:
-        logger.error(f"Unrecognized CSV format. Expected columns: 'date' or 'trade_date,gvkey,weights'")
+        logger.error(
+            "Unrecognized CSV format. Expected columns: 'date' or "
+            "'trade_date,gvkey,weights'"
+        )
         return {}
 
 
@@ -164,8 +165,7 @@ class OfflinePortfolio:
     def get_portfolio_value(self, prices: dict) -> float:
         """Calculate total portfolio value."""
         holdings = sum(
-            self.positions.get(sym, 0) * prices.get(sym, 0)
-            for sym in self.positions
+            self.positions.get(sym, 0) * prices.get(sym, 0) for sym in self.positions
         )
         return self.cash + holdings
 
@@ -223,7 +223,9 @@ class OfflinePortfolio:
 
                 # Cap to available cash
                 if total_cost > self.cash:
-                    buy_qty = self.cash / (price * (1 + (self.slippage_bps + self.tx_cost_bps) / 10000))
+                    buy_qty = self.cash / (
+                        price * (1 + (self.slippage_bps + self.tx_cost_bps) / 10000)
+                    )
                     buy_value = buy_qty * price
                     slippage = buy_value * (self.slippage_bps / 10000)
                     tx_cost = buy_value * (self.tx_cost_bps / 10000)
@@ -277,18 +279,26 @@ def record_rl_snapshot(
     # Calculate weekly return
     prev = conn.execute(
         """SELECT portfolio_value FROM weekly_snapshot
-           WHERE account='RL' ORDER BY snapshot_date DESC LIMIT 1""",
+           WHERE account='RL' AND snapshot_date < ?
+           ORDER BY snapshot_date DESC LIMIT 1""",
+        (snapshot_date,),
     ).fetchone()
 
-    weekly_return = ((portfolio_value - prev[0]) / prev[0]) if prev and prev[0] > 0 else 0.0
+    weekly_return = (
+        ((portfolio_value - prev[0]) / prev[0]) if prev and prev[0] > 0 else 0.0
+    )
 
     # Calculate cumulative return
     first = conn.execute(
         """SELECT portfolio_value FROM weekly_snapshot
-           WHERE account='RL' ORDER BY snapshot_date ASC LIMIT 1""",
+           WHERE account='RL' AND snapshot_date < ?
+           ORDER BY snapshot_date ASC LIMIT 1""",
+        (snapshot_date,),
     ).fetchone()
 
-    cumulative_return = ((portfolio_value - first[0]) / first[0]) if first and first[0] > 0 else 0.0
+    cumulative_return = (
+        ((portfolio_value - first[0]) / first[0]) if first and first[0] > 0 else 0.0
+    )
 
     spy_weekly_return = benchmark.get("spy_weekly_return")
     spy_cum = benchmark.get("spy_cumulative_return")
@@ -299,7 +309,8 @@ def record_rl_snapshot(
         """
         INSERT OR REPLACE INTO weekly_snapshot
         (snapshot_date, account, config, portfolio_value, cash, equity,
-         weekly_return, cumulative_return, spy_weekly_return, spy_cumulative_return, positions_json)
+         weekly_return, cumulative_return, spy_weekly_return,
+         spy_cumulative_return, positions_json)
         VALUES (?,?,?,?,?,?,?,?,?,?,?)
     """,
         (
@@ -373,18 +384,22 @@ def simulate_rl_tracking(
     weights_path: str,
     snapshot_date: str,
     conn: sqlite3.Connection,
-    portfolio: OfflinePortfolio = None,
+    portfolio: OfflinePortfolio | None = None,
 ) -> OfflinePortfolio:
     """Simulate RL portfolio for a single date and record snapshot."""
 
     # Initialize portfolio if first run
     if portfolio is None:
-        portfolio = OfflinePortfolio(STARTING_CAPITAL, TRANSACTION_COST_BPS, SLIPPAGE_BPS)
+        portfolio = OfflinePortfolio(
+            STARTING_CAPITAL, TRANSACTION_COST_BPS, SLIPPAGE_BPS
+        )
 
     # Load RL target weights
     target_weights = load_rl_weights(weights_path, snapshot_date)
     if not target_weights:
-        logger.warning(f"No RL weights for {snapshot_date} — holding previous positions")
+        logger.warning(
+            f"No RL weights for {snapshot_date} — holding previous positions"
+        )
         target_weights = {}
 
     # Get current prices for all symbols
@@ -409,14 +424,31 @@ def simulate_rl_tracking(
     conn_db.close()
 
     # Record snapshot
-    record_rl_snapshot(conn, snapshot_date, portfolio, prices, target_weights, benchmark)
+    record_rl_snapshot(
+        conn, snapshot_date, portfolio, prices, target_weights, benchmark
+    )
 
     return portfolio
 
 
 def backfill_rl_history(weights_path: str, conn: sqlite3.Connection) -> None:
     """Backfill all historical weekly snapshots for RL strategy."""
-    # Get all dates from existing snapshots
+    # Keep RL observations aligned to dates shared by the live comparison.
+    conn.execute(
+        """DELETE FROM weekly_weights
+           WHERE account='RL' AND snapshot_date NOT IN (
+               SELECT DISTINCT snapshot_date FROM weekly_snapshot
+               WHERE account != 'RL'
+           )"""
+    )
+    conn.execute(
+        """DELETE FROM weekly_snapshot
+           WHERE account='RL' AND snapshot_date NOT IN (
+               SELECT DISTINCT snapshot_date FROM weekly_snapshot
+               WHERE account != 'RL'
+           )"""
+    )
+
     rows = conn.execute(
         """SELECT DISTINCT snapshot_date FROM weekly_snapshot
            WHERE account != 'RL' ORDER BY snapshot_date ASC"""
@@ -495,6 +527,7 @@ def main():
     logger.info("Regenerating dashboard to include RL data...")
     try:
         import subprocess
+
         cmd = [sys.executable, "track_metrics.py", "--report-only", "--date", args.date]
         subprocess.run(cmd, cwd=project_root)
         logger.info("Dashboard regeneration complete")

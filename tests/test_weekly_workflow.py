@@ -15,6 +15,7 @@ sys.path.insert(0, str(project_root))
 
 import src.data.trading_calendar
 from run_paper_trading import (
+    allows_cash_fallback,
     get_ar_weights,
     get_rl_candidate_weights,
     get_target_weights,
@@ -24,12 +25,96 @@ from run_paper_trading import (
 )
 import track_metrics
 from src.strategies.rl_candidate_strategy import load_rl_candidate_weights
-from refresh_fmp_daily import get_last_csv_date
+from refresh_fmp_daily import get_last_csv_date, load_symbols_from_yaml
 
 
 # ---------------------------------------------------------------------------
 # Priority 4 Tests
 # ---------------------------------------------------------------------------
+
+
+def test_refresh_symbols_always_include_required_benchmarks(tmp_path):
+    """Price refresh must retain benchmarks even when fallback holds cash."""
+    config_path = tmp_path / "strategy.yaml"
+    config_path.write_text(
+        "asset_groups:\n"
+        "  group_a:\n"
+        "    symbols: [AAPL]\n"
+        "benchmark:\n"
+        "  excess_return_benchmark: QQQ\n"
+        "portfolio:\n"
+        "  fallback:\n"
+        "    symbols: []\n",
+        encoding="utf-8",
+    )
+
+    symbols = load_symbols_from_yaml(config_path)
+
+    assert symbols == ["AAPL", "QQQ", "SPY"]
+
+
+def test_rl_backfill_uses_previous_chronological_snapshot(tmp_path):
+    """Re-backfills must not calculate returns against a future RL row."""
+    from track_rl_offline import OfflinePortfolio, record_rl_snapshot
+
+    conn = sqlite3.connect(tmp_path / "metrics.db")
+    track_metrics.init_db(conn)
+    conn.execute(
+        "INSERT INTO weekly_snapshot "
+        "(snapshot_date, account, portfolio_value, positions_json) "
+        "VALUES ('2026-05-01', 'RL', 100.0, '[]')"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot "
+        "(snapshot_date, account, portfolio_value, positions_json) "
+        "VALUES ('2026-05-15', 'RL', 500.0, '[]')"
+    )
+
+    portfolio = OfflinePortfolio(110.0, 0.0, 0.0)
+    record_rl_snapshot(conn, "2026-05-08", portfolio, {}, {}, {})
+
+    weekly_return, cumulative_return = conn.execute(
+        "SELECT weekly_return, cumulative_return FROM weekly_snapshot "
+        "WHERE snapshot_date='2026-05-08' AND account='RL'"
+    ).fetchone()
+    conn.close()
+
+    assert weekly_return == pytest.approx(0.10)
+    assert cumulative_return == pytest.approx(0.10)
+
+
+@patch("track_rl_offline.simulate_rl_tracking")
+def test_rl_backfill_removes_dates_outside_comparison_calendar(mock_simulate, tmp_path):
+    """RL-only dates must not distort three-way comparison metrics."""
+    from track_rl_offline import backfill_rl_history
+
+    conn = sqlite3.connect(tmp_path / "metrics.db")
+    track_metrics.init_db(conn)
+    conn.execute(
+        "INSERT INTO weekly_snapshot "
+        "(snapshot_date, account, portfolio_value, positions_json) "
+        "VALUES ('2026-05-01', 'AR', 100.0, '[]')"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot "
+        "(snapshot_date, account, portfolio_value, positions_json) "
+        "VALUES ('2026-05-01', 'RL', 100.0, '[]')"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot "
+        "(snapshot_date, account, portfolio_value, positions_json) "
+        "VALUES ('2026-05-08', 'RL', 110.0, '[]')"
+    )
+
+    backfill_rl_history("weights.csv", conn)
+
+    dates = conn.execute(
+        "SELECT snapshot_date FROM weekly_snapshot WHERE account='RL'"
+    ).fetchall()
+    conn.close()
+
+    assert dates == [("2026-05-01",)]
+    mock_simulate.assert_called_once()
 
 
 @patch("subprocess.run")
@@ -162,6 +247,32 @@ def test_invalid_target_weights_fail_validation():
     )
     assert not valid
     assert failed_rule == "no single symbol exceeds configured maximum weight"
+
+
+@patch("src.data.trading_calendar.is_trading_day")
+def test_configured_cash_fallback_passes_validation(mock_is_trading_day):
+    """An empty target is valid only for an explicit cash fallback."""
+    account = {"name": "AR", "config": "dummy_config.yaml"}
+    executor = MagicMock()
+    executor.alpaca.get_account_info.return_value = {
+        "cash": 1_000_000.0,
+        "equity": 1_000_000.0,
+    }
+    mock_is_trading_day.return_value = True
+
+    valid, failed_rule, error_msg, _ = validate_pre_trade(
+        account,
+        "2026-07-10",
+        {},
+        executor,
+        allow_cash_target=True,
+    )
+
+    assert valid
+    assert failed_rule is None
+    assert error_msg is None
+    assert allows_cash_fallback("src/strategies/AdaptiveRotationConf_baseline.yaml")
+    assert allows_cash_fallback("src/strategies/AdaptiveRotationConf_v1.2.2.yaml")
 
 
 @patch("pathlib.Path.exists")
@@ -324,9 +435,13 @@ def test_dashboard_spy_series_aligns_to_weekly_dates():
     """Test that generate_html_dashboard aligns SPY series and accounts correctly."""
     # Mock SQL connection
     conn = MagicMock()
-    conn.execute.return_value.fetchall.return_value = [
+    snapshot_rows = [
         ("2026-05-15", "test_acc", 1000000.0, 0.0, 0.0, 0.01, 0.01, "[]"),
         ("2026-05-22", "test_acc", 1010000.0, 0.01, 0.01, -0.005, 0.005, "[]"),
+    ]
+    conn.execute.side_effect = [
+        MagicMock(fetchall=MagicMock(return_value=snapshot_rows)),
+        MagicMock(fetchall=MagicMock(return_value=[])),
     ]
 
     output_path = MagicMock()
@@ -505,6 +620,39 @@ def test_strategy_decision_records_with_timestamps(tmp_path):
         assert orders[0]["symbol"] == "SATS"
         assert "2026-06-05" in orders[0]["submitted_at"]
         conn.close()
+
+
+def test_snapshot_preserves_target_and_actual_weights(tmp_path):
+    """Snapshot rows must distinguish missing fills from unexpected holdings."""
+    db_file = tmp_path / "finrl_trading.db"
+    conn = sqlite3.connect(db_file)
+    track_metrics.init_db(conn)
+    account = {"name": "AR", "config": "baseline.yaml"}
+    alpaca = {
+        "portfolio_value": 1_000.0,
+        "cash": 500.0,
+        "equity": 1_000.0,
+        "positions": [
+            {"symbol": "AAPL", "actual_weight": 0.5, "market_value": 500.0}
+        ],
+    }
+
+    track_metrics.record_snapshot(
+        conn,
+        "2026-07-10",
+        account,
+        alpaca,
+        {},
+        {"AAPL": 0.5, "MSFT": 0.5},
+    )
+
+    rows = conn.execute(
+        "SELECT symbol, target_weight, actual_weight FROM weekly_weights "
+        "ORDER BY symbol"
+    ).fetchall()
+    conn.close()
+
+    assert rows == [("AAPL", 0.5, 0.5), ("MSFT", 0.5, 0.0)]
 
 
 def test_weekly_comparison_metrics(tmp_path):
@@ -898,10 +1046,11 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
             id                     INTEGER PRIMARY KEY AUTOINCREMENT,
             run_date               TEXT NOT NULL,
             account_name           TEXT NOT NULL,
-            target_weights         TEXT,
-            post_trade_positions   TEXT,
-            equity                 REAL,
-            parity_check           TEXT
+                target_weights         TEXT,
+                post_trade_positions   TEXT,
+                equity                 REAL,
+                submitted_orders       TEXT,
+                parity_check           TEXT
         );
         CREATE TABLE IF NOT EXISTS weekly_weights (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,

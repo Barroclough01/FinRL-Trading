@@ -5,13 +5,13 @@ Configuration Settings Module
 Centralized configuration management using Pydantic settings.
 """
 
-import os
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from pydantic import validator
-from pydantic_settings import BaseSettings
-from pydantic.types import SecretStr
+from typing import List, Optional
+
 from dotenv import load_dotenv
+from pydantic import Field, field_validator
+from pydantic.types import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,60 +19,55 @@ load_dotenv()
 
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="DB_")
     url: str = "sqlite:///finrl_trading.db"
     pool_size: int = 5
     max_overflow: int = 10
     pool_timeout: int = 30
 
-    class Config:
-        env_prefix = "DB_"
-
 
 class AlpacaSettings(BaseSettings):
     """Alpaca API configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="APCA_")
     api_key: Optional[str] = None
     api_secret: Optional[str] = None
     base_url: str = "https://paper-api.alpaca.markets/v2"
     use_paper_trading: bool = True
 
-    class Config:
-        env_prefix = "APCA_"
-
 
 class WRDSSettings(BaseSettings):
     """WRDS database configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="WRDS_")
     username: Optional[str] = None
     password: Optional[SecretStr] = None
     hostname: str = "wrds.wharton.upenn.edu"
     port: int = 9737
     database: str = "wrds"
 
-    class Config:
-        env_prefix = "WRDS_"
-
 
 class FMPSettings(BaseSettings):
     """Financial Modeling Prep API configuration settings."""
-    api_key: Optional[SecretStr] = None
 
-    class Config:
-        env_prefix = "FMP_"
+    model_config = SettingsConfigDict(env_prefix="FMP_")
+    api_key: Optional[SecretStr] = None
 
 
 class OpenAISettings(BaseSettings):
     """OpenAI GPT configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="OPENAI_")
     api_key: Optional[SecretStr] = None
     model: str = "gpt-4o-mini"
     request_timeout: int = 30
-
-    class Config:
-        env_prefix = "OPENAI_"
 
 
 class DataSettings(BaseSettings):
     """
     Data management configuration settings.
-    
+
     Attributes:
         base_dir: Main directory for all data storage (including SQLite database).
                   Set via DATA_BASE_DIR environment variable.
@@ -82,6 +77,9 @@ class DataSettings(BaseSettings):
         cache_ttl_hours: Time-to-live for cache entries in hours
         max_cache_size_mb: Maximum cache size in megabytes
     """
+
+    model_config = SettingsConfigDict(env_prefix="DATA_")
+
     base_dir: str = "./data"
     cache_dir: str = "./data/cache"
     processed_dir: str = "./data/processed"
@@ -89,9 +87,6 @@ class DataSettings(BaseSettings):
     cache_ttl_hours: int = 24
     max_cache_size_mb: int = 1000
 
-    class Config:
-        env_prefix = "DATA_"
-    
     def get_database_path(self) -> Path:
         """Get the path to the SQLite database file."""
         return Path(self.base_dir) / "finrl_trading.db"
@@ -99,19 +94,20 @@ class DataSettings(BaseSettings):
 
 class StrategySettings(BaseSettings):
     """Strategy configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="STRATEGY_")
     default_rebalance_freq: str = "Q"
     max_weight_per_stock: float = 0.1
     max_sector_weight: float = 0.3
     max_turnover: float = 0.5
     risk_free_rate: float = 0.02
-    benchmark_tickers: List[str] = ["SPY", "QQQ"]
-
-    class Config:
-        env_prefix = "STRATEGY_"
+    benchmark_tickers: List[str] = Field(default_factory=lambda: ["SPY", "QQQ"])
 
 
 class TradingSettings(BaseSettings):
     """Trading configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="TRADING_")
     max_order_value: float = 100000.0
     max_portfolio_turnover: float = 0.5
     min_order_size: float = 100.0
@@ -120,68 +116,68 @@ class TradingSettings(BaseSettings):
     log_orders: bool = True
     order_log_path: str = "./logs/orders"
 
-    class Config:
-        env_prefix = "TRADING_"
-
 
 class WebSettings(BaseSettings):
     """Web interface configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="WEB_")
     host: str = "0.0.0.0"
     port: int = 8501
     debug: bool = False
     theme: str = "light"
 
-    class Config:
-        env_prefix = "WEB_"
-
 
 class LoggingSettings(BaseSettings):
     """Logging configuration settings."""
+
+    model_config = SettingsConfigDict(env_prefix="LOG_")
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file_path: Optional[str] = "./logs/finrl_trading.log"
     max_file_size: int = 10485760  # 10MB
     backup_count: int = 5
 
-    class Config:
-        env_prefix = "LOG_"
-
 
 class FinRLSettings(BaseSettings):
     """Main FinRL configuration settings."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
     app_name: str = "FinRL Trading"
     version: str = "2.0.0"
     environment: str = "development"
 
     # Sub-settings
-    database: DatabaseSettings = DatabaseSettings()
-    alpaca: AlpacaSettings = AlpacaSettings()
-    wrds: WRDSSettings = WRDSSettings()
-    fmp: FMPSettings = FMPSettings()
-    openai: OpenAISettings = OpenAISettings()
-    data: DataSettings = DataSettings()
-    strategy: StrategySettings = StrategySettings()
-    trading: TradingSettings = TradingSettings()
-    web: WebSettings = WebSettings()
-    logging: LoggingSettings = LoggingSettings()
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    alpaca: AlpacaSettings = Field(default_factory=AlpacaSettings)
+    wrds: WRDSSettings = Field(default_factory=WRDSSettings)
+    fmp: FMPSettings = Field(default_factory=FMPSettings)
+    openai: OpenAISettings = Field(default_factory=OpenAISettings)
+    data: DataSettings = Field(default_factory=DataSettings)
+    strategy: StrategySettings = Field(default_factory=StrategySettings)
+    trading: TradingSettings = Field(default_factory=TradingSettings)
+    web: WebSettings = Field(default_factory=WebSettings)
+    logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        extra = "ignore"  # 忽略未定义的环境变量
-
-    @validator('environment')
-    def validate_environment(cls, v):
-        if v not in ['development', 'testing', 'staging', 'production']:
-            raise ValueError('Environment must be one of: development, testing, staging, production')
-        return v
+    @field_validator("environment")
+    @classmethod
+    def validate_environment(cls, value: str) -> str:
+        valid_environments = {"development", "testing", "staging", "production"}
+        if value not in valid_environments:
+            raise ValueError(
+                "Environment must be one of: development, testing, staging, production"
+            )
+        return value
 
     def is_development(self) -> bool:
-        return self.environment == 'development'
+        return self.environment == "development"
 
     def is_production(self) -> bool:
-        return self.environment == 'production'
+        return self.environment == "production"
 
     def get_data_dir(self) -> Path:
         """Get data directory path."""
@@ -200,7 +196,7 @@ class FinRLSettings(BaseSettings):
         if self.logging.file_path:
             return Path(self.logging.file_path).parent
         return Path("./logs")
-    
+
     def get_database_path(self) -> Path:
         """Get the path to the SQLite database file."""
         return self.data.get_database_path()
@@ -314,7 +310,7 @@ LOG_MAX_FILE_SIZE=10485760
 LOG_BACKUP_COUNT=5
 """
 
-    with open(template_path, 'w') as f:
+    with open(template_path, "w") as f:
         f.write(template_content)
 
     return template_path

@@ -175,11 +175,11 @@ portfolio:
     scheme: equal
     residual_to_cash: true
 
-  # Fallback strategy when no groups qualify
+  # Match the baseline's defensive fallback. SPY and QQQ are benchmarks only.
   fallback:
     enabled: true
-    symbols: [SPY, QQQ, IAU, XLU, XLV]      # Fallback to market benchmarks
-    allocation: equal         # Equal weight between fallback symbols
+    symbols: []
+    allocation: equal
 
 # -----------------------
 # Stop-Loss Rules
