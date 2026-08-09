@@ -9,6 +9,9 @@ This checkout runs a bounded three-way paper comparison around FinRL-Trading.
 - Treat defensive cash as cash, not synthetic benchmark exposure.
 - Keep the RL path offline unless the user explicitly changes that boundary.
 - Treat small observation counts as preliminary evidence.
+- Treat routine experiment check-ins as read-only. Inspect current scheduler
+  state, logs, metrics, database records, and broker status directly.
+- Do not build or update Graphify artifacts unless the user explicitly asks.
 - Use the WSL environment and `uv` for Python verification. Run targeted tests,
   Ruff, and Ty after relevant changes.
 
