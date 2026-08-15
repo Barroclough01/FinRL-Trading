@@ -70,14 +70,22 @@ def load_predictions(csv_path: str) -> pd.DataFrame:
     return df
 
 
-def get_top_picks(df: pd.DataFrame, top_n: int) -> dict[str, list[str]]:
+def get_top_picks(
+    df: pd.DataFrame,
+    top_n: int,
+    excluded_symbols: set[str] | None = None,
+) -> dict[str, list[str]]:
     """Return {bucket: [ticker, ...]} with top-N per bucket by predicted_return."""
+    excluded = {symbol.strip().upper() for symbol in (excluded_symbols or set())}
     picks = {}
     for bucket in BUCKET_TO_GROUP:
         bdf = df[df["bucket"] == bucket].sort_values(
             "predicted_return", ascending=False
         )
-        tickers = bdf["tic"].head(top_n).tolist()
+        ranked_tickers = bdf["tic"].astype(str).str.strip().str.upper()
+        tickers = [ticker for ticker in ranked_tickers if ticker not in excluded][
+            :top_n
+        ]
         if not tickers:
             print(f"  WARNING: no picks for {bucket}, using fallback symbols")
             tickers = FALLBACK_SYMBOLS[bucket]
@@ -85,7 +93,9 @@ def get_top_picks(df: pd.DataFrame, top_n: int) -> dict[str, list[str]]:
     return picks
 
 
-def patch_yaml(yaml_path: str, picks: dict[str, list[str]], dry_run: bool) -> str:
+def patch_yaml(
+    yaml_path: str, picks: dict[str, list[str]], dry_run: bool
+) -> tuple[str, str]:
     """
     Patch asset_groups symbol lists in the YAML line by line.
     Finds each group block, locates its symbols: section, replaces the ticker lines.
@@ -182,8 +192,8 @@ def print_diff_summary(picks: dict[str, list[str]], original_text: str) -> None:
         group_line = next(
             (
                 i
-                for i, l in enumerate(orig_lines)
-                if l.strip().startswith(group_key + ":")
+                for i, line in enumerate(orig_lines)
+                if line.strip().startswith(group_key + ":")
             ),
             None,
         )
@@ -199,8 +209,8 @@ def print_diff_summary(picks: dict[str, list[str]], original_text: str) -> None:
                 None,
             )
             if sym_line is not None:
-                for l in orig_lines[sym_line + 1 :]:
-                    m = re.match(r"^\s+-\s+(\S+)", l)
+                for line in orig_lines[sym_line + 1 :]:
+                    m = re.match(r"^\s+-\s+(\S+)", line)
                     if m:
                         old_tickers.append(m.group(1))
                     else:
@@ -247,6 +257,15 @@ def main():
         help="Number of ML picks to include per bucket (default: 5)",
     )
     parser.add_argument(
+        "--exclude-symbol",
+        action="append",
+        default=[],
+        help=(
+            "Ticker to exclude from selection (repeatable; use for confirmed "
+            "inactive or untradeable assets)"
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Print what would change without writing any files",
@@ -261,6 +280,7 @@ def main():
     print(f"Predictions : {csv_path}")
     print(f"Config      : {args.config}")
     print(f"Top-N       : {args.top_n} per bucket")
+    print(f"Excluded    : {', '.join(args.exclude_symbol) or 'none'}")
     print(f"Dry-run     : {args.dry_run}")
 
     if not os.path.exists(csv_path):
@@ -274,7 +294,7 @@ def main():
     df = load_predictions(csv_path)
     print(f"\nLoaded {len(df)} predictions across {df['bucket'].nunique()} buckets")
 
-    picks = get_top_picks(df, args.top_n)
+    picks = get_top_picks(df, args.top_n, set(args.exclude_symbol))
 
     # Print picks before patching
     print("\nTop picks per bucket:")
@@ -294,7 +314,8 @@ def main():
         print(f"\nBackup saved : {backup_path}")
         print(f"Config updated: {args.config}")
         print(
-            "\nReady to run: ./deploy.sh --strategy adaptive_rotation --mode backtest ..."
+            "\nReady to run: ./deploy.sh --strategy adaptive_rotation "
+            "--mode backtest ..."
         )
     else:
         print("\n[dry-run] No files written.")

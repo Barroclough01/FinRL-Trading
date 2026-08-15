@@ -93,6 +93,30 @@ def is_trading_day(check_date: date) -> bool:
     return not schedule.empty
 
 
+def latest_trading_day_on_or_before(check_date: date) -> date:
+    """Return the latest NYSE session date on or before ``check_date``."""
+    nyse = mcal.get_calendar("NYSE")
+    schedule = nyse.schedule(
+        start_date=(check_date - timedelta(days=10)).strftime("%Y-%m-%d"),
+        end_date=check_date.strftime("%Y-%m-%d"),
+    )
+    if schedule.empty:
+        raise ValueError(f"No NYSE trading session found on or before {check_date}")
+    return schedule.index[-1].date()
+
+
+def empty_fetch_is_stale(
+    last_date: date | None, expected_latest_date: date
+) -> bool:
+    """Return whether an empty provider response leaves local history stale."""
+    return last_date is None or last_date < expected_latest_date
+
+
+def stale_data_severity(ticker: str, required_symbols: set[str]) -> str:
+    """Make stale live inputs fatal while leaving RL-only inputs as warnings."""
+    return "failed" if ticker in required_symbols else "optional_stale"
+
+
 def get_last_csv_date(csv_path: Path) -> date | None:
     """Return the most recent date in an existing CSV, or None if missing/empty."""
     if not csv_path.exists():
@@ -236,6 +260,7 @@ def main():
     args = parser.parse_args()
 
     today = date.today()
+    expected_latest_date = latest_trading_day_on_or_before(today)
     mode = " [DRY RUN]" if args.dry_run else ""
     print(f"=== refresh_fmp_daily.py  [{today}]{mode} ===\n")
 
@@ -264,6 +289,7 @@ def main():
             args.configs = [DEFAULT_CONFIG]
 
     all_symbols = []
+    required_symbols = set()
     for cfg_path in args.configs:
         if not cfg_path.exists():
             print(f"ERROR: Config not found: {cfg_path}", file=sys.stderr)
@@ -271,6 +297,7 @@ def main():
         syms = load_symbols_from_yaml(cfg_path)
         print(f"Symbols from {cfg_path.name}: {syms}")
         for s in syms:
+            required_symbols.add(s)
             if s not in all_symbols:
                 all_symbols.append(s)
 
@@ -302,7 +329,13 @@ def main():
     api_key = load_api_key()
 
     # --- Refresh loop ---
-    results = {"updated": [], "up_to_date": [], "failed": [], "new_file": []}
+    results = {
+        "updated": [],
+        "up_to_date": [],
+        "failed": [],
+        "optional_stale": [],
+        "new_file": [],
+    }
 
     for ticker in symbols:
         csv_path = FMP_DAILY_DIR / f"{ticker}_daily.csv"
@@ -333,8 +366,22 @@ def main():
             new_rows = fetch_fmp_daily(ticker, from_date, today, api_key)
 
             if new_rows.empty:
-                print("no data returned (holiday/weekend window?)")
-                results["up_to_date"].append(ticker)
+                if empty_fetch_is_stale(last_date, expected_latest_date):
+                    message = (
+                        "No data returned while local history is stale "
+                        f"(last: {last_date or 'missing'}, expected: "
+                        f"{expected_latest_date})"
+                    )
+                    severity = stale_data_severity(ticker, required_symbols)
+                    if severity == "failed":
+                        print(f"FAILED: {message}")
+                        results["failed"].append((ticker, message))
+                    else:
+                        print(f"WARNING (RL-only): {message}")
+                        results["optional_stale"].append((ticker, message))
+                else:
+                    print("no data returned; local history is current")
+                    results["up_to_date"].append(ticker)
                 continue
 
             # Deduplicate and write
@@ -391,6 +438,9 @@ def main():
     print(f"  New files created : {len(results['new_file'])}  {results['new_file']}")
     print(f"  Updated           : {len(results['updated'])}  {results['updated']}")
     print(f"  Already up to date: {len(results['up_to_date'])}")
+    print(f"  RL-only stale     : {len(results['optional_stale'])}")
+    for ticker, err in results["optional_stale"]:
+        print(f"    {ticker}: {err}")
     print(f"  Failed            : {len(results['failed'])}")
     for ticker, err in results["failed"]:
         print(f"    {ticker}: {err}")

@@ -85,7 +85,7 @@ Both accounts funded with $1,000,000 paper capital. Credentials stored in `.env`
 2. For each account: runs AR strategy for today → gets target weights
 3. Connects to that account's Alpaca paper account
 4. Generates dry-run order plan, checks market open/closed
-5. Submits rebalance orders (OPG if market closed and `USE_OPG=true`)
+5. Submits rebalance orders (`MARKET_CLOSED_ACTION=next_open` queues Friday-evening DAY orders for the next regular session)
 6. Logs execution to `logs/execution_YYYY-MM-DD.json`
 7. After all accounts: automatically runs `track_metrics.py`
 - Run via: `python run_paper_trading.py [--dry-run] [--date YYYY-MM-DD] [--account FinRL]`
@@ -113,7 +113,7 @@ Both accounts funded with $1,000,000 paper capital. Credentials stored in `.env`
 
 ```
 ~/stock-trading/FinRL-Trading/
-├── .env                                          # Multi-account Alpaca credentials + USE_OPG=true
+├── .env                                          # Multi-account Alpaca credentials + MARKET_CLOSED_ACTION=next_open
 ├── deploy.sh                                     # Main entry point (updated to v1.2.2)
 ├── refresh_fmp_daily.py                          # Weekly price refresh (yfinance, 52 symbols)
 ├── run_paper_trading.py                          # Weekly dual-account paper trading script
@@ -169,7 +169,10 @@ cd C:\Users\paxto\stock-trading\qlib
 - Tickers that are YAML booleans (`ON`, `NO`, `YES`) must be quoted — `update_adaptive_rotation_symbols.py` handles this automatically
 - `APCA_BASE_URL` in `.env` must include `/v2` suffix: `https://paper-api.alpaca.markets/v2`
 - Multi-account `.env` keys are case-sensitive: `APCA_FinRL_API_KEY` not `APCA_FINRL_API_KEY`
-- Fractional share orders override OPG → day TIF automatically (Alpaca requirement)
+- Friday-evening DAY orders are queued by Alpaca for the next regular session; this is the expected weekly execution protocol
+- Stale live-strategy or benchmark prices fail the refresh; stale RL-only symbols are reported as warnings because RL remains offline
+- Confirmed inactive RL holdings are liquidated at their last cached close and retained as cash according to `src/strategies/rl_inactive_symbols.json`
+- The quarterly ML workflow treats its Excel dashboard as optional; CSV outputs remain authoritative when `openpyxl` is unavailable
 - FMP API deprecated all legacy endpoints post-Aug 2025; free tier only allows SPY on stable endpoints — yfinance used instead
 - Task Scheduler wake-from-sleep requires laptop in sleep (not shutdown) + "Allow wake timers" enabled in Windows power settings
 - AR baseline account (AR) may show fallback positions (SPY/QQQ/IAU/XLU/XLV) for first few weeks while regime signals warm up on new symbol CSVs
@@ -177,10 +180,10 @@ cd C:\Users\paxto\stock-trading\qlib
 
 ## Weekly Run Checklist
 
-1. **Thursday night**: put laptop to sleep (not shutdown)
-2. **Friday ~9:25am**: Task Scheduler fires automatically
-3. **Friday afternoon**: check Alpaca dashboard for both accounts (FinRL + AR) to confirm fills
-4. **Friday**: `explorer.exe logs/dashboard.html` to view updated performance dashboard
+1. **Friday evening**: Task Scheduler runs after the computer is available
+2. **Friday evening**: signals and closing-price metrics are recorded; DAY orders queue for the next regular session
+3. **Monday after market open**: check Alpaca for both accounts (FinRL + AR) to confirm fills
+4. **Friday or weekend**: `explorer.exe logs/dashboard.html` to view updated performance dashboard
 5. **Quarterly (~July 2026)**: re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py` → download any new symbols
 
 ## Current Roadmap Phase

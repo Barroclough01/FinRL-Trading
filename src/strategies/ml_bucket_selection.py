@@ -74,6 +74,33 @@ FEATURE_COLS = [
     "BPS",
 ]
 
+
+def write_optional_excel_dashboard(
+    excel_path: str,
+    predictions: pd.DataFrame,
+    model_results: list[dict],
+    importances: list[dict],
+) -> bool:
+    """Write the convenience workbook when openpyxl is available."""
+    try:
+        with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+            predictions.sort_values("rank_best").to_excel(
+                writer, sheet_name="Rankings", index=False
+            )
+            pd.DataFrame(model_results).to_excel(
+                writer, sheet_name="Models", index=False
+            )
+            if importances:
+                pd.DataFrame(importances).to_excel(
+                    writer, sheet_name="Features", index=False
+                )
+    except ModuleNotFoundError as exc:
+        if exc.name != "openpyxl":
+            raise
+        print("WARNING: openpyxl is unavailable; skipping optional Excel dashboard")
+        return False
+    return True
+
 # Momentum features computed from sequential data (not stored in DB)
 MOMENTUM_COLS = [
     # Price momentum (from trade_price)
@@ -1044,15 +1071,15 @@ def main():
         print(f"Saved: {imp_path} ({len(imp_df)} rows)")
     print(f"Saved: {model_path} ({len(all_model_results)} rows)")
 
-    # Excel dashboard
-    excel_path = os.path.join(args.output_dir, f"{prefix}ml_dashboard_{trade_tag}_{timestamp}.xlsx")
-    with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
-        pred_all.sort_values("rank_best").to_excel(writer, sheet_name="Rankings", index=False)
-        pd.DataFrame(all_model_results).to_excel(writer, sheet_name="Models", index=False)
-        if all_importances:
-            pd.DataFrame(all_importances).to_excel(writer, sheet_name="Features", index=False)
-    print(f"Saved: {excel_path}")
-    print(f"Dashboard: python3 src/tools/dashboard.py {excel_path}")
+    # Excel dashboard is optional; CSV artifacts above remain authoritative.
+    excel_path = os.path.join(
+        args.output_dir, f"{prefix}ml_dashboard_{trade_tag}_{timestamp}.xlsx"
+    )
+    if write_optional_excel_dashboard(
+        excel_path, pred_all, all_model_results, all_importances
+    ):
+        print(f"Saved: {excel_path}")
+        print(f"Dashboard: python3 src/tools/dashboard.py {excel_path}")
 
     # Summary per quarter
     print(f"\n{'=' * 60}")

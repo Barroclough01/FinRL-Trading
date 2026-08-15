@@ -45,6 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path("data/finrl_trading.db")
+INACTIVE_SYMBOLS_PATH = Path("src/strategies/rl_inactive_symbols.json")
 STARTING_CAPITAL = 1_000_000.0
 TRANSACTION_COST_BPS = 5  # 0.05% per trade
 SLIPPAGE_BPS = 2  # 0.02% execution slippage
@@ -147,6 +148,19 @@ def load_rl_weights(weights_path: str, target_date: str) -> dict:
         return {}
 
 
+def load_inactive_symbols(policy_path: str | Path) -> dict[str, dict]:
+    """Load explicitly verified inactive-symbol handling metadata."""
+    path = Path(policy_path)
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as policy_file:
+        payload = json.load(policy_file)
+    symbols = payload.get("symbols", {})
+    if not isinstance(symbols, dict):
+        raise ValueError("Inactive-symbol policy must contain a symbols object")
+    return {str(symbol).upper(): details for symbol, details in symbols.items()}
+
+
 # ---------------------------------------------------------------------------
 # Portfolio simulator
 # ---------------------------------------------------------------------------
@@ -168,6 +182,23 @@ class OfflinePortfolio:
             self.positions.get(sym, 0) * prices.get(sym, 0) for sym in self.positions
         )
         return self.cash + holdings
+
+    def liquidate_position(self, symbol: str, price: float) -> float:
+        """Sell an inactive holding at its last available close and return net cash."""
+        quantity = self.positions.get(symbol, 0.0)
+        if quantity <= 0:
+            return 0.0
+        if price <= 0:
+            raise ValueError(f"Cannot liquidate {symbol} without a positive price")
+
+        gross_proceeds = quantity * price
+        slippage = gross_proceeds * (self.slippage_bps / 10000)
+        transaction_cost = gross_proceeds * (self.tx_cost_bps / 10000)
+        net_proceeds = gross_proceeds - slippage - transaction_cost
+        self.cash += net_proceeds
+        self.total_tx_cost += transaction_cost
+        del self.positions[symbol]
+        return net_proceeds
 
     def rebalance(self, target_weights: dict, prices: dict) -> None:
         """Rebalance portfolio to target weights."""
@@ -258,6 +289,55 @@ class OfflinePortfolio:
         return pos_list
 
 
+def apply_inactive_symbol_policy(
+    portfolio: OfflinePortfolio,
+    source_target_weights: dict[str, float],
+    snapshot_date: str,
+    inactive_symbols: dict[str, dict],
+) -> tuple[dict[str, float], list[dict]]:
+    """Remove inactive targets and liquidate held positions into cash."""
+    effective_target_weights = dict(source_target_weights)
+    liquidation_events = []
+
+    for symbol, details in inactive_symbols.items():
+        effective_date = details.get("effective_date")
+        if not effective_date or snapshot_date < str(effective_date):
+            continue
+
+        source_weight = effective_target_weights.pop(symbol, 0.0)
+        held_quantity = portfolio.positions.get(symbol, 0.0)
+        if held_quantity <= 0:
+            continue
+
+        price = get_price_on_date(symbol, snapshot_date)
+        if price <= 0:
+            raise RuntimeError(
+                f"Inactive RL holding {symbol} cannot be liquidated: "
+                "no positive cached price is available"
+            )
+        net_proceeds = portfolio.liquidate_position(symbol, price)
+        event = {
+            "symbol": symbol,
+            "snapshot_date": snapshot_date,
+            "quantity": held_quantity,
+            "liquidation_price": price,
+            "net_proceeds": net_proceeds,
+            "source_target_weight": source_weight,
+            "reason": details.get("reason"),
+        }
+        liquidation_events.append(event)
+        logger.warning(
+            "RL inactive-symbol liquidation: %s qty=%.6f price=%.4f "
+            "net=$%.2f; proceeds retained as cash",
+            symbol,
+            held_quantity,
+            price,
+            net_proceeds,
+        )
+
+    return effective_target_weights, liquidation_events
+
+
 # ---------------------------------------------------------------------------
 # Snapshot recorder
 # ---------------------------------------------------------------------------
@@ -328,8 +408,15 @@ def record_rl_snapshot(
         ),
     )
 
-    # Record weekly weights
-    for pos in positions:
+    # Replace the whole RL weight set so rebuilt snapshots cannot retain stale rows.
+    conn.execute(
+        "DELETE FROM weekly_weights WHERE snapshot_date=? AND account='RL'",
+        (snapshot_date,),
+    )
+    positions_by_symbol = {position["symbol"]: position for position in positions}
+    all_symbols = set(target_weights) | set(positions_by_symbol)
+    for symbol in sorted(all_symbols):
+        position = positions_by_symbol.get(symbol, {})
         conn.execute(
             """
             INSERT OR REPLACE INTO weekly_weights
@@ -339,10 +426,10 @@ def record_rl_snapshot(
             (
                 snapshot_date,
                 "RL",
-                pos["symbol"],
-                target_weights.get(pos["symbol"]),
-                pos["actual_weight"],
-                pos["market_value"],
+                symbol,
+                target_weights.get(symbol, 0.0),
+                position.get("actual_weight", 0.0),
+                position.get("market_value", 0.0),
             ),
         )
 
@@ -385,6 +472,7 @@ def simulate_rl_tracking(
     snapshot_date: str,
     conn: sqlite3.Connection,
     portfolio: OfflinePortfolio | None = None,
+    inactive_symbols: dict[str, dict] | None = None,
 ) -> OfflinePortfolio:
     """Simulate RL portfolio for a single date and record snapshot."""
 
@@ -395,12 +483,21 @@ def simulate_rl_tracking(
         )
 
     # Load RL target weights
-    target_weights = load_rl_weights(weights_path, snapshot_date)
-    if not target_weights:
+    source_target_weights = load_rl_weights(weights_path, snapshot_date)
+    if not source_target_weights:
         logger.warning(
             f"No RL weights for {snapshot_date} — holding previous positions"
         )
-        target_weights = {}
+        source_target_weights = {}
+
+    if inactive_symbols is None:
+        inactive_symbols = load_inactive_symbols(INACTIVE_SYMBOLS_PATH)
+    target_weights, _ = apply_inactive_symbol_policy(
+        portfolio,
+        source_target_weights,
+        snapshot_date,
+        inactive_symbols,
+    )
 
     # Get current prices for all symbols
     all_symbols = set(target_weights.keys()) | set(portfolio.positions.keys())
@@ -425,7 +522,7 @@ def simulate_rl_tracking(
 
     # Record snapshot
     record_rl_snapshot(
-        conn, snapshot_date, portfolio, prices, target_weights, benchmark
+        conn, snapshot_date, portfolio, prices, source_target_weights, benchmark
     )
 
     return portfolio

@@ -86,18 +86,23 @@ For each weekly snapshot:
 
 1. **Load target weights** from `results/drl_weight.csv` (latest on or before snapshot date)
 2. **Fetch prices** for all symbols from `data/fmp_daily/*.csv`
-3. **Sell phase**: Close or reduce positions not in target
+3. **Inactive-symbol phase**: Apply `src/strategies/rl_inactive_symbols.json`
+   - Liquidate confirmed inactive holdings at their last cached close
+   - Apply the normal transaction-cost and slippage assumptions
+   - Retain proceeds as cash rather than reallocating them
+   - Preserve source target weights with zero actual weight for drift reporting
+4. **Sell phase**: Close or reduce positions not in target
    - Calculate sell value
    - Apply slippage (2 bps against trader)
    - Apply transaction cost (5 bps)
    - Credit net proceeds to cash
-4. **Buy phase**: Open or add to target positions
+5. **Buy phase**: Open or add to target positions
    - Calculate buy value
    - Apply slippage (2 bps against trader)
    - Apply transaction cost (5 bps)
    - Cap to available cash
    - Deduct total cost from cash
-5. **Record snapshot** to SQLite with positions, weights, and returns
+6. **Record snapshot** to SQLite with positions, weights, and returns
 
 ### Cost Model
 
@@ -167,7 +172,9 @@ All metrics are calculated identically:
 
 - **Perfect execution**: Assumes all orders fill at close price
 - **No partial fills**: All trades execute fully
-- **No order rejection**: Assumes all symbols are tradable
+- **Explicit inactive-symbol handling only**: Confirmed inactive symbols are
+  maintained in `src/strategies/rl_inactive_symbols.json`; new corporate actions
+  still require verification and a policy update
 - **No market impact beyond slippage**: Large orders don't move price
 - **No overnight gaps**: Uses daily close-to-close prices
 - **No opportunity cost**: Cash earns 0% (should be ~4-5% money market rate)

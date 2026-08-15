@@ -792,6 +792,23 @@ def load_accounts_from_env() -> list[dict]:
     return accounts
 
 
+def get_market_closed_action() -> str:
+    """Resolve closed-market order behavior with legacy USE_OPG compatibility."""
+    configured_action = os.getenv("MARKET_CLOSED_ACTION", "").strip().lower()
+    if configured_action:
+        if configured_action not in {"skip", "opg", "next_open"}:
+            raise ValueError(
+                "MARKET_CLOSED_ACTION must be one of: skip, opg, next_open"
+            )
+        return configured_action
+
+    # Existing installations opted in with USE_OPG. Route that intent through
+    # DAY orders, which work consistently for both whole and fractional shares
+    # when queued after the close.
+    use_opg = os.getenv("USE_OPG", "false").lower() == "true"
+    return "next_open" if use_opg else "skip"
+
+
 def get_executor_for_account(account: dict):
     """Build a TradeExecutor scoped to a single Alpaca account."""
     from src.trading.alpaca_manager import AlpacaAccount, AlpacaManager
@@ -1082,7 +1099,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
         f"Order plan: {plan_sells} sells, {plan_buys} buys | Market open: {market_open}"
     )
 
-    use_opg = os.getenv("USE_OPG", "false").lower() == "true"
+    market_closed_action = get_market_closed_action()
 
     skipped = False
     if market_open:
@@ -1091,8 +1108,18 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
             target_weights=weights,
             account_name=name,
         )
-    elif use_opg:
-        logger.info("Market closed — submitting as OPG (executes at next open)")
+    elif market_closed_action == "next_open":
+        logger.info(
+            "Market closed — submitting DAY orders queued for the next "
+            "regular trading session"
+        )
+        rebalance_result = executor.alpaca.execute_portfolio_rebalance(
+            target_weights=weights,
+            account_name=name,
+            market_closed_action="next_open",
+        )
+    elif market_closed_action == "opg":
+        logger.info("Market closed — submitting OPG orders for the next open")
         rebalance_result = executor.alpaca.execute_portfolio_rebalance(
             target_weights=weights,
             account_name=name,
@@ -1592,7 +1619,7 @@ def main():
     # Run metrics tracker (always on live runs, even if all accounts failed)
     metrics_warning = None
     if not args.dry_run:
-        metrics_ok, metrics_error = run_metrics_tracker(args.date, project_root)
+        metrics_ok, metrics_error = run_metrics_tracker(args.date, Path(project_root))
         if not metrics_ok:
             errors.append({"account": "metrics", "error": metrics_error})
         elif metrics_error:

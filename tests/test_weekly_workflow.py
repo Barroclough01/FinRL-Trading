@@ -3,7 +3,9 @@ import math
 import os
 import sqlite3
 import sys
+from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -17,6 +19,7 @@ import src.data.trading_calendar
 from run_paper_trading import (
     allows_cash_fallback,
     get_ar_weights,
+    get_market_closed_action,
     get_rl_candidate_weights,
     get_target_weights,
     reconcile_post_trade,
@@ -24,8 +27,15 @@ from run_paper_trading import (
     validate_pre_trade,
 )
 import track_metrics
+from update_adaptive_rotation_symbols import get_top_picks
 from src.strategies.rl_candidate_strategy import load_rl_candidate_weights
-from refresh_fmp_daily import get_last_csv_date, load_symbols_from_yaml
+from refresh_fmp_daily import (
+    empty_fetch_is_stale,
+    get_last_csv_date,
+    latest_trading_day_on_or_before,
+    load_symbols_from_yaml,
+    stale_data_severity,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +61,53 @@ def test_refresh_symbols_always_include_required_benchmarks(tmp_path):
     symbols = load_symbols_from_yaml(config_path)
 
     assert symbols == ["AAPL", "QQQ", "SPY"]
+
+
+def test_empty_refresh_fails_when_local_history_is_stale():
+    assert empty_fetch_is_stale(date(2026, 7, 17), date(2026, 8, 14))
+    assert empty_fetch_is_stale(None, date(2026, 8, 14))
+    assert not empty_fetch_is_stale(date(2026, 8, 14), date(2026, 8, 14))
+
+
+def test_latest_trading_day_uses_previous_session_on_weekend():
+    assert latest_trading_day_on_or_before(date(2026, 8, 15)) == date(2026, 8, 14)
+
+
+def test_stale_data_is_fatal_only_for_live_comparison_inputs():
+    required = {"SPY", "QQQ", "AAPL"}
+
+    assert stale_data_severity("AAPL", required) == "failed"
+    assert stale_data_severity("EA", required) == "optional_stale"
+
+
+def test_quarterly_symbol_update_excludes_confirmed_inactive_ticker():
+    predictions = pd.DataFrame(
+        [
+            {"tic": "SATS", "bucket": "growth_tech", "predicted_return": 0.2},
+            {"tic": "WDAY", "bucket": "growth_tech", "predicted_return": 0.1},
+            {"tic": "JPM", "bucket": "cyclical", "predicted_return": 0.1},
+            {"tic": "XOM", "bucket": "real_assets", "predicted_return": 0.1},
+            {"tic": "JNJ", "bucket": "defensive", "predicted_return": 0.1},
+        ]
+    )
+
+    picks = get_top_picks(predictions, top_n=1, excluded_symbols={"sats"})
+
+    assert picks["growth_tech"] == ["WDAY"]
+
+
+def test_legacy_use_opg_setting_maps_to_next_open_day_orders(monkeypatch):
+    monkeypatch.delenv("MARKET_CLOSED_ACTION", raising=False)
+    monkeypatch.setenv("USE_OPG", "true")
+
+    assert get_market_closed_action() == "next_open"
+
+
+def test_market_closed_action_rejects_invalid_configuration(monkeypatch):
+    monkeypatch.setenv("MARKET_CLOSED_ACTION", "whenever")
+
+    with pytest.raises(ValueError, match="MARKET_CLOSED_ACTION"):
+        get_market_closed_action()
 
 
 def test_rl_backfill_uses_previous_chronological_snapshot(tmp_path):
@@ -1210,3 +1267,70 @@ def test_alpaca_manager_normalization_with_skipped_assets(
     assert "SATS" not in res_weights
     assert res_weights["TXN"] == pytest.approx(0.50, abs=1e-4)
     assert res_weights["MCHP"] == pytest.approx(0.50, abs=1e-4)
+
+
+def test_alpaca_manager_queues_day_orders_for_next_open():
+    """Next-open mode must use DAY for whole and fractional shares."""
+    from src.trading.alpaca_manager import AlpacaAccount, AlpacaManager
+
+    account = AlpacaAccount(name="test_acc", api_key="key", api_secret="secret")
+    manager = AlpacaManager([account])
+    manager._assets_loaded = True
+    manager._is_market_open = MagicMock(return_value=False)
+    manager.cancel_all_orders = MagicMock(return_value=0)
+    manager.get_positions = MagicMock(return_value=[])
+    manager.get_portfolio_value = MagicMock(return_value=100_000.0)
+    manager.get_account_info = MagicMock(return_value={"buying_power": "100000"})
+    manager._is_symbol_tradable = MagicMock(return_value=True)
+    manager._is_symbol_fractionable = MagicMock(
+        side_effect=lambda symbol: symbol == "FRACTIONAL"
+    )
+    manager._get_latest_price = MagicMock(return_value=100.0)
+
+    submitted_orders = []
+
+    def place_orders(orders, account_name):
+        submitted_orders.extend(orders)
+        return [
+            SimpleNamespace(
+                order_id=f"order-{order.symbol}",
+                status="accepted",
+                symbol=order.symbol,
+                quantity=order.quantity,
+                filled_quantity=0.0,
+                side=order.side,
+                order_type=order.order_type,
+                submitted_at=None,
+                filled_at=None,
+                average_fill_price=None,
+            )
+            for order in orders
+        ]
+
+    manager.place_orders_batch = MagicMock(side_effect=place_orders)
+
+    result = manager.execute_portfolio_rebalance(
+        target_weights={"WHOLE": 0.5, "FRACTIONAL": 0.5},
+        account_name="test_acc",
+        market_closed_action="next_open",
+    )
+
+    assert result["orders_placed"] == 2
+    assert result["used_time_in_force"] == "day"
+    assert {order.symbol for order in submitted_orders} == {"WHOLE", "FRACTIONAL"}
+    assert {order.time_in_force for order in submitted_orders} == {"day"}
+
+
+def test_alpaca_manager_rejects_unknown_closed_market_action():
+    from src.trading.alpaca_manager import AlpacaAccount, AlpacaManager
+
+    account = AlpacaAccount(name="test_acc", api_key="key", api_secret="secret")
+    manager = AlpacaManager([account])
+    manager._is_market_open = MagicMock(return_value=False)
+
+    with pytest.raises(ValueError, match="market_closed_action"):
+        manager.execute_portfolio_rebalance(
+            target_weights={},
+            account_name="test_acc",
+            market_closed_action="tomorrowish",
+        )

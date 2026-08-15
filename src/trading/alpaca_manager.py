@@ -403,7 +403,9 @@ class AlpacaManager:
             target_weights: Dictionary of symbol -> target weight
             account_name: Account name (uses current if None)
             dry_run: If True, do not place orders; only return planned orders
-            market_closed_action: Behavior when market is closed: 'skip' (default) or 'opg'
+            market_closed_action: Behavior when market is closed: 'skip' (default),
+                'opg', or 'next_open'. ``next_open`` submits DAY orders that
+                Alpaca queues for the next regular trading session.
 
         Returns:
             Rebalance execution results
@@ -412,11 +414,21 @@ class AlpacaManager:
 
         # Detect market status and decide order TIF
         is_open = self._is_market_open()
+        valid_closed_actions = {'skip', 'opg', 'next_open'}
+        if market_closed_action not in valid_closed_actions:
+            raise ValueError(
+                "market_closed_action must be one of: skip, opg, next_open"
+            )
         use_opg = (not is_open) and (market_closed_action == 'opg')
+        queue_for_next_open = (
+            (not is_open) and (market_closed_action == 'next_open')
+        )
         default_tif = 'opg' if use_opg else 'day'
 
         # Only cancel open orders when we intend to place new ones
-        will_place_orders = (not dry_run) and (is_open or use_opg)
+        will_place_orders = (
+            (not dry_run) and (is_open or use_opg or queue_for_next_open)
+        )
         if will_place_orders:
             try:
                 self.cancel_all_orders(account_name)
@@ -502,8 +514,8 @@ class AlpacaManager:
                 price = None
                 try:
                     price = self._get_latest_price(symbol, account=account)
-                except Exception:
-                    print(f"Failed to get latest price for {symbol}: {e}")
+                except Exception as exc:
+                    print(f"Failed to get latest price for {symbol}: {exc}")
                     price = None
                 if price is None:
                     try:
@@ -736,9 +748,15 @@ class AlpacaManager:
         else:
             raise ValueError("No account specified and no current account set")
 
-    def _api_request(self, method: str, path: str, account: AlpacaAccount = None,
-                    json_body: Optional[Dict] = None, params: Optional[Dict] = None,
-                    timeout: int = 30) -> Any:
+    def _api_request(
+        self,
+        method: str,
+        path: str,
+        account: Optional[AlpacaAccount] = None,
+        json_body: Optional[Dict] = None,
+        params: Optional[Dict] = None,
+        timeout: int = 30,
+    ) -> Any:
         """
         Make API request to Alpaca.
 
@@ -781,9 +799,15 @@ class AlpacaManager:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Request failed: {e}")
 
-    def _api_data_request(self, method: str, path: str, account: AlpacaAccount = None,
-                          json_body: Optional[Dict] = None, params: Optional[Dict] = None,
-                          timeout: int = 10) -> Any:
+    def _api_data_request(
+        self,
+        method: str,
+        path: str,
+        account: Optional[AlpacaAccount] = None,
+        json_body: Optional[Dict] = None,
+        params: Optional[Dict] = None,
+        timeout: int = 10,
+    ) -> Any:
         """Make API request to Alpaca Market Data endpoint.
 
         Uses https://data.alpaca.markets/v2 regardless of trading base_url.
@@ -823,7 +847,9 @@ class AlpacaManager:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Data request failed: {e}")
 
-    def _get_latest_price(self, symbol: str, account: AlpacaAccount = None) -> Optional[float]:
+    def _get_latest_price(
+        self, symbol: str, account: Optional[AlpacaAccount] = None
+    ) -> Optional[float]:
         """Get latest trade/quote-derived price for a symbol from Alpaca Market Data.
 
         Tries trades/latest, then quotes/latest (mid), then bars/latest (close).

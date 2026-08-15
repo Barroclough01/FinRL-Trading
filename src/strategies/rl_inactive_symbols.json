@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-08-15",
+  "policy": "Liquidate at the last cached close, retain proceeds as cash, and preserve the source target weight for drift reporting.",
+  "symbols": {
+    "BK": {
+      "effective_date": "2026-07-03",
+      "last_price_date": "2026-07-02",
+      "reason": "No longer returned as an active Alpaca asset; local price history ends 2026-07-02."
+    },
+    "CTRA": {
+      "effective_date": "2026-05-08",
+      "last_price_date": "2026-05-07",
+      "reason": "Inactive and non-tradable at Alpaca; local price history ends 2026-05-07."
+    },
+    "DAY": {
+      "effective_date": "2025-08-30",
+      "last_price_date": null,
+      "reason": "Inactive and non-tradable at Alpaca; no local price history is available."
+    },
+    "EA": {
+      "effective_date": "2026-08-11",
+      "last_price_date": "2026-08-10",
+      "reason": "Inactive and non-tradable at Alpaca; local price history ends 2026-08-10."
+    }
+  }
+}

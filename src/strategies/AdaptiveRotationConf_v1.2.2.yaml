@@ -43,10 +43,10 @@ asset_groups:
   group_a_growth_tech:
     max_assets: 2
     symbols:
-      - SATS
+      - WDAY
       - MCHP
+      - HPQ
       - "ON"
-      - ORCL
       - TXN
 
   group_b_cyclical:
@@ -54,27 +54,27 @@ asset_groups:
     symbols:
       - IVZ
       - ODFL
-      - MAS
       - TROW
+      - MAS
       - HON
 
   group_c_real_assets:
     max_assets: 2
     symbols:
-      - LYB
-      - FCX
       - ALB
-      - DOW
+      - LYB
+      - NEM
+      - HAL
       - SLB
 
   group_d_defensive:
     max_assets: 2
     symbols:
-      - ADM
       - INCY
-      - DVA
       - UHS
+      - DVA
       - ZTS
+      - WMT
 
 # -----------------------
 # Market Regime (Slow)
