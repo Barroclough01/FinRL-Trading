@@ -21,10 +21,11 @@ Usage:
 import argparse
 import json
 import logging
+import math
 import os
 import sqlite3
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 project_root = os.path.abspath(os.path.dirname(__file__))
@@ -35,8 +36,6 @@ if project_root not in sys.path:
 from dotenv import load_dotenv
 
 load_dotenv()
-
-import yfinance as yf
 
 Path("logs").mkdir(exist_ok=True)
 logging.basicConfig(
@@ -49,6 +48,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = Path("data/finrl_trading.db")
 DASHBOARD_PATH = Path("logs/dashboard.html")
 STARTING_CAPITAL = 1_000_000.0  # Alpaca paper account starting value
+BENCHMARK_DATA_DIR = Path("data/fmp_daily")
 
 
 # ---------------------------------------------------------------------------
@@ -169,41 +169,53 @@ def get_alpaca_snapshot(account: dict) -> dict:
     }
 
 
-def fetch_benchmark_prices(as_of: date) -> dict:
-    """Fetch SPY and QQQ close prices for the given date (and prior week)."""
-    start = (as_of - timedelta(days=10)).strftime("%Y-%m-%d")
-    end = (as_of + timedelta(days=1)).strftime("%Y-%m-%d")
+def fetch_benchmark_prices(
+    as_of: date, data_dir: Path = BENCHMARK_DATA_DIR
+) -> dict:
+    """Load finite SPY and QQQ closes from the freshness-gated local cache."""
+    import pandas as pd
 
-    df = yf.download(
-        ["SPY", "QQQ"], start=start, end=end, auto_adjust=True, progress=False
-    )
+    from refresh_fmp_daily import latest_trading_day_on_or_before
 
-    if df.empty:
-        return {}
+    expected_date = latest_trading_day_on_or_before(as_of)
+    closes = None
+    for symbol in ("SPY", "QQQ"):
+        path = data_dir / f"{symbol}_daily.csv"
+        if not path.exists():
+            raise ValueError(f"Benchmark price file is missing: {path}")
 
-    close = df["Close"] if "Close" in df else df
-    close.index = close.index.date
+        frame = pd.read_csv(  # ty: ignore[no-matching-overload]
+            path, usecols=["date", "close"]
+        )
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.date
+        frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+        frame = frame[frame["date"] <= expected_date].rename(
+            columns={"close": symbol}
+        )
+        symbol_closes = frame[["date", symbol]]
+        closes = (
+            symbol_closes
+            if closes is None
+            else closes.merge(symbol_closes, on="date", how="inner")
+        )
 
-    # Get the most recent available date up to as_of
-    available = [d for d in close.index if d <= as_of]
-    if not available:
-        return {}
+    if closes is None:
+        raise ValueError("No benchmark price data was loaded")
 
-    latest = max(available)
-    prev = max([d for d in available if d < latest], default=None)
+    finite_mask = closes[["SPY", "QQQ"]].map(math.isfinite).all(axis=1)
+    closes = closes[finite_mask].sort_values("date")
+    if closes.empty or closes.iloc[-1]["date"] != expected_date:
+        raise ValueError(
+            "No finite shared SPY/QQQ close is available for "
+            f"expected session {expected_date}"
+        )
 
+    latest = closes.iloc[-1]
     result = {
-        "date": latest,
-        "spy_close": float(close.loc[latest, "SPY"]),
-        "qqq_close": float(close.loc[latest, "QQQ"]),
+        "date": expected_date,
+        "spy_close": float(latest["SPY"]),
+        "qqq_close": float(latest["QQQ"]),
     }
-    if prev:
-        result["spy_prev"] = float(close.loc[prev, "SPY"])
-        result["qqq_prev"] = float(close.loc[prev, "QQQ"])
-        result["spy_weekly_return"] = (
-            result["spy_close"] - result["spy_prev"]
-        ) / result["spy_prev"]
-
     return result
 
 
@@ -246,11 +258,28 @@ def record_snapshot(
     else:
         cumulative_return = 0.0  # first snapshot
 
-    spy_weekly_return = benchmark.get("spy_weekly_return", None)
+    spy_weekly_return = None
+    benchmark_date = str(benchmark["date"]) if benchmark.get("date") else None
+    if benchmark_date and benchmark.get("spy_close") is not None:
+        previous_spy = conn.execute(
+            """
+            SELECT spy_close
+            FROM benchmark_prices
+            WHERE price_date < ? AND spy_close IS NOT NULL
+            ORDER BY price_date DESC
+            LIMIT 1
+            """,
+            (benchmark_date,),
+        ).fetchone()
+        if previous_spy and previous_spy[0]:
+            spy_weekly_return = (
+                benchmark["spy_close"] - previous_spy[0]
+            ) / previous_spy[0]
 
     # SPY cumulative: first benchmark entry
     first_spy = conn.execute(
-        "SELECT spy_close FROM benchmark_prices ORDER BY price_date ASC LIMIT 1"
+        "SELECT spy_close FROM benchmark_prices "
+        "WHERE spy_close IS NOT NULL ORDER BY price_date ASC LIMIT 1"
     ).fetchone()
     spy_cum = None
     if first_spy and benchmark.get("spy_close"):
@@ -312,7 +341,7 @@ def record_snapshot(
             VALUES (?,?,?)
         """,
             (
-                str(benchmark["date"]),
+                benchmark_date,
                 benchmark["spy_close"],
                 benchmark.get("qqq_close"),
             ),
@@ -918,7 +947,10 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
 
     # Also build QQQ return series from benchmark_prices
     qqq_prices = conn.execute("""
-        SELECT price_date, qqq_close FROM benchmark_prices ORDER BY price_date ASC
+        SELECT price_date, qqq_close
+        FROM benchmark_prices
+        WHERE qqq_close IS NOT NULL
+        ORDER BY price_date ASC
     """).fetchall()
 
     qqq_returns = {}
@@ -926,6 +958,10 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         for i in range(1, len(qqq_prices)):
             d1, p1 = qqq_prices[i]
             d0, p0 = qqq_prices[i - 1]
+            if not all(
+                value is not None and math.isfinite(value) for value in (p0, p1)
+            ):
+                continue
             ret = (p1 - p0) / p0 if p0 else 0.0
 
             # Map d1 to closest date in dates
@@ -1164,6 +1200,7 @@ def save_comparison_metrics(metrics: dict, run_date: str) -> None:
         logger.info(f"Saved comparison metrics JSON to {json_path}")
     except Exception as e:
         logger.error(f"Failed to save comparison metrics JSON: {e}", exc_info=True)
+        raise
 
     # 2. Save CSV
     csv_path = Path("logs/comparison_metrics_latest.csv")
@@ -1213,6 +1250,7 @@ def save_comparison_metrics(metrics: dict, run_date: str) -> None:
         logger.info(f"Saved comparison metrics CSV to {csv_path}")
     except Exception as e:
         logger.error(f"Failed to save comparison metrics CSV: {e}", exc_info=True)
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -1280,16 +1318,22 @@ def main():
     generate_html_dashboard(conn, DASHBOARD_PATH)
 
     # Calculate and save weekly comparison metrics side-by-side
+    comparison_error = None
     try:
         logger.info("Calculating weekly comparison metrics...")
         metrics = calculate_comparison_metrics(conn, args.date)
         save_comparison_metrics(metrics, args.date)
     except Exception as e:
+        comparison_error = str(e)
         logger.error(
             f"Failed to calculate and save comparison metrics: {e}", exc_info=True
         )
 
     conn.close()
+
+    if comparison_error:
+        logger.error("Comparison metrics generation failed: %s", comparison_error)
+        sys.exit(1)
 
     if not args.report_only and failed_accounts:
         logger.error(

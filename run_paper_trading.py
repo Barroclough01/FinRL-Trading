@@ -290,6 +290,16 @@ def allows_cash_fallback(config_path: str) -> bool:
     return bool(fallback and fallback.enabled and not fallback.symbols)
 
 
+def resolve_run_date(requested_date: str | None, *, today: date | None = None) -> str:
+    """Resolve an automatic run to the latest NYSE session date."""
+    if requested_date:
+        return date.fromisoformat(requested_date).isoformat()
+
+    from refresh_fmp_daily import latest_trading_day_on_or_before
+
+    return latest_trading_day_on_or_before(today or date.today()).isoformat()
+
+
 def validate_pre_trade(
     account: dict,
     run_date: str,
@@ -303,6 +313,9 @@ def validate_pre_trade(
     Returns (is_valid, failed_rule, error_message, suggested_fix).
     """
     run_date_parsed = pd.to_datetime(run_date).date()
+    from refresh_fmp_daily import latest_trading_day_on_or_before
+
+    expected_price_date = latest_trading_day_on_or_before(run_date_parsed)
 
     # 1. target weights are nonempty unless an explicit cash fallback applies.
     if not target_weights and not allow_cash_target:
@@ -378,11 +391,12 @@ def validate_pre_trade(
                     )
                 last_date_str = df["date"].iloc[-1]
                 last_date = pd.to_datetime(last_date_str).date()
-                if (run_date_parsed - last_date).days > 10:
+                if last_date < expected_price_date:
                     return (
                         False,
                         "all required symbol prices are fresh",
-                        f"Price data for {sym} is stale. Last date: {last_date_str}, Run date: {run_date}",
+                        f"Price data for {sym} is stale. Last date: {last_date_str}, "
+                        f"expected: {expected_price_date}",
                         f"Run data refresh for {sym}.",
                     )
             except Exception as e:
@@ -414,11 +428,12 @@ def validate_pre_trade(
                 )
             last_date_str = df["date"].iloc[-1]
             last_date = pd.to_datetime(last_date_str).date()
-            if (run_date_parsed - last_date).days > 10:
+            if last_date < expected_price_date:
                 return (
                     False,
                     "SPY and QQQ benchmark data are present",
-                    f"Benchmark data for {bench} is stale. Last date: {last_date_str}",
+                    f"Benchmark data for {bench} is stale. Last date: "
+                    f"{last_date_str}, expected: {expected_price_date}",
                     f"Run data refresh for {bench}.",
                 )
         except Exception as e:
@@ -1532,7 +1547,9 @@ def main():
         description="Run AR paper trading (single or multi-account)"
     )
     parser.add_argument(
-        "--date", default=date.today().isoformat(), help="Trading date (default: today)"
+        "--date",
+        default=None,
+        help="Trading date (default: latest NYSE session)",
     )
     parser.add_argument(
         "--account",
@@ -1551,6 +1568,7 @@ def main():
         "(default: PAPER_TRADING_WEBHOOK_URL env)",
     )
     args = parser.parse_args()
+    args.date = resolve_run_date(args.date)
 
     # Check Production Kill Switch
     trading_disabled_env = os.getenv("TRADING_DISABLED", "false").lower() == "true"

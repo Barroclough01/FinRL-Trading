@@ -4,8 +4,8 @@ refresh_fmp_daily.py
 Weekly refresh of fmp_daily/ OHLCV CSVs for all symbols in the Adaptive Rotation YAML.
 
 - Reads symbol list from AR YAML config (all asset_groups)
-- Checks if today is a valid US trading day (skips silently if not)
-- For each symbol, appends any missing trading days up to today from FMP API
+- Resolves weekends/holidays to the latest US trading session on or before today
+- For each symbol, appends any missing trading days through that session
 - Idempotent: safe to run multiple times — will not duplicate rows
 - Logs a summary of what was updated / skipped / failed
 
@@ -14,7 +14,7 @@ Usage:
 
     --config   Path to AR YAML (default: AdaptiveRotationConf_v1.2.2.yaml)
     --dry-run  Show what would be fetched without writing anything
-    --force    Skip market calendar check and run regardless of day
+    --force    Explicitly run on a non-trading day (same catch-up target)
 """
 
 import argparse
@@ -103,6 +103,11 @@ def latest_trading_day_on_or_before(check_date: date) -> date:
     if schedule.empty:
         raise ValueError(f"No NYSE trading session found on or before {check_date}")
     return schedule.index[-1].date()
+
+
+def get_refresh_target_date(check_date: date) -> date:
+    """Return the latest NYSE session on or before the supplied date."""
+    return latest_trading_day_on_or_before(check_date)
 
 
 def empty_fetch_is_stale(
@@ -260,18 +265,19 @@ def main():
     args = parser.parse_args()
 
     today = date.today()
-    expected_latest_date = latest_trading_day_on_or_before(today)
+    target_date = get_refresh_target_date(today)
     mode = " [DRY RUN]" if args.dry_run else ""
     print(f"=== refresh_fmp_daily.py  [{today}]{mode} ===\n")
 
-    # --- Market calendar check ---
-    if not args.force:
-        if not is_trading_day(today):
-            print(f"Today ({today}) is not a NYSE trading day. Nothing to do.")
-            print("Use --force to override.")
-            sys.exit(0)
-    else:
-        print("--force: skipping market calendar check\n")
+    # A missed Friday task may start when the computer next becomes available.
+    # Catch up through Friday instead of treating a weekend start as a no-op.
+    if not is_trading_day(today):
+        print(
+            f"Today ({today}) is not a NYSE trading day; "
+            f"refreshing through {target_date}.\n"
+        )
+    elif args.force:
+        print("--force: refreshing the current trading session\n")
 
     # --- Load symbols from all configs ---
     # If no --config flags passed, auto-discover from APCA_ACCOUNTS env
@@ -348,9 +354,9 @@ def main():
 
         if last_date is None:
             # New ticker — fetch full history (5 years back)
-            from_date = today - timedelta(days=5 * 365)
+            from_date = target_date - timedelta(days=5 * 365)
             status_prefix = "[NEW]"
-        elif last_date >= today:
+        elif last_date >= target_date:
             print(f"  {ticker:6s} — already up to date (last: {last_date})")
             results["up_to_date"].append(ticker)
             continue
@@ -359,18 +365,20 @@ def main():
             status_prefix = "[UPD]"
 
         print(
-            f"  {ticker:6s} — fetching {from_date} → {today} ...", end=" ", flush=True
+            f"  {ticker:6s} — fetching {from_date} → {target_date} ...",
+            end=" ",
+            flush=True,
         )
 
         try:
-            new_rows = fetch_fmp_daily(ticker, from_date, today, api_key)
+            new_rows = fetch_fmp_daily(ticker, from_date, target_date, api_key)
 
             if new_rows.empty:
-                if empty_fetch_is_stale(last_date, expected_latest_date):
+                if empty_fetch_is_stale(last_date, target_date):
                     message = (
                         "No data returned while local history is stale "
                         f"(last: {last_date or 'missing'}, expected: "
-                        f"{expected_latest_date})"
+                        f"{target_date})"
                     )
                     severity = stale_data_severity(ticker, required_symbols)
                     if severity == "failed":
@@ -434,7 +442,7 @@ def main():
 
     # --- Summary ---
     print(f"\n{'=' * 50}")
-    print(f"Summary for {today}:")
+    print(f"Summary through {target_date}:")
     print(f"  New files created : {len(results['new_file'])}  {results['new_file']}")
     print(f"  Updated           : {len(results['updated'])}  {results['updated']}")
     print(f"  Already up to date: {len(results['up_to_date'])}")

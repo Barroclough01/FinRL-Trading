@@ -73,6 +73,22 @@ def test_latest_trading_day_uses_previous_session_on_weekend():
     assert latest_trading_day_on_or_before(date(2026, 8, 15)) == date(2026, 8, 14)
 
 
+def test_default_paper_run_uses_latest_session_on_weekend():
+    from run_paper_trading import resolve_run_date
+
+    assert resolve_run_date(None, today=date(2026, 8, 29)) == "2026-08-28"
+    assert (
+        resolve_run_date("2026-08-29", today=date(2026, 8, 29))
+        == "2026-08-29"
+    )
+
+
+def test_weekend_refresh_targets_latest_completed_session():
+    from refresh_fmp_daily import get_refresh_target_date
+
+    assert get_refresh_target_date(date(2026, 8, 29)) == date(2026, 8, 28)
+
+
 def test_stale_data_is_fatal_only_for_live_comparison_inputs():
     required = {"SPY", "QQQ", "AAPL"}
 
@@ -411,6 +427,34 @@ def test_stale_prices_fail_validation(
     assert "stale" in error_msg
 
 
+@patch("pathlib.Path.exists")
+@patch("pandas.read_csv")
+@patch("src.data.trading_calendar.is_trading_day")
+def test_previous_week_prices_fail_friday_validation(
+    mock_is_trading_day, mock_read_csv, mock_path_exists
+):
+    """A one-week-old close must not pass merely because it is under ten days old."""
+    account = {"name": "test_acc", "config": "dummy_config.yaml"}
+    executor = MagicMock()
+    executor.alpaca.get_account_info.return_value = {
+        "cash": 100000,
+        "equity": 100000,
+    }
+    mock_is_trading_day.return_value = True
+    mock_path_exists.return_value = True
+    mock_read_csv.return_value = pd.DataFrame(
+        {"date": ["2026-08-21"], "close": [150.0]}
+    )
+
+    valid, failed_rule, error_msg, _ = validate_pre_trade(
+        account, "2026-08-28", {"AAPL": 0.4}, executor
+    )
+
+    assert not valid
+    assert failed_rule == "all required symbol prices are fresh"
+    assert "expected: 2026-08-28" in error_msg
+
+
 @patch("track_metrics.load_accounts_from_env")
 @patch("track_metrics.get_alpaca_snapshot")
 @patch("track_metrics.fetch_benchmark_prices")
@@ -427,6 +471,64 @@ def test_metrics_fail_when_account_snapshot_fails(
         with patch("sys.exit") as mock_exit:
             track_metrics.main()
             mock_exit.assert_called_once_with(1)
+
+
+def test_benchmark_fetch_uses_finite_local_shared_closes(tmp_path):
+    for symbol, closes in {
+        "SPY": [("2026-08-27", 760.0), ("2026-08-28", 765.0)],
+        "QQQ": [("2026-08-27", 700.0), ("2026-08-28", 693.0)],
+    }.items():
+        pd.DataFrame(closes, columns=["date", "close"]).to_csv(
+            tmp_path / f"{symbol}_daily.csv", index=False
+        )
+
+    benchmark = track_metrics.fetch_benchmark_prices(
+        date(2026, 8, 29), data_dir=tmp_path
+    )
+
+    assert benchmark["date"] == date(2026, 8, 28)
+    assert benchmark["spy_close"] == 765.0
+    assert benchmark["qqq_close"] == 693.0
+
+
+def test_benchmark_fetch_rejects_nonfinite_local_close(tmp_path):
+    pd.DataFrame(
+        [("2026-08-28", float("nan"))], columns=["date", "close"]
+    ).to_csv(tmp_path / "SPY_daily.csv", index=False)
+    pd.DataFrame(
+        [("2026-08-28", 693.0)], columns=["date", "close"]
+    ).to_csv(tmp_path / "QQQ_daily.csv", index=False)
+
+    with pytest.raises(ValueError, match="finite shared SPY/QQQ"):
+        track_metrics.fetch_benchmark_prices(date(2026, 8, 29), data_dir=tmp_path)
+
+
+@patch("track_metrics.calculate_comparison_metrics", side_effect=TypeError("bad benchmark"))
+@patch("track_metrics.generate_html_dashboard")
+@patch("track_metrics.print_cli_report")
+@patch("track_metrics.sqlite3.connect")
+def test_metrics_exit_nonzero_when_comparison_generation_fails(
+    mock_connect, _mock_report, _mock_dashboard, _mock_calculate
+):
+    mock_connect.return_value = MagicMock()
+
+    with (
+        patch("sys.argv", ["track_metrics.py", "--report-only"]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        track_metrics.main()
+
+    assert exc_info.value.code == 1
+
+
+def test_comparison_metrics_write_failure_is_not_swallowed():
+    with (
+        patch("builtins.open", side_effect=OSError("disk full")),
+        pytest.raises(OSError, match="disk full"),
+    ):
+        track_metrics.save_comparison_metrics(
+            {"accounts": {}, "benchmarks": {}}, "2026-08-28"
+        )
 
 
 @patch("sqlite3.connect")
@@ -712,6 +814,39 @@ def test_snapshot_preserves_target_and_actual_weights(tmp_path):
     assert rows == [("AAPL", 0.5, 0.5), ("MSFT", 0.5, 0.0)]
 
 
+def test_snapshot_benchmark_return_uses_previous_observation(tmp_path):
+    database = sqlite3.connect(tmp_path / "metrics.db")
+    track_metrics.init_db(database)
+    database.execute(
+        "INSERT INTO benchmark_prices (price_date, spy_close, qqq_close) "
+        "VALUES ('2026-08-21', 760.0, 700.0)"
+    )
+    account = {"name": "AR", "config": "baseline.yaml"}
+    alpaca = {
+        "portfolio_value": 1_000.0,
+        "cash": 100.0,
+        "equity": 1_000.0,
+        "positions": [],
+    }
+
+    track_metrics.record_snapshot(
+        database,
+        "2026-08-28",
+        account,
+        alpaca,
+        {"date": date(2026, 8, 28), "spy_close": 775.2, "qqq_close": 693.0},
+        {},
+    )
+
+    spy_return = database.execute(
+        "SELECT spy_weekly_return FROM weekly_snapshot "
+        "WHERE snapshot_date='2026-08-28' AND account='AR'"
+    ).fetchone()[0]
+    database.close()
+
+    assert spy_return == pytest.approx(0.02)
+
+
 def test_weekly_comparison_metrics(tmp_path):
     """Test that weekly comparison metrics can be calculated and saved correctly."""
     from track_metrics import calculate_comparison_metrics, save_comparison_metrics
@@ -765,6 +900,8 @@ def test_weekly_comparison_metrics(tmp_path):
 
     # Insert benchmark prices (for QQQ returns calculation)
     conn.execute("INSERT INTO benchmark_prices VALUES ('2026-05-14', 400.0, 300.0)")
+    # Preserve a historical bad row to prove metrics ignore missing closes.
+    conn.execute("INSERT INTO benchmark_prices VALUES ('2026-05-18', NULL, NULL)")
     conn.execute("INSERT INTO benchmark_prices VALUES ('2026-05-22', 402.4, 303.0)")
 
     conn.commit()

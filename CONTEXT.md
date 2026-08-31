@@ -186,6 +186,10 @@ cd C:\Users\paxto\stock-trading\qlib
 4. **Friday or weekend**: `explorer.exe logs/dashboard.html` to view updated performance dashboard
 5. **Quarterly (~July 2026)**: re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py` → download any new symbols
 
+If Windows starts the missed task on Saturday or Sunday, the refresh and
+automatic run date resolve to Friday's latest NYSE session. A stale Friday
+close or failed comparison-metrics build now returns a nonzero scheduler result.
+
 ## Current Roadmap Phase
 
 Paper shadow-trading / evidence collection (see `docs/paper_to_production_roadmap.md`).
