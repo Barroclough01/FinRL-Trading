@@ -9,6 +9,7 @@ from src.strategies.ml_bucket_selection import write_optional_excel_dashboard
 from track_rl_offline import (
     OfflinePortfolio,
     apply_inactive_symbol_policy,
+    get_fresh_price_on_date,
     record_rl_snapshot,
 )
 
@@ -50,6 +51,48 @@ def test_inactive_holding_without_cached_price_fails_safely():
 
     assert portfolio.positions["DAY"] == 10.0
     assert portfolio.cash == 100.0
+
+
+def test_active_symbol_with_stale_cached_price_fails_safely():
+    stale_prices = pd.DataFrame(
+        [{"date": pd.Timestamp("2026-08-24"), "close": 68.14}]
+    )
+
+    with (
+        patch("track_rl_offline.load_price_data", return_value=stale_prices),
+        pytest.raises(RuntimeError, match=r"AVB.*last close 2026-08-24.*2026-09-04"),
+    ):
+        get_fresh_price_on_date("AVB", "2026-09-04")
+
+
+def test_active_symbol_accepts_latest_session_on_weekend():
+    friday_prices = pd.DataFrame(
+        [{"date": pd.Timestamp("2026-08-14"), "close": 100.0}]
+    )
+
+    with patch("track_rl_offline.load_price_data", return_value=friday_prices):
+        assert get_fresh_price_on_date("AAPL", "2026-08-15") == 100.0
+
+
+def test_avb_policy_liquidates_at_last_verified_close_after_cutoff():
+    portfolio = OfflinePortfolio(100.0, tx_cost_bps=0, slippage_bps=0)
+    portfolio.positions["AVB"] = 10.0
+    policy = {
+        "AVB": {
+            "effective_date": "2026-08-25",
+            "last_price_date": "2026-08-24",
+            "reason": "verified inactive",
+        }
+    }
+
+    with patch("track_rl_offline.get_price_on_date", return_value=68.14):
+        targets, events = apply_inactive_symbol_policy(
+            portfolio, {"AVB": 0.1, "AAPL": 0.9}, "2026-08-29", policy
+        )
+
+    assert targets == {"AAPL": 0.9}
+    assert portfolio.cash == pytest.approx(781.4)
+    assert events[0]["liquidation_price"] == pytest.approx(68.14)
 
 
 def test_inactive_source_target_is_preserved_as_zero_actual_weight(tmp_path):

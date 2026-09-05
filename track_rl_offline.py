@@ -30,6 +30,8 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
+from refresh_fmp_daily import latest_trading_day_on_or_before
+
 project_root = os.path.abspath(os.path.dirname(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -71,11 +73,44 @@ def load_price_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame
 
 
 def get_price_on_date(symbol: str, target_date: str) -> float:
-    """Get close price for symbol on or before target_date."""
+    """Get the last cached close on or before target_date.
+
+    This intentionally permits an older close for verified inactive-symbol
+    liquidation. Active holdings and targets must use get_fresh_price_on_date.
+    """
     df = load_price_data(symbol, "2020-01-01", target_date)
     if df.empty:
         return 0.0
     return float(df.iloc[-1]["close"])
+
+
+def get_fresh_price_on_date(symbol: str, target_date: str) -> float:
+    """Get an active symbol's close, failing on a stale cache endpoint."""
+    cached_df = load_price_data(symbol, "2020-01-01", "2100-01-01")
+    expected_date = latest_trading_day_on_or_before(date.fromisoformat(target_date))
+    if cached_df.empty:
+        raise RuntimeError(
+            f"Active RL symbol {symbol} has no cached price through "
+            f"expected NYSE session {expected_date}. Refresh its history or add "
+            "a verified inactive-symbol policy entry."
+        )
+    eligible_df = cached_df[cached_df["date"] <= target_date]
+    if eligible_df.empty:
+        raise RuntimeError(
+            f"Active RL symbol {symbol} has no cached price through "
+            f"expected NYSE session {expected_date}. Refresh its history or add "
+            "a verified inactive-symbol policy entry."
+        )
+
+    last_price_date = eligible_df.iloc[-1]["date"].date()
+    cache_end_date = cached_df.iloc[-1]["date"].date()
+    if cache_end_date <= expected_date and last_price_date < expected_date:
+        raise RuntimeError(
+            f"Active RL symbol {symbol} has stale cached price data: last close "
+            f"{last_price_date}, expected NYSE session {expected_date}. Refresh "
+            "its history or add a verified inactive-symbol policy entry."
+        )
+    return float(eligible_df.iloc[-1]["close"])
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +536,7 @@ def simulate_rl_tracking(
 
     # Get current prices for all symbols
     all_symbols = set(target_weights.keys()) | set(portfolio.positions.keys())
-    prices = {sym: get_price_on_date(sym, snapshot_date) for sym in all_symbols}
+    prices = {sym: get_fresh_price_on_date(sym, snapshot_date) for sym in all_symbols}
 
     # Rebalance portfolio
     portfolio.rebalance(target_weights, prices)

@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-08-15",
+  "checked_at": "2026-09-05",
   "policy": "Liquidate at the last cached close, retain proceeds as cash, and preserve the source target weight for drift reporting.",
   "symbols": {
     "BK": {
@@ -21,6 +21,11 @@
       "effective_date": "2026-08-11",
       "last_price_date": "2026-08-10",
       "reason": "Inactive and non-tradable at Alpaca; local price history ends 2026-08-10."
+    },
+    "AVB": {
+      "effective_date": "2026-08-25",
+      "last_price_date": "2026-08-24",
+      "reason": "Inactive and non-tradable at Alpaca as checked 2026-09-05; local price history ends 2026-08-24. The effective date is the first day after the last verified cached close, not an asserted corporate-action date."
     }
   }
 }

@@ -1244,6 +1244,7 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
                 post_trade_positions   TEXT,
                 equity                 REAL,
                 submitted_orders       TEXT,
+                created_at             TEXT,
                 parity_check           TEXT
         );
         CREATE TABLE IF NOT EXISTS weekly_weights (
@@ -1254,32 +1255,52 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
             target_weight REAL,
             actual_weight REAL
         );
+        CREATE TABLE IF NOT EXISTS weekly_snapshot (
+            snapshot_date TEXT NOT NULL,
+            account TEXT NOT NULL,
+            positions_json TEXT,
+            created_at TEXT
+        );
     """)
 
     # Case 1: Perfect parity
     conn.execute(
         "INSERT INTO strategy_decisions (run_date, account_name, target_weights, post_trade_positions, equity) "
         "VALUES ('2026-05-31', 'perfect_acc', '{\"AAPL\": 0.5, \"MSFT\": 0.5}', "
-        '\'[{"symbol": "AAPL", "market_value": 50000.0}, {"symbol": "MSFT", "market_value": 50000.0}]\', 100000.0)'
+        '\'[{"symbol": "AAPL", "qty": 100.0, "market_value": 50000.0}, {"symbol": "MSFT", "qty": 50.0, "market_value": 50000.0}]\', 100000.0)'
     )
     conn.execute(
-        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'AAPL', 0.5, 0.5)"
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'AAPL', 0.5, 0.49)"
     )
     conn.execute(
-        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'MSFT', 0.5, 0.5)"
+        "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'perfect_acc', 'MSFT', 0.5, 0.51)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot (snapshot_date, account, positions_json, created_at) "
+        "VALUES ('2026-05-31', 'perfect_acc', "
+        "'[{\"symbol\": \"AAPL\", \"qty\": 100.0, \"market_value\": 49000.0}, "
+        "{\"symbol\": \"MSFT\", \"qty\": 50.0, \"market_value\": 51000.0}]', "
+        "'2026-05-31 22:31:00')"
     )
 
     # Case 2: Determinism mismatch
     conn.execute(
         "INSERT INTO strategy_decisions (run_date, account_name, target_weights, post_trade_positions, equity) "
         "VALUES ('2026-05-31', 'mismatch_acc', '{\"AAPL\": 0.5, \"MSFT\": 0.5}', "
-        '\'[{"symbol": "AAPL", "market_value": 50000.0}, {"symbol": "MSFT", "market_value": 50000.0}]\', 100000.0)'
+        '\'[{"symbol": "AAPL", "qty": 100.0, "market_value": 50000.0}, {"symbol": "MSFT", "qty": 50.0, "market_value": 50000.0}]\', 100000.0)'
     )
     conn.execute(
         "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'mismatch_acc', 'AAPL', 0.5, 0.5)"
     )
     conn.execute(
         "INSERT INTO weekly_weights (snapshot_date, account, symbol, target_weight, actual_weight) VALUES ('2026-05-31', 'mismatch_acc', 'MSFT', 0.5, 0.5)"
+    )
+    conn.execute(
+        "INSERT INTO weekly_snapshot (snapshot_date, account, positions_json, created_at) "
+        "VALUES ('2026-05-31', 'mismatch_acc', "
+        "'[{\"symbol\": \"AAPL\", \"qty\": 99.0, \"market_value\": 50000.0}, "
+        "{\"symbol\": \"MSFT\", \"qty\": 50.0, \"market_value\": 50000.0}]', "
+        "'2026-05-31 22:31:00')"
     )
 
     conn.commit()
@@ -1330,7 +1351,15 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
         assert "mismatch_acc" in report_data["accounts"]
 
         assert report_data["accounts"]["perfect_acc"]["reconciled_successfully"]
+        assert report_data["accounts"]["perfect_acc"]["dashboard_ok"]
+        assert (
+            report_data["accounts"]["perfect_acc"]["metrics"][
+                "actual_vs_dashboard_actual_mae"
+            ]
+            > 0
+        )
         assert not report_data["accounts"]["mismatch_acc"]["reconciled_successfully"]
+        assert not report_data["accounts"]["mismatch_acc"]["dashboard_ok"]
         assert (
             "Determinism mismatch"
             in report_data["accounts"]["mismatch_acc"]["mismatches"][0]

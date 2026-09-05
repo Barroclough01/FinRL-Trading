@@ -1326,6 +1326,9 @@ def run_parity_checks(
         # remain open here, so this is evidence of execution progress rather
         # than a final filled portfolio.
         filled_weights = {}
+        decision_positions = []
+        decision_positions_loaded = False
+        decision_created_at = None
         execution_ok = True
         execution_pending = False
         submitted_orders = []
@@ -1335,13 +1338,17 @@ def run_parity_checks(
                 if db_path.exists():
                     conn = sqlite3.connect(db_path)
                     row = conn.execute(
-                        "SELECT post_trade_positions, equity, submitted_orders "
+                        "SELECT post_trade_positions, equity, submitted_orders, "
+                        "created_at "
                         "FROM strategy_decisions "
                         "WHERE run_date = ? AND account_name = ?",
                         (run_date, name),
                     ).fetchone()
                     if row and row[0]:
                         post_trade_positions = json.loads(row[0])
+                        decision_positions = post_trade_positions
+                        decision_positions_loaded = True
+                        decision_created_at = row[3]
                         try:
                             equity = float(row[1]) if row[1] not in (None, "") else 0.0
                         except (TypeError, ValueError):
@@ -1400,9 +1407,14 @@ def run_parity_checks(
         # 4. Get dashboard weights
         dashboard_target_weights = {}
         dashboard_actual_weights = {}
+        dashboard_positions = []
+        dashboard_positions_loaded = False
+        dashboard_created_at = None
         dashboard_ok = True
+        position_quantities_ok = True
         submitted_vs_dashboard_target_mae = 0.0
         actual_vs_dashboard_actual_mae = 0.0
+        position_quantity_mae = 0.0
         if not dry_run:
             try:
                 if db_path.exists():
@@ -1419,6 +1431,15 @@ def run_parity_checks(
                         dashboard_actual_weights[sym] = (
                             act_w if act_w is not None else 0.0
                         )
+                    snapshot_row = conn.execute(
+                        "SELECT positions_json, created_at FROM weekly_snapshot "
+                        "WHERE snapshot_date = ? AND account = ?",
+                        (run_date, name),
+                    ).fetchone()
+                    if snapshot_row and snapshot_row[0]:
+                        dashboard_positions = json.loads(snapshot_row[0])
+                        dashboard_created_at = snapshot_row[1]
+                        dashboard_positions_loaded = True
                     conn.close()
 
                 if dashboard_target_weights or dashboard_actual_weights:
@@ -1444,11 +1465,53 @@ def run_parity_checks(
                         fil_w = filled_weights.get(sym, 0.0)
                         dash_act_w = dashboard_actual_weights.get(sym, 0.0)
                         diffs_act.append(abs(fil_w - dash_act_w))
-                        if abs(fil_w - dash_act_w) > 1e-5:
-                            dashboard_ok = False
                     actual_vs_dashboard_actual_mae = (
                         float(sum(diffs_act) / len(diffs_act)) if diffs_act else 0.0
                     )
+
+                    try:
+                        decision_quantities = {
+                            str(pos["symbol"]): float(pos["qty"])
+                            for pos in decision_positions
+                        }
+                        dashboard_quantities = {
+                            str(pos["symbol"]): float(pos["qty"])
+                            for pos in dashboard_positions
+                        }
+                        all_position_syms = set(decision_quantities) | set(
+                            dashboard_quantities
+                        )
+                        quantity_diffs = [
+                            abs(
+                                decision_quantities.get(sym, 0.0)
+                                - dashboard_quantities.get(sym, 0.0)
+                            )
+                            for sym in all_position_syms
+                        ]
+                        position_quantity_mae = (
+                            float(sum(quantity_diffs) / len(quantity_diffs))
+                            if quantity_diffs
+                            else 0.0
+                        )
+                        position_quantities_ok = (
+                            dashboard_positions_loaded
+                            and decision_positions_loaded
+                            and set(decision_quantities) == set(dashboard_quantities)
+                            and all(
+                                math.isclose(
+                                    decision_quantities[sym],
+                                    dashboard_quantities[sym],
+                                    rel_tol=1e-9,
+                                    abs_tol=1e-8,
+                                )
+                                for sym in decision_quantities
+                            )
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        position_quantities_ok = False
+
+                    if not position_quantities_ok:
+                        dashboard_ok = False
                 else:
                     dashboard_ok = False
             except Exception as e:
@@ -1471,7 +1534,8 @@ def run_parity_checks(
             )
         if not dashboard_ok and not dry_run:
             mismatches.append(
-                "Dashboard database mismatch (submitted/actual vs weekly_weights table)"
+                "Dashboard database mismatch (submitted targets or persisted "
+                "position quantities differ)"
             )
 
         reconciled_successfully = len(mismatches) == 0
@@ -1488,6 +1552,7 @@ def run_parity_checks(
                 "submitted_vs_actual_mae": submitted_vs_actual_mae,
                 "submitted_vs_dashboard_target_mae": submitted_vs_dashboard_target_mae,
                 "actual_vs_dashboard_actual_mae": actual_vs_dashboard_actual_mae,
+                "position_quantity_mae": position_quantity_mae,
             },
             "details": {
                 "replay_weights": replay_weights,
@@ -1495,6 +1560,12 @@ def run_parity_checks(
                 "filled_weights": filled_weights,
                 "dashboard_target_weights": dashboard_target_weights,
                 "dashboard_actual_weights": dashboard_actual_weights,
+                "position_quantities_ok": position_quantities_ok,
+                "decision_created_at": decision_created_at,
+                "dashboard_created_at": dashboard_created_at,
+                "actual_weight_comparison_basis": (
+                    "informational_only_different_valuation_timestamps"
+                ),
             },
         }
 
