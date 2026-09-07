@@ -244,7 +244,7 @@ def append_new_rows(csv_path: Path, new_rows: pd.DataFrame, dry_run: bool) -> in
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Refresh fmp_daily/ OHLCV CSVs from FMP API"
+        description="Refresh fmp_daily/ OHLCV CSVs from yfinance"
     )
     parser.add_argument(
         "--config",
