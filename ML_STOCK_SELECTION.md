@@ -1,5 +1,13 @@
 # ML Stock Selection Pipeline
 
+> **Methodology plus dated examples:** The point-in-time universe and return
+> construction rules in this file are durable design constraints. Record
+> counts, example cutoffs, membership dates, API limits, and “latest” outputs
+> are historical snapshots. Before a new model run, check current script help,
+> source/tests, database coverage, and provider behavior. Use
+> `finrl-env/bin/python`; fetching, recomputing returns, or running selection
+> can mutate research data and generated outputs.
+
 End-to-end guide for ML-driven stock selection with per-sector-bucket models.
 
 **Database:** 22,909 records, 715 tickers, 64 columns (2015-Q2 ~ 2026-Q1)
