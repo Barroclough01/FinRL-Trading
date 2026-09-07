@@ -1,5 +1,9 @@
 # Foundation Stabilization Plan
 
+> Historical design record. The scoped foundation work described here was
+> implemented in 2026. Use `operations.md`, `offline_rl_tracking.md`, current
+> code/tests, and runtime artifacts for present behavior and health.
+
 Last updated: 2026-06-12
 Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 
@@ -251,4 +255,3 @@ The foundation is stable enough for roadmap work when:
 - dashboard data cannot silently omit an account
 - basic tests cover the weekly workflow's failure paths
 - dry-run, paper, and replay paths use the same target-weight contract
-

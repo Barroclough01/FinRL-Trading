@@ -1,5 +1,9 @@
 # Weekly Comparison Journal
 
+> Historical observations and review templates. Verify current scheduler,
+> broker, database, market-data, and metrics state before using an entry in a
+> new status report.
+
 Use this document as a running template for weekly FinRL vs AR vs benchmark
 reviews. Copy the template section for each new run.
 

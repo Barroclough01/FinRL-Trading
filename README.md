@@ -1,4 +1,11 @@
 
+> **Local checkout:** This fork runs a user-specific two-account paper
+> comparison plus an offline RL simulation. Read [CONTEXT.md](CONTEXT.md) before
+> operating it and use [docs/README.md](docs/README.md) for current workflow,
+> safety boundaries, and documentation status. The upstream overview below is
+> product documentation and does not describe the local scheduler or authorize
+> trading.
+
 <div align="center">
 
 # FinRL-X

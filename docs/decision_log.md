@@ -2,6 +2,18 @@
 
 This file records project decisions that should be easy to revisit later.
 
+## 2026-09-07: Separate Durable Guidance from Runtime State
+
+Keep stable safety boundaries and orientation in `AGENTS.md` and `CONTEXT.md`.
+Keep current procedures in `docs/operations.md` and specialized references.
+Dated plans and journals remain historical evidence; current health must be
+verified from the scheduler, wrapper, logs, SQLite, market-data cache, generated
+metrics, and broker state.
+
+Offline RL remains a local simulation. Friday-evening paper orders intentionally
+queue for the next regular session. Documentation must distinguish tracked
+configuration, ignored operational authority, and generated summaries.
+
 ## 2026-06-07: Quick Wins Before Next Live Run
 
 Decision:
@@ -237,4 +249,3 @@ Implementation details:
 - Created `save_reconciliation_report(run_date, account_name, recon_result)` to consolidate and save reports to `logs/reconciliation_YYYY-MM-DD.json`.
 - Integrated reconciliation checks at the very end of `run_account` in `run_paper_trading.py`.
 - Verified execution quality and alert flagging with comprehensive pytest unit tests.
-

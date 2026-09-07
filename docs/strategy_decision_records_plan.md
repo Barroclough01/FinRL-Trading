@@ -1,5 +1,9 @@
 # Strategy Decision Records Design and Implementation Plan
 
+> Historical design record. Strategy decision records are implemented. Use
+> `operations.md`, current schema/code, and generated artifacts for the active
+> contract.
+
 Last updated: 2026-06-12
 Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 

@@ -1,220 +1,148 @@
-# Session Context — FinRL-X + Qlib Trading Stack
+# Local Operating Context
 
-## What we've built so far
+This file describes the user-specific FinRL-Trading workflow in this checkout.
+The root `README.md` describes the upstream FinRL-X project. Start here for
+local maintenance and use `docs/README.md` to find deeper references.
 
-Two separate environments, both working:
+Last documentation verification: 2026-09-07. This date records when paths and
+behavior were checked; it is not a claim that the scheduler, broker, market
+data, or generated metrics are currently healthy.
 
-### 1. Qlib (Windows, native Python / uv)
+## Purpose
 
-- Installed from source in `C:\Users\paxto\stock-trading\qlib` with a uv venv at `qlib-env`
-- S&P 500 (~490 tickers) downloaded via yfinance, normalized, and dumped to Qlib binary format at `~/.qlib/qlib_data/us_data`
-- Successfully ran LightGBM + Alpha158 benchmark end-to-end via `qrun` with a custom YAML (US data, SPY benchmark, 2010-2024 date range)
-- MLflow tracking working — results stored in `mlruns/` inside the qlib repo
-- Next Qlib step: set up RD-Agent in WSL for LLM-driven automated factor discovery
+The project is collecting comparable weekly evidence for three strategies:
 
----
+| Label | Strategy | Execution boundary |
+| --- | --- | --- |
+| `FinRL` | ML-enhanced Adaptive Rotation | Alpaca paper account |
+| `AR` | Baseline Adaptive Rotation | Alpaca paper account |
+| `RL` | DRL-produced target weights | Local offline simulation only |
 
-### 2. FinRL-X / FinRL-Trading (WSL, Ubuntu)
+The current goal is reliable evidence collection. The project is not ready for
+real capital, and the small number of weekly observations does not support a
+strategy winner or a promotion decision.
 
-Repo cloned to `~/stock-trading/FinRL-Trading` with uv venv at `finrl-env`.
+## Checkout and environment
 
-#### Alpaca Paper Trading — Two Accounts
+- Repository: `/home/paxto/stock-trading/FinRL-Trading` in Ubuntu WSL
+- Python environment: `finrl-env`
+- Git: run Git inside WSL
+- Secrets: `.env` (ignored; never print or commit it)
+- Paper account list: `APCA_ACCOUNTS=FinRL,AR`
+- Per-account strategy paths: `APCA_<NAME>_CONFIG`
+- Closed-market policy: `MARKET_CLOSED_ACTION=next_open`
 
-| Account | Purpose | Config |
-|---------|---------|--------|
-| `FinRL` | ML-enhanced AR (live) | `AdaptiveRotationConf_v1.2.2.yaml` |
-| `AR`    | Baseline AR (shadow comparison) | `AdaptiveRotationConf_baseline.yaml` |
-
-Both accounts funded with $1,000,000 paper capital. Credentials stored in `.env` under `APCA_FinRL_*` and `APCA_AR_*`. `APCA_ACCOUNTS=FinRL,AR`.
-
----
-
-### Three Strategy Layers
-
-#### Layer 1 — Adaptive Rotation (working, live paper trading)
-
-- Rules-based macro regime strategy (risk-on / neutral / risk-off / fast risk-off)
-- Rotates across Growth Tech, Real Assets, Defensive, Cyclical asset groups
-- Weekly rebalance + daily stop-loss / fast risk-off monitoring
-- **ML-enhanced config (FinRL account):** ML-picked symbols per bucket, updated quarterly
-- **Baseline config (AR account):** Original hardcoded symbols (AAPL, MSFT, NVDA, JPM, XOM, JNJ, etc.)
-- Backtest 2020-2024 with original symbols: 32.9% annualized, Sharpe 1.32, max drawdown -23% vs SPY's -32%
-- Run via: `python src/strategies/run_adaptive_rotation_strategy.py --config <yaml> --date YYYY-MM-DD`
-
-#### Layer 2 — ML Bucket Selection (working, integrated)
-
-- `src/strategies/ml_bucket_selection.py` — trains RF, XGBoost, LightGBM, HistGBM, ExtraTrees, Ridge, and Stacking ensemble per sector bucket
-- Four buckets: `growth_tech`, `cyclical`, `real_assets`, `defensive`
-- Uses 24 fundamental features + 7 momentum features + sector dummies
-- Point-in-time S&P 500 membership filtering (no survivorship bias)
-- Fundamental data in `data/finrl_trading.db` (SQLite) + `data/fundamental_data_full.csv`
-- Mixed-vintage mode fixed: Q4 2025 fallback correctly populates late-filing buckets
-- Latest run (2026-04-26, `--mixed-vintage`, 503 stocks across all 4 buckets):
-  - `growth_tech` [Ridge]: SATS(+12.0%), MCHP(+9.5%), ON(+8.2%), ORCL(+8.2%), TXN(+6.9%)
-  - `cyclical` [Ridge]: IVZ(+8.1%), ODFL(+6.2%), MAS(+6.2%), TROW(+6.2%), HON(+6.1%)
-  - `real_assets` [Stacking]: LYB(+4.9%), FCX(+4.6%), ALB(+3.3%), DOW(+3.0%), SLB(+3.0%)
-  - `defensive` [Stacking]: ADM(+4.2%), INCY(+3.4%), DVA(+2.8%), UHS(+2.5%), ZTS(+2.4%)
-- Run via: `python src/strategies/ml_bucket_selection.py --mixed-vintage`
-
-#### Layer 3 — RL model (present in repo, not yet run)
-
-- `src/strategies/rl_model.py` — A2C, PPO, DDPG agents via FinRL + StableBaselines3
-- Uses `StockPortfolioEnv` from original FinRL library
-- Not yet integrated or tested
-
----
-
-### Integration Layer (all working, live)
-
-#### `refresh_fmp_daily.py` — Weekly price data refresh
-- Auto-discovers all configs from `APCA_ACCOUNTS` in `.env`
-- Fetches OHLCV data via yfinance (FMP deprecated their free tier endpoints)
-- 52 unique symbols across both configs (25 ML config + 33 baseline, deduplicated)
-- Checks NYSE calendar via `pandas_market_calendars` — skips silently on non-trading days
-- Idempotent: deduplicates on date before writing
-- CSV format: `data/fmp_daily/<TICKER>_daily.csv` (date, open, high, low, close, volume)
-- Run via: `python refresh_fmp_daily.py [--force] [--dry-run] [--config PATH]`
-
-#### `update_adaptive_rotation_symbols.py` — Quarterly ML→AR symbol patcher
-- Reads ML predictions CSV and patches `asset_groups` symbol lists in AR YAML config
-- Top-5 per bucket, handles YAML boolean tickers (`ON` → `"ON"`), timestamped backup before overwrite
-- Run via: `python update_adaptive_rotation_symbols.py --top-n 5 [--dry-run]`
-
-#### `run_paper_trading.py` — Weekly execution script (dual-account)
-1. Loads all accounts from `APCA_ACCOUNTS` in `.env`
-2. For each account: runs AR strategy for today → gets target weights
-3. Connects to that account's Alpaca paper account
-4. Generates dry-run order plan, checks market open/closed
-5. Submits rebalance orders (`MARKET_CLOSED_ACTION=next_open` queues Friday-evening DAY orders for the next regular session)
-6. Logs execution to `logs/execution_YYYY-MM-DD.json`
-7. After all accounts: automatically runs `track_metrics.py`
-- Run via: `python run_paper_trading.py [--dry-run] [--date YYYY-MM-DD] [--account FinRL]`
-
-#### `track_metrics.py` — Performance metrics tracker
-- Records weekly snapshot per account to `data/finrl_trading.db`
-- Tables: `weekly_snapshot`, `weekly_weights`, `benchmark_prices`
-- Fetches SPY/QQQ benchmark via yfinance
-- Reads target weights from `logs/execution_YYYY-MM-DD.json`
-- Prints CLI performance report (cumulative return, weekly return, vs SPY, vs each other)
-- Generates HTML dashboard at `logs/dashboard.html`
-- Latest snapshot 2026-05-29: FinRL=$1,139,861.42 (+4.46% cum), AR=$1,010,839.29 (+1.08% cum)
-- Run via: `python track_metrics.py [--report-only] [--date YYYY-MM-DD]`
-
-#### `run_paper_trading.ps1` — Windows PowerShell wrapper
-- Called by Windows Task Scheduler every Friday at 9:25am ET
-- Step 1: Runs `refresh_fmp_daily.py` (price refresh)
-- Step 2: Runs `run_paper_trading.py` (strategy + orders + metrics)
-- Logs to `logs/paper_trading_cron.log` (WSL) and `logs/task_scheduler_YYYY-MM-DD.log` (Windows)
-- Located at `C:\Users\paxto\stock-trading\run_paper_trading.ps1`
-
----
-
-## Key File Locations (WSL)
-
-```
-~/stock-trading/FinRL-Trading/
-├── .env                                          # Multi-account Alpaca credentials + MARKET_CLOSED_ACTION=next_open
-├── deploy.sh                                     # Main entry point (updated to v1.2.2)
-├── refresh_fmp_daily.py                          # Weekly price refresh (yfinance, 52 symbols)
-├── run_paper_trading.py                          # Weekly dual-account paper trading script
-├── track_metrics.py                              # Performance metrics + HTML dashboard
-├── update_adaptive_rotation_symbols.py           # Quarterly ML→AR symbol patcher
-├── data/
-│   ├── finrl_trading.db                          # SQLite: price_data, fundamental_data,
-│   │                                             #   weekly_snapshot, weekly_weights, benchmark_prices
-│   ├── fundamental_data_full.csv                 # Pre-built fundamental dataset (22,909 rows, 715 tickers)
-│   ├── sp500_historical_constituents.csv
-│   ├── fmp_daily/                                # OHLCV CSVs for all 52 symbols (yfinance)
-│   │   └── <TICKER>_daily.csv                    # date, open, high, low, close, volume
-│   └── sp500_ml_bucket_predictions_20260426_135742.csv
-├── logs/
-│   ├── paper_trading_cron.log                    # WSL-side execution log
-│   ├── execution_YYYY-MM-DD.json                 # Per-run order log (both accounts)
-│   ├── dashboard.html                            # HTML performance dashboard
-│   └── paper_trading_YYYY-MM-DD.log              # Per-run detailed log
-└── src/strategies/
-    ├── AdaptiveRotationConf_v1.2.2.yaml          # ML-enhanced AR config (FinRL account)
-    ├── AdaptiveRotationConf_baseline.yaml        # Original AR config (AR account)
-    ├── ml_bucket_selection.py                    # ML fundamental factor model
-    ├── ml_strategy.py                            # ML + min-variance portfolio construction
-    └── rl_model.py                               # RL agents (not yet run)
-```
-
-## Key File Locations (Windows)
-
-```
-C:\Users\paxto\stock-trading\
-├── run_paper_trading.ps1                         # Task Scheduler PowerShell wrapper
-└── logs\                                         # Windows-side Task Scheduler logs
-C:\Users\paxto\stock-trading\qlib\
-├── examples\benchmarks\LightGBM\workflow_config_lightgbm_Alpha158.yaml
-├── mlruns\
-~/.qlib/qlib_data/us_data/
-```
-
-## Environment Activation
+Use the environment explicitly:
 
 ```bash
-# WSL / FinRL-X
-cd ~/stock-trading/FinRL-Trading
-source finrl-env/bin/activate
-
-# Windows / Qlib (PowerShell)
-cd C:\Users\paxto\stock-trading\qlib
-.\qlib-env\Scripts\activate
+cd /home/paxto/stock-trading/FinRL-Trading
+finrl-env/bin/python run_paper_trading.py --help
 ```
 
-## Known Issues / Gotchas
+## Weekly workflow
 
-- Tickers that are YAML booleans (`ON`, `NO`, `YES`) must be quoted — `update_adaptive_rotation_symbols.py` handles this automatically
-- `APCA_BASE_URL` in `.env` must include `/v2` suffix: `https://paper-api.alpaca.markets/v2`
-- Multi-account `.env` keys are case-sensitive: `APCA_FinRL_API_KEY` not `APCA_FINRL_API_KEY`
-- Friday-evening DAY orders are queued by Alpaca for the next regular session; this is the expected weekly execution protocol
-- Stale live-strategy or benchmark prices fail the refresh; stale RL-only symbols are reported as warnings because RL remains offline
-- Confirmed inactive RL holdings are liquidated at their last cached close and retained as cash according to `src/strategies/rl_inactive_symbols.json`
-- The quarterly ML workflow treats its Excel dashboard as optional; CSV outputs remain authoritative when `openpyxl` is unavailable
-- FMP API deprecated all legacy endpoints post-Aug 2025; free tier only allows SPY on stable endpoints — yfinance used instead
-- Task Scheduler wake-from-sleep requires laptop in sleep (not shutdown) + "Allow wake timers" enabled in Windows power settings
-- AR baseline account (AR) may show fallback positions (SPY/QQQ/IAU/XLU/XLV) for first few weeks while regime signals warm up on new symbol CSVs
-- `Target weights sum 1.000200 > 1` warning in AR strategy is a floating point artifact — normalizes correctly, benign
+The registered Windows task is `FinRL Paper Trading`. It is scheduled for
+Friday at 18:15 local time, wakes the computer, and starts when available. Its
+wrapper is outside the repository:
 
-## Weekly Run Checklist
+```text
+C:\Users\paxto\stock-trading\run_paper_trading.ps1
+```
 
-1. **Friday evening**: Task Scheduler runs after the computer is available
-2. **Friday evening**: signals and closing-price metrics are recorded; DAY orders queue for the next regular session
-3. **Monday after market open**: check Alpaca for both accounts (FinRL + AR) to confirm fills
-4. **Friday or weekend**: `explorer.exe logs/dashboard.html` to view updated performance dashboard
-5. **Quarterly (~July 2026)**: re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py` → download any new symbols
+The wrapper performs two WSL commands:
 
-If Windows starts the missed task on Saturday or Sunday, the refresh and
-automatic run date resolve to Friday's latest NYSE session. A stale Friday
-close or failed comparison-metrics build now returns a nonzero scheduler result.
+1. `refresh_fmp_daily.py` refreshes cached OHLCV data through the latest NYSE
+   session. Its name is historical; it currently fetches from yfinance.
+2. `run_paper_trading.py` generates each account's target weights, validates
+   inputs and broker state, submits paper rebalances, captures metrics, runs the
+   offline RL simulation, performs sanity/parity checks, and writes artifacts.
 
-## Current Roadmap Phase
+If the computer starts the task on a weekend, both commands resolve the run to
+Friday's latest NYSE session. Friday-evening `DAY` orders are expected to remain
+open until the next regular session. Persisted broker order IDs and later broker
+status are the basis for reconciliation; never resubmit merely because an order
+was still open after the Friday run.
 
-Paper shadow-trading / evidence collection (see `docs/paper_to_production_roadmap.md`).
+The wrapper returns the trading exit code first and then a failed refresh exit
+code. A successful scheduled-task result therefore means both commands returned
+zero. It does not prove that queued orders later filled or that external state
+has remained healthy.
 
-**Completed foundation work (2026-05-31):**
-- Structured JSON strategy output, pre-trade validation, post-trade reconciliation
-- Strategy decision records (SQLite + JSONL), weekly comparison metrics
-- Live-vs-replay parity checks, production kill switch (`TRADING_DISABLED` / `.kill_switch`)
-- Test suite: 17 tests in `tests/test_weekly_workflow.py`
+## Data and artifact map
 
-**Paper comparison status (through 2026-05-29):**
-- FinRL: +4.46% cumulative (ML-picked tech, higher turnover)
-- AR: +1.08% cumulative (still in fallback — `all_groups_negative_excess_return`)
-- SPY: +2.30%, QQQ: +3.43%
+| Path | Role | Authority / lifecycle |
+| --- | --- | --- |
+| `src/strategies/AdaptiveRotationConf_v1.2.2.yaml` | FinRL account strategy config | Durable, tracked |
+| `src/strategies/AdaptiveRotationConf_baseline.yaml` | AR account strategy config | Durable, tracked |
+| `src/strategies/rl_contract.json` | Offline RL research contract | Durable, tracked |
+| `src/strategies/rl_acceptance_gate.json` | Offline evaluation thresholds | Durable, tracked |
+| `src/strategies/rl_inactive_symbols.json` | Verified inactive-symbol policy | Durable, tracked |
+| `results/drl_weight.csv` | RL target-weight input | Generated, ignored |
+| `data/fmp_daily/*_daily.csv` | Local adjusted OHLCV cache | Runtime data, ignored |
+| `data/finrl_trading.db` | Snapshot, decision, weight, and price store | Operational authority, ignored |
+| `logs/strategy_decisions.jsonl` | Append-only decision mirror | Generated audit evidence, ignored |
+| `logs/execution_YYYY-MM-DD.json` | Per-run submitted-order record | Generated audit evidence, ignored |
+| `logs/parity_check_YYYY-MM-DD.json` | Replay/execution/database comparison | Generated audit evidence, ignored |
+| `logs/comparison_metrics_YYYY-MM-DD.json` | Dated comparison export | Generated summary, ignored |
+| `logs/comparison_metrics_latest.csv` | Latest tabular comparison | Generated summary, ignored |
+| `logs/dashboard.html` | Human-readable comparison | Generated summary, ignored |
+| Windows scheduler logs | Wrapper/task result | Runtime evidence outside repo |
 
-**Known incident (2026-06-05):** Both accounts failed on the first run after foundation work shipped. FinRL orders were placed but decision-record save crashed on pandas Timestamp serialization; AR was blocked by an overly strict negative-cash validation rule. Both bugs fixed 2026-06-07.
+Before rebuilding `data/finrl_trading.db` or RL history, create a dated backup
+outside the active database path and verify it exists. Existing large database
+backups are operational evidence; do not delete or replace them during routine
+maintenance.
 
-## Immediate Next Steps (in priority order)
+## Comparison invariants
 
-See `docs/paper_to_production_roadmap.md` → **Path Forward** for the full plan.
+- Use only shared chronological dates when comparing FinRL, AR, and RL.
+- SPY and QQQ are required benchmarks and refresh inputs.
+- Target weights record the strategy decision. Actual weights record observed
+  paper positions or simulated holdings. Preserve their union so unfilled or
+  skipped assets remain visible.
+- Enabled fallback with an empty symbol list represents defensive cash.
+- Position-quantity parity is exact within numeric tolerance. Weight differences
+  caused by distinct valuation timestamps are informational.
+- Active RL holdings and targets require a fresh terminal cached close. A
+  verified inactive holding may be liquidated at its last cached close under
+  `rl_inactive_symbols.json`; proceeds remain cash and source target weight is
+  retained for drift reporting.
+- Offline RL assumes close-price execution, no partial fills or rejections, 5
+  bps transaction cost per trade, 2 bps slippage per side, and zero cash yield.
+  Those assumptions differ from Alpaca paper execution and must be disclosed in
+  any performance interpretation.
 
-1. **VERIFY**: Next Friday run completes end-to-end — decision records, reconciliation, metrics
-2. **RESOLVE**: FinRL June 5 pending orders (confirm fills or cancel before next rebalance)
-3. **MONITOR**: Keep FinRL vs AR comparison unchanged; collect evidence through June/July
-4. **WATCH**: AR baseline — still in fallback; mega-cap groups underperform QQQ trend filter
-5. **NEXT CODE SPRINT** (after one clean run): hard risk gate, order idempotency, alerting
-6. **QUARTERLY (~July 2026)**: Re-run `ml_bucket_selection.py --mixed-vintage` → `update_adaptive_rotation_symbols.py`
-7. **DEFERRED**: RL integration, production capital, AR fallback changes
+## Safe orientation
+
+These commands are read-only with respect to broker orders:
+
+```bash
+git status --short --branch
+finrl-env/bin/python run_paper_trading.py --dry-run --date YYYY-MM-DD
+finrl-env/bin/python refresh_fmp_daily.py --dry-run
+finrl-env/bin/python sync_rl_price_data.py --dry-run
+finrl-env/bin/python track_metrics.py --report-only --date YYYY-MM-DD
+finrl-env/bin/python -m pytest
+```
+
+`run_paper_trading.py` without `--dry-run` submits paper orders.
+`track_rl_offline.py`, `backfill_rl_history.py`, non-report metrics runs, price
+syncs, and non-dry-run refreshes write local operational state. The offline RL
+pipeline can also train models and replace generated results.
+
+## Current health checks
+
+For a fresh status report, verify rather than repeat this file's date:
+
+1. Windows task configuration, last result, next run, and wrapper contents.
+2. Tail of the Windows task log and `logs/paper_trading_cron.log`.
+3. Latest SQLite rows by account and database `PRAGMA integrity_check`.
+4. Latest execution and parity reports, including unresolved broker orders.
+5. Terminal dates for required live and benchmark CSVs; review RL-only stale
+   symbols separately from live inputs.
+6. Current Alpaca paper account positions and persisted order IDs when broker
+   reconciliation is part of the request.
+7. Shared-date metrics and observation count before interpreting performance.
+
+Detailed commands and failure semantics are in `docs/operations.md` and
+`docs/offline_rl_tracking.md`.

@@ -1,5 +1,9 @@
 # Post-Trade Reconciliation Design and Implementation Plan
 
+> Historical design record. Reconciliation is implemented in the weekly
+> workflow. Confirm current behavior in `run_paper_trading.py`, tests, SQLite,
+> and broker receipts rather than treating this checklist as open work.
+
 Last updated: 2026-06-12
 Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 

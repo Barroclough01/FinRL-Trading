@@ -1,5 +1,9 @@
 # Weekly Comparison Metrics Design and Implementation Plan
 
+> Historical design record. Weekly comparison metrics are implemented. Use
+> `operations.md`, `track_metrics.py`, current tests, and generated artifacts
+> for the active contract.
+
 Last updated: 2026-06-12
 Status: **IMPLEMENTED IN THE CURRENT WORKFLOW (2026-06-12)**
 
