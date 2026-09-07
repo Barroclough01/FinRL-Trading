@@ -1156,6 +1156,98 @@ def test_run_metrics_tracker_both_fail(mock_subprocess_run):
     assert mock_subprocess_run.call_count == 2
 
 
+@patch("subprocess.run")
+def test_run_rl_tracker_success(mock_subprocess_run):
+    """A zero offline-RL exit should preserve the successful weekly path."""
+    from run_paper_trading import run_rl_tracker
+
+    mock_subprocess_run.return_value = MagicMock(
+        returncode=0, stdout="snapshot complete", stderr=""
+    )
+
+    ok, err = run_rl_tracker("2026-09-04", project_root)
+
+    assert ok
+    assert err is None
+
+
+@patch("subprocess.run")
+def test_run_rl_tracker_failure_has_actionable_context(mock_subprocess_run):
+    """A nonzero offline-RL exit should return its date, code, and output."""
+    from run_paper_trading import run_rl_tracker
+
+    mock_subprocess_run.return_value = MagicMock(
+        returncode=7, stdout="", stderr="stale cached price for AVB\n"
+    )
+
+    ok, err = run_rl_tracker("2026-09-04", project_root)
+
+    assert not ok
+    assert err is not None
+    assert "2026-09-04" in err
+    assert "exit 7" in err
+    assert "stale cached price for AVB" in err
+
+
+@patch("subprocess.run", side_effect=OSError("cannot start Python"))
+def test_run_rl_tracker_launch_failure_has_actionable_context(mock_subprocess_run):
+    """A subprocess launch error should be returned instead of swallowed."""
+    from run_paper_trading import run_rl_tracker
+
+    ok, err = run_rl_tracker("2026-09-04", project_root)
+
+    assert not ok
+    assert err is not None
+    assert "2026-09-04" in err
+    assert "cannot start Python" in err
+
+
+@patch("run_paper_trading.run_post_run_sanity_checks")
+@patch("run_paper_trading.run_rl_tracker")
+@patch("run_paper_trading.run_metrics_tracker")
+@patch("run_paper_trading.notify_status")
+@patch("run_paper_trading.load_accounts_from_env")
+@patch("run_paper_trading.run_account")
+def test_main_exits_nonzero_when_offline_rl_fails(
+    mock_run_account,
+    mock_load,
+    mock_notify,
+    mock_metrics,
+    mock_rl,
+    mock_sanity,
+):
+    """A required offline-RL failure must make the whole live run fail."""
+    from run_paper_trading import main
+
+    mock_load.return_value = [{"name": "FinRL", "config": "dummy.yaml"}]
+    mock_run_account.return_value = {"account": "FinRL", "target_weights": {}}
+    mock_metrics.return_value = (True, None)
+    mock_rl.return_value = (
+        False,
+        "track_rl_offline.py failed for 2026-09-04 (exit 7): stale cache",
+    )
+    mock_sanity.return_value = ["execution reported account errors: ['RL']"]
+
+    with (
+        patch("sys.argv", ["run_paper_trading.py", "--date", "2026-09-04"]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        main()
+
+    assert exc_info.value.code == 1
+    errors = mock_sanity.call_args.args[3]
+    assert errors == [
+        {
+            "account": "RL",
+            "error": (
+                "track_rl_offline.py failed for 2026-09-04 (exit 7): stale cache"
+            ),
+        }
+    ]
+    assert mock_notify.call_args.args[1]["status"] == "failed"
+
+
+@patch("run_paper_trading.run_rl_tracker")
 @patch("run_paper_trading.run_metrics_tracker")
 @patch("run_paper_trading.run_parity_checks")
 @patch("run_paper_trading.notify_status")
@@ -1167,6 +1259,7 @@ def test_metrics_runs_when_all_accounts_fail(
     mock_notify,
     mock_parity,
     mock_metrics,
+    mock_rl,
 ):
     """Metrics tracker should run even when every account fails."""
     mock_load.return_value = [
@@ -1175,6 +1268,7 @@ def test_metrics_runs_when_all_accounts_fail(
     ]
     mock_run_account.side_effect = RuntimeError("account failed")
     mock_metrics.return_value = (True, None)
+    mock_rl.return_value = (True, None)
 
     with patch("sys.argv", ["run_paper_trading.py", "--date", "2026-06-06"]):
         with patch("sys.exit") as mock_exit:

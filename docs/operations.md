@@ -63,10 +63,9 @@ not blindly resubmit it.
 The orchestrator runs each configured account sequentially. On non-dry runs it
 then records/regenerates live metrics, invokes offline RL tracking, runs sanity
 checks, writes parity information, and optionally sends a webhook. Offline RL
-tracking is currently invoked as a warning-level subprocess: its failure is
-logged but is not itself appended to the main error list. A status review must
-therefore verify the current RL row and logs rather than infer RL success from a
-zero orchestrator exit alone.
+tracking is a required subprocess: a nonzero exit or launch failure is added to
+the main error list with the run date, exit status, and available subprocess
+output. It therefore makes the overall orchestrator exit nonzero.
 
 ## Data freshness
 

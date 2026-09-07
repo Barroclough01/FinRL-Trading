@@ -1050,6 +1050,35 @@ def run_metrics_tracker(run_date: str, project_root: Path) -> tuple[bool, str | 
     )
 
 
+def run_rl_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]:
+    """Run the required offline-RL snapshot step and return its status."""
+    import subprocess
+
+    logger.info("Running RL offline tracking...")
+    try:
+        rl_proc = subprocess.run(
+            [sys.executable, "track_rl_offline.py", "--date", run_date],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+    except Exception as exc:
+        return False, (
+            f"track_rl_offline.py could not start for {run_date}: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    if rl_proc.returncode == 0:
+        logger.info("RL offline tracking completed successfully")
+        return True, None
+
+    detail = (rl_proc.stderr or rl_proc.stdout or "no subprocess output").strip()
+    return False, (
+        f"track_rl_offline.py failed for {run_date} "
+        f"(exit {rl_proc.returncode}): {detail[-2000:]}"
+    )
+
+
 def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     """
     Run the full paper trading cycle for a single account.
@@ -1715,22 +1744,11 @@ def main():
             metrics_warning = metrics_error
             logger.warning(metrics_error)
         
-        # Run RL offline tracking after live metrics
-        logger.info("Running RL offline tracking...")
-        try:
-            import subprocess
-            rl_proc = subprocess.run(
-                [sys.executable, "track_rl_offline.py", "--date", args.date],
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-            )
-            if rl_proc.returncode == 0:
-                logger.info("RL offline tracking completed successfully")
-            else:
-                logger.warning(f"RL offline tracking failed: {rl_proc.stderr}")
-        except Exception as e:
-            logger.warning(f"Could not run RL offline tracking: {e}")
+        # Run required RL offline tracking after live metrics.
+        rl_ok, rl_error = run_rl_tracker(args.date, Path(project_root))
+        if not rl_ok:
+            logger.error(rl_error)
+            errors.append({"account": "RL", "error": rl_error})
 
     if not args.dry_run and results:
         failures = run_post_run_sanity_checks(args.date, accounts, results, errors)
