@@ -29,6 +29,9 @@ sys.path.insert(0, os.path.join(project_root, 'src'))
 
 logger = logging.getLogger(__name__)
 
+READ_RETRY_DELAYS_SECONDS = (0.5, 1.0)
+RETRYABLE_READ_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
 
 @dataclass
 class AlpacaAccount:
@@ -782,22 +785,79 @@ class AlpacaManager:
             'Accept': 'application/json'
         }
 
-        try:
-            response = requests.request(
-                method, url, headers=headers, json=json_body, params=params, timeout=timeout
-            )
+        is_read = method.upper() == "GET"
+        max_attempts = 1 + len(READ_RETRY_DELAYS_SECONDS) if is_read else 1
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.request(
+                    method,
+                    url,
+                    headers=headers,
+                    json=json_body,
+                    params=params,
+                    timeout=timeout,
+                )
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+            ) as e:
+                if attempt == max_attempts:
+                    if is_read:
+                        raise RuntimeError(
+                            f"Alpaca read request failed after {attempt} attempts: {e}"
+                        ) from e
+                    raise RuntimeError(f"Request failed: {e}") from e
+                self.logger.warning(
+                    "Transient Alpaca read failure for %s (attempt %d/%d): %s",
+                    path,
+                    attempt,
+                    max_attempts,
+                    e,
+                )
+                time.sleep(READ_RETRY_DELAYS_SECONDS[attempt - 1])
+                continue
+            except requests.exceptions.RequestException as e:
+                raise RuntimeError(f"Request failed: {e}") from e
 
             if response.status_code >= 400:
-                error_info = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'message': response.text}
-                raise RuntimeError(f"Alpaca API error {response.status_code}: {error_info}")
+                error_info = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith(
+                        "application/json"
+                    )
+                    else {"message": response.text}
+                )
+                error = (
+                    f"Alpaca API error {response.status_code}: {error_info}"
+                )
+                retryable = (
+                    is_read
+                    and response.status_code in RETRYABLE_READ_STATUS_CODES
+                )
+                if retryable and attempt < max_attempts:
+                    self.logger.warning(
+                        "Transient Alpaca read failure for %s (attempt %d/%d): %s",
+                        path,
+                        attempt,
+                        max_attempts,
+                        error,
+                    )
+                    time.sleep(READ_RETRY_DELAYS_SECONDS[attempt - 1])
+                    continue
+                if retryable:
+                    raise RuntimeError(
+                        f"Alpaca read request failed after {attempt} attempts; "
+                        f"last error: {error}"
+                    )
+                raise RuntimeError(error)
 
             if response.status_code == 204:  # No content
                 return {}
 
             return response.json()
 
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Request failed: {e}")
+        raise AssertionError("Alpaca request retry loop exited unexpectedly")
 
     def _api_data_request(
         self,
