@@ -1092,7 +1092,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     logger.info(f"{'=' * 50}")
 
     # Step 1: Get target weights
-    weights = get_target_weights(config, run_date)
+    weights = get_target_weights(config, run_date, account_name=name)
 
     # Step 2: Connect and execute
     logger.info(f"Connecting to Alpaca account: {name}")

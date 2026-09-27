@@ -912,22 +912,29 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
     Returns a dict with complete metrics structure.
     """
     import numpy as np
-    import pandas as pd
 
     # 1. Fetch all weekly returns from DB
     snapshots = conn.execute("""
         SELECT snapshot_date, account, portfolio_value, cash, weekly_return, cumulative_return, spy_weekly_return, spy_cumulative_return
         FROM weekly_snapshot
+        WHERE snapshot_date <= ?
         ORDER BY snapshot_date ASC
-    """).fetchall()
+    """, (run_date,)).fetchall()
 
     if not snapshots:
-        return {}
+        return {
+            "date": run_date,
+            "accounts": {},
+            "benchmarks": {},
+            "comparison": {
+                "status": "unavailable", "as_of_date": None,
+                "weekly_returns": {},
+            },
+        }
 
     # Group by account
     account_series = {}
-    spy_series = {}  # snapshot_date -> spy_weekly_return
-    dates = sorted(list(set(row[0] for row in snapshots)))
+    account_returns = {}
 
     for row in snapshots:
         snap_date, account, val, cash, wkly, cum, spy_wkly, spy_cum = row
@@ -942,41 +949,28 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
                 "cumulative_return": cum if cum is not None else 0.0,
             }
         )
-        if spy_wkly is not None:
-            spy_series[snap_date] = spy_wkly
+        if wkly is not None and math.isfinite(wkly):
+            account_returns.setdefault(account, {})[snap_date] = wkly
 
-    # Also build QQQ return series from benchmark_prices
-    qqq_prices = conn.execute("""
-        SELECT price_date, qqq_close
+    # Use actual price dates. A missing close never becomes a zero return or
+    # gets assigned to a nearby account snapshot.
+    benchmark_prices = conn.execute("""
+        SELECT price_date, spy_close, qqq_close
         FROM benchmark_prices
-        WHERE qqq_close IS NOT NULL
+        WHERE price_date <= ?
         ORDER BY price_date ASC
-    """).fetchall()
+    """, (run_date,)).fetchall()
 
-    qqq_returns = {}
-    if len(qqq_prices) > 1:
-        for i in range(1, len(qqq_prices)):
-            d1, p1 = qqq_prices[i]
-            d0, p0 = qqq_prices[i - 1]
-            if not all(
-                value is not None and math.isfinite(value) for value in (p0, p1)
-            ):
+    benchmark_returns = {"SPY": {}, "QQQ": {}}
+    previous_prices = {"SPY": None, "QQQ": None}
+    for price_date, spy_close, qqq_close in benchmark_prices:
+        for symbol, close in (("SPY", spy_close), ("QQQ", qqq_close)):
+            if close is None or not math.isfinite(close) or close <= 0:
                 continue
-            ret = (p1 - p0) / p0 if p0 else 0.0
-
-            # Map d1 to closest date in dates
-            match_date = None
-            d1_parsed = pd.to_datetime(d1).date()
-            for d in dates:
-                d_parsed = pd.to_datetime(d).date()
-                if abs((d_parsed - d1_parsed).days) <= 3:
-                    match_date = d
-                    break
-            if match_date:
-                qqq_returns[match_date] = ret
-
-    spy_ret_list = [spy_series.get(d, 0.0) for d in dates]
-    qqq_ret_list = [qqq_returns.get(d, 0.0) for d in dates]
+            previous = previous_prices[symbol]
+            if previous is not None:
+                benchmark_returns[symbol][price_date] = close / previous - 1
+            previous_prices[symbol] = close
 
     results = {"date": run_date, "accounts": {}, "benchmarks": {}}
 
@@ -992,7 +986,6 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         if n == 0:
             return {}
 
-        avg_ret = np.mean(ret_series)
         std_ret = np.std(ret_series)
 
         # Annualized Volatility
@@ -1079,6 +1072,9 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
     for account, series in account_series.items():
         ret_list = [s["weekly_return"] for s in series]
         val_list = [s["value"] for s in series]
+        series_dates = [s["date"] for s in series]
+        spy_dates = [d for d in series_dates if d in benchmark_returns["SPY"]]
+        qqq_dates = [d for d in series_dates if d in benchmark_returns["QQQ"]]
 
         cash_weights = []
         for s in series:
@@ -1088,11 +1084,30 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
 
         stats = compute_stats(
             ret_list,
-            ref_spy_series=spy_ret_list[: len(ret_list)],
-            ref_qqq_series=qqq_ret_list[: len(ret_list)],
             values_series=val_list,
             cash_series=cash_weights,
         )
+        stats["as_of_date"] = series_dates[-1]
+        # Pair each account observation with benchmark returns on the same date.
+        # Unmatched dates do not enter beta or tracking error.
+        for symbol, matched_dates in (("spy", spy_dates), ("qqq", qqq_dates)):
+            if len(matched_dates) < 2:
+                continue
+            valid_dates = [d for d in matched_dates if d in account_returns[account]]
+            account_matched = [account_returns[account][d] for d in valid_dates]
+            benchmark_matched = [
+                benchmark_returns[symbol.upper()][d] for d in valid_dates
+            ]
+            if len(account_matched) < 2:
+                continue
+            variance = float(np.var(benchmark_matched))
+            stats[f"beta_{symbol}"] = (
+                float(np.cov(account_matched, benchmark_matched)[0, 1] / variance)
+                if variance > 0 else 0.0
+            )
+            stats[f"tracking_error_{symbol}"] = float(
+                np.std(np.subtract(account_matched, benchmark_matched)) * np.sqrt(52)
+            )
 
         # Calculate Turnover and Drift
         weights_data = conn.execute(
@@ -1165,23 +1180,37 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         results["accounts"][account] = stats
 
     # 3. Calculate stats for benchmarks
-    results["benchmarks"]["SPY"] = compute_stats(
-        spy_ret_list,
-        ref_spy_series=spy_ret_list,
-        ref_qqq_series=qqq_ret_list,
-    )
-    results["benchmarks"]["SPY"]["turnover"] = "N/A"
-    results["benchmarks"]["SPY"]["weight_drift"] = "N/A"
-    results["benchmarks"]["SPY"]["weeks_in_fallback"] = "N/A"
+    for symbol, dated_returns in benchmark_returns.items():
+        stats = compute_stats(list(dated_returns.values()))
+        stats["as_of_date"] = max(dated_returns) if dated_returns else None
+        stats["turnover"] = "N/A"
+        stats["weight_drift"] = "N/A"
+        stats["weeks_in_fallback"] = "N/A"
+        results["benchmarks"][symbol] = stats
 
-    results["benchmarks"]["QQQ"] = compute_stats(
-        qqq_ret_list,
-        ref_spy_series=spy_ret_list,
-        ref_qqq_series=qqq_ret_list,
+    required_accounts = ("FinRL", "AR", "RL")
+    series_returns = {
+        name: account_returns[name]
+        for name in required_accounts if name in account_returns
+    }
+    series_returns.update(benchmark_returns)
+    shared_dates = (
+        set.intersection(*(set(series) for series in series_returns.values()))
+        if all(name in account_returns for name in required_accounts) else set()
     )
-    results["benchmarks"]["QQQ"]["turnover"] = "N/A"
-    results["benchmarks"]["QQQ"]["weight_drift"] = "N/A"
-    results["benchmarks"]["QQQ"]["weeks_in_fallback"] = "N/A"
+    shared_dates = {d for d in shared_dates if d <= run_date}
+    shared_date = max(shared_dates) if shared_dates else None
+    status = "unavailable"
+    if shared_date:
+        status = "current" if shared_date == run_date else "historical"
+    results["comparison"] = {
+        "status": status,
+        "as_of_date": shared_date,
+        "weekly_returns": (
+            {name: series[shared_date] for name, series in series_returns.items()}
+            if shared_date else {}
+        ),
+    }
 
     return results
 
@@ -1210,6 +1239,10 @@ def save_comparison_metrics(metrics: dict, run_date: str) -> None:
         rows = []
         headers = [
             "account",
+            "as_of_date",
+            "comparison_status",
+            "comparison_as_of_date",
+            "comparison_weekly_return",
             "weekly_return",
             "cumulative_return",
             "volatility",
@@ -1225,18 +1258,31 @@ def save_comparison_metrics(metrics: dict, run_date: str) -> None:
             "weeks_in_fallback",
             "weight_drift",
         ]
+        comparison = metrics.get("comparison", {})
 
         # Process accounts
         for acc_name, stats in metrics.get("accounts", {}).items():
             row = {"account": acc_name}
-            for h in headers[1:]:
+            row["as_of_date"] = stats.get("as_of_date")
+            row["comparison_status"] = comparison.get("status", "unavailable")
+            row["comparison_as_of_date"] = comparison.get("as_of_date")
+            row["comparison_weekly_return"] = comparison.get(
+                "weekly_returns", {}
+            ).get(acc_name)
+            for h in headers[5:]:
                 row[h] = stats.get(h, 0.0)
             rows.append(row)
 
         # Process benchmarks
         for bench_name, stats in metrics.get("benchmarks", {}).items():
             row = {"account": bench_name}
-            for h in headers[1:]:
+            row["as_of_date"] = stats.get("as_of_date")
+            row["comparison_status"] = comparison.get("status", "unavailable")
+            row["comparison_as_of_date"] = comparison.get("as_of_date")
+            row["comparison_weekly_return"] = comparison.get(
+                "weekly_returns", {}
+            ).get(bench_name)
+            for h in headers[5:]:
                 row[h] = stats.get(h, "N/A")
             rows.append(row)
 
