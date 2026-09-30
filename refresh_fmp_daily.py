@@ -20,6 +20,7 @@ Usage:
 import argparse
 import os
 import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -39,6 +40,8 @@ DEFAULT_CONFIG = SCRIPT_DIR / "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
 FMP_DAILY_DIR = SCRIPT_DIR / "data/fmp_daily"
 OHLCV_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
 REQUIRED_BENCHMARK_SYMBOLS = ("SPY", "QQQ")
+RECENT_CACHE_MAX_AGE_DAYS = 10
+STALE_FETCH_MAX_ATTEMPTS = 3
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -203,6 +206,43 @@ def fetch_fmp_daily(
     raw["date"] = pd.to_datetime(raw["date"]).dt.date
     df = raw[OHLCV_COLUMNS].sort_values("date").reset_index(drop=True)
     return df
+
+
+def fetch_recent_rows_with_retry(
+    ticker: str,
+    from_date: date,
+    target_date: date,
+    api_key: str,
+    last_date: date | None,
+) -> pd.DataFrame:
+    """Retry an incomplete fetch only when the cache was recently current."""
+    recent = (
+        last_date is not None
+        and timedelta(0)
+        <= target_date - last_date
+        <= timedelta(days=RECENT_CACHE_MAX_AGE_DAYS)
+    )
+    max_attempts = STALE_FETCH_MAX_ATTEMPTS if recent else 1
+
+    for attempt in range(1, max_attempts + 1):
+        rows = fetch_fmp_daily(ticker, from_date, target_date, api_key)
+        returned_end = None if rows.empty else rows["date"].max()
+        if (returned_end is not None and returned_end >= target_date) or not recent:
+            if attempt > 1:
+                print(
+                    f"provider attempt {attempt}/{max_attempts}: "
+                    f"returned end {returned_end or 'none'} (target {target_date})"
+                )
+            return rows
+
+        print(
+            f"provider attempt {attempt}/{max_attempts}: "
+            f"returned end {returned_end or 'none'} (target {target_date})"
+        )
+        if attempt < max_attempts:
+            time.sleep(2 ** attempt)
+
+    return rows
 
 
 def append_new_rows(csv_path: Path, new_rows: pd.DataFrame, dry_run: bool) -> int:
@@ -371,12 +411,16 @@ def main():
         )
 
         try:
-            new_rows = fetch_fmp_daily(ticker, from_date, target_date, api_key)
+            new_rows = fetch_recent_rows_with_retry(
+                ticker, from_date, target_date, api_key, last_date
+            )
 
-            if new_rows.empty:
+            returned_end = None if new_rows.empty else new_rows["date"].max()
+            if returned_end is None or returned_end < target_date:
                 if empty_fetch_is_stale(last_date, target_date):
                     message = (
-                        "No data returned while local history is stale "
+                        f"Provider data ended at {returned_end or 'none'} "
+                        "while local history is stale "
                         f"(last: {last_date or 'missing'}, expected: "
                         f"{target_date})"
                     )

@@ -31,6 +31,7 @@ from update_adaptive_rotation_symbols import get_top_picks
 from src.strategies.rl_candidate_strategy import load_rl_candidate_weights
 from refresh_fmp_daily import (
     empty_fetch_is_stale,
+    fetch_recent_rows_with_retry,
     get_last_csv_date,
     latest_trading_day_on_or_before,
     load_symbols_from_yaml,
@@ -67,6 +68,108 @@ def test_empty_refresh_fails_when_local_history_is_stale():
     assert empty_fetch_is_stale(date(2026, 7, 17), date(2026, 8, 14))
     assert empty_fetch_is_stale(None, date(2026, 8, 14))
     assert not empty_fetch_is_stale(date(2026, 8, 14), date(2026, 8, 14))
+
+
+@patch("refresh_fmp_daily.time.sleep")
+@patch("refresh_fmp_daily.fetch_fmp_daily")
+def test_recent_empty_fetch_recovers_on_retry(mock_fetch, mock_sleep, capsys):
+    recovered = pd.DataFrame({"date": [date(2026, 9, 25)]})
+    mock_fetch.side_effect = [pd.DataFrame(), recovered]
+
+    result = fetch_recent_rows_with_retry(
+        "CARR", date(2026, 9, 19), date(2026, 9, 25), "", date(2026, 9, 18)
+    )
+
+    assert result is recovered
+    assert mock_fetch.call_count == 2
+    mock_sleep.assert_called_once_with(2)
+    output = capsys.readouterr().out
+    assert "attempt 1/3: returned end none" in output
+    assert "attempt 2/3: returned end 2026-09-25" in output
+
+
+@patch("refresh_fmp_daily.time.sleep")
+@patch("refresh_fmp_daily.fetch_fmp_daily")
+def test_recent_partial_fetch_recovers_on_retry(mock_fetch, mock_sleep, capsys):
+    partial = pd.DataFrame({"date": [date(2026, 9, 24)]})
+    recovered = pd.DataFrame({"date": [date(2026, 9, 25)]})
+    mock_fetch.side_effect = [partial, recovered]
+
+    result = fetch_recent_rows_with_retry(
+        "CARR", date(2026, 9, 19), date(2026, 9, 25), "", date(2026, 9, 18)
+    )
+
+    assert result is recovered
+    mock_sleep.assert_called_once_with(2)
+    assert "attempt 1/3: returned end 2026-09-24" in capsys.readouterr().out
+
+
+@patch("refresh_fmp_daily.time.sleep")
+@patch("refresh_fmp_daily.fetch_fmp_daily")
+def test_recent_empty_fetch_exhausts_retries(mock_fetch, mock_sleep, capsys):
+    mock_fetch.return_value = pd.DataFrame()
+
+    result = fetch_recent_rows_with_retry(
+        "CARR", date(2026, 9, 19), date(2026, 9, 25), "", date(2026, 9, 18)
+    )
+
+    assert result.empty
+    assert mock_fetch.call_count == 3
+    assert [call.args[0] for call in mock_sleep.call_args_list] == [2, 4]
+    assert "attempt 3/3: returned end none" in capsys.readouterr().out
+
+
+@patch("refresh_fmp_daily.time.sleep")
+@patch("refresh_fmp_daily.fetch_fmp_daily")
+def test_old_stale_fetch_is_not_retried(mock_fetch, mock_sleep):
+    mock_fetch.return_value = pd.DataFrame()
+
+    fetch_recent_rows_with_retry(
+        "AVB", date(2026, 8, 25), date(2026, 9, 25), "", date(2026, 8, 24)
+    )
+
+    mock_fetch.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+def test_exhausted_partial_refresh_does_not_write_cache(tmp_path, monkeypatch, capsys):
+    import refresh_fmp_daily
+
+    config = tmp_path / "strategy.yaml"
+    config.touch()
+    cache_dir = tmp_path / "fmp_daily"
+    cache_dir.mkdir()
+    cache = cache_dir / "CARR_daily.csv"
+    original = "date,open,high,low,close,volume\n2026-09-18,1,1,1,1,1\n"
+    cache.write_text(original, encoding="utf-8")
+    partial = pd.DataFrame(
+        {
+            "date": [date(2026, 9, 24)],
+            "open": [1],
+            "high": [1],
+            "low": [1],
+            "close": [1],
+            "volume": [1],
+        }
+    )
+    monkeypatch.setattr(refresh_fmp_daily, "SCRIPT_DIR", tmp_path)
+    monkeypatch.setattr(refresh_fmp_daily, "FMP_DAILY_DIR", cache_dir)
+    monkeypatch.setattr(
+        refresh_fmp_daily, "get_refresh_target_date", lambda _: date(2026, 9, 25)
+    )
+    monkeypatch.setattr(refresh_fmp_daily, "is_trading_day", lambda _: True)
+    monkeypatch.setattr(refresh_fmp_daily, "load_symbols_from_yaml", lambda _: ["CARR"])
+    monkeypatch.setattr(refresh_fmp_daily, "fetch_fmp_daily", lambda *args: partial)
+    monkeypatch.setattr(refresh_fmp_daily.time, "sleep", lambda _: None)
+    monkeypatch.setattr(sys, "argv", ["refresh_fmp_daily.py", "--config", str(config)])
+
+    with pytest.raises(SystemExit, match="1"):
+        refresh_fmp_daily.main()
+
+    assert cache.read_text(encoding="utf-8") == original
+    output = capsys.readouterr().out
+    assert "attempt 3/3: returned end 2026-09-24" in output
+    assert "Provider data ended at 2026-09-24" in output
 
 
 def test_latest_trading_day_uses_previous_session_on_weekend():
