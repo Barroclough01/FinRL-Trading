@@ -236,10 +236,13 @@ def record_snapshot(
 
     portfolio_value = alpaca["portfolio_value"]
 
-    # Weekly return: 0.0 on first snapshot, otherwise vs prior week
+    # Exclude same-date replacements and later captures, as in offline RL.
+    # Weekly return: 0.0 on first snapshot, otherwise vs prior observation.
     prev = conn.execute(
-        "SELECT portfolio_value FROM weekly_snapshot WHERE account=? ORDER BY snapshot_date DESC LIMIT 1",
-        (account["name"],),
+        "SELECT portfolio_value FROM weekly_snapshot "
+        "WHERE account=? AND snapshot_date < ? "
+        "ORDER BY snapshot_date DESC LIMIT 1",
+        (account["name"], snapshot_date),
     ).fetchone()
 
     if prev:
@@ -249,8 +252,10 @@ def record_snapshot(
 
     # Cumulative return: 0.0 on first snapshot, otherwise vs first recorded value
     first = conn.execute(
-        "SELECT portfolio_value FROM weekly_snapshot WHERE account=? ORDER BY snapshot_date ASC LIMIT 1",
-        (account["name"],),
+        "SELECT portfolio_value FROM weekly_snapshot "
+        "WHERE account=? AND snapshot_date < ? "
+        "ORDER BY snapshot_date ASC LIMIT 1",
+        (account["name"], snapshot_date),
     ).fetchone()
 
     if first:
@@ -279,11 +284,16 @@ def record_snapshot(
     # SPY cumulative: first benchmark entry
     first_spy = conn.execute(
         "SELECT spy_close FROM benchmark_prices "
-        "WHERE spy_close IS NOT NULL ORDER BY price_date ASC LIMIT 1"
+        "WHERE price_date < ? AND spy_close IS NOT NULL "
+        "ORDER BY price_date ASC LIMIT 1",
+        (benchmark_date,),
     ).fetchone()
     spy_cum = None
-    if first_spy and benchmark.get("spy_close"):
-        spy_cum = (benchmark["spy_close"] - first_spy[0]) / first_spy[0]
+    if benchmark_date and benchmark.get("spy_close"):
+        spy_cum = (
+            (benchmark["spy_close"] - first_spy[0]) / first_spy[0]
+            if first_spy and first_spy[0] else 0.0
+        )
 
     conn.execute(
         """
@@ -1114,10 +1124,10 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             """
             SELECT snapshot_date, symbol, actual_weight, target_weight
             FROM weekly_weights
-            WHERE account = ?
+            WHERE account = ? AND snapshot_date <= ?
             ORDER BY snapshot_date ASC
         """,
-            (account,),
+            (account, run_date),
         ).fetchall()
 
         weights_by_date = {}
@@ -1160,9 +1170,9 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             decisions = conn.execute(
                 """
                 SELECT fallback_status FROM strategy_decisions
-                WHERE account_name = ?
+                WHERE account_name = ? AND run_date <= ?
             """,
-                (account,),
+                (account, run_date),
             ).fetchall()
             if decisions:
                 fallback_count = sum(1 for d in decisions if d[0] == 1)
