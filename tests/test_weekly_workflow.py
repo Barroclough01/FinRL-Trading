@@ -294,7 +294,7 @@ def test_rl_backfill_removes_dates_outside_comparison_calendar(mock_simulate, tm
 
 
 @patch("subprocess.run")
-def test_structured_strategy_output_parsing(mock_run):
+def test_structured_strategy_output_parsing(mock_run, tmp_path):
     """Test that structured strategy output can be parsed and validated."""
     dummy_json = {
         "target_weights": {"SATS": 0.25, "MCHP": 0.25, "ON": 0.25, "ORCL": 0.25},
@@ -310,6 +310,7 @@ def test_structured_strategy_output_parsing(mock_run):
         cmd = args[0]
         json_path_idx = cmd.index("--json-output") + 1
         json_path = cmd[json_path_idx]
+        assert Path(json_path).parent == tmp_path / "logs"
         with open(json_path, "w") as f:
             json.dump(dummy_json, f)
         res = MagicMock()
@@ -426,7 +427,7 @@ def test_invalid_target_weights_fail_validation():
 
 
 @patch("src.data.trading_calendar.is_trading_day")
-def test_configured_cash_fallback_passes_validation(mock_is_trading_day):
+def test_configured_cash_fallback_passes_validation(mock_is_trading_day, tmp_path):
     """An empty target is valid only for an explicit cash fallback."""
     account = {"name": "AR", "config": "dummy_config.yaml"}
     executor = MagicMock()
@@ -435,6 +436,12 @@ def test_configured_cash_fallback_passes_validation(mock_is_trading_day):
         "equity": 1_000_000.0,
     }
     mock_is_trading_day.return_value = True
+    cache_dir = tmp_path / "data/fmp_daily"
+    cache_dir.mkdir(parents=True)
+    for symbol in ("SPY", "QQQ"):
+        (cache_dir / f"{symbol}_daily.csv").write_text(
+            "date,close\n2026-07-10,100\n", encoding="utf-8"
+        )
 
     valid, failed_rule, error_msg, _ = validate_pre_trade(
         account,
@@ -447,8 +454,11 @@ def test_configured_cash_fallback_passes_validation(mock_is_trading_day):
     assert valid
     assert failed_rule is None
     assert error_msg is None
-    assert allows_cash_fallback("src/strategies/AdaptiveRotationConf_baseline.yaml")
-    assert allows_cash_fallback("src/strategies/AdaptiveRotationConf_v1.2.2.yaml")
+    for name in (
+        "AdaptiveRotationConf_baseline.yaml",
+        "AdaptiveRotationConf_v1.2.2.yaml",
+    ):
+        assert allows_cash_fallback(str(project_root / "src/strategies" / name))
 
 
 @patch("pathlib.Path.exists")

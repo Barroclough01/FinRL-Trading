@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from src.strategies.rl_contract import DEFAULT_RL_CONTRACT_PATH, load_rl_contract
 
@@ -16,7 +15,7 @@ def test_rl_contract_file_exists_and_contains_expected_sections():
 
 
 def test_rl_contract_matches_documented_fields():
-    contract_path = Path("src/strategies/rl_contract.json")
+    contract_path = DEFAULT_RL_CONTRACT_PATH
     data = json.loads(contract_path.read_text())
 
     assert set(data.keys()) >= {
