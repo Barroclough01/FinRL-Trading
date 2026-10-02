@@ -1396,7 +1396,8 @@ def test_metrics_runs_when_all_accounts_fail(
 @patch("os.getenv")
 @patch("run_paper_trading.load_accounts_from_env")
 @patch("run_paper_trading.run_account")
-def test_production_kill_switch(mock_run_account, mock_load, mock_getenv):
+@patch("run_paper_trading.run_parity_checks")
+def test_production_kill_switch(mock_parity, mock_run_account, mock_load, mock_getenv):
     """Test that the production kill switch forces dry-run mode."""
 
     # Simulate TRADING_DISABLED=true
@@ -1547,7 +1548,8 @@ def test_live_vs_replay_parity(mock_exists, mock_get_ar_weights, tmp_path):
 
         mock_path.side_effect = path_side_effect
 
-        run_parity_checks("2026-05-31", accounts, results, dry_run=False)
+        with pytest.raises(RuntimeError, match="mismatch_acc.*Determinism"):
+            run_parity_checks("2026-05-31", accounts, results, dry_run=False)
 
         # Verify JSON report exists
         assert report_file.exists()

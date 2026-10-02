@@ -67,6 +67,20 @@ tracking is a required subprocess: a nonzero exit or launch failure is added to
 the main error list with the run date, exit status, and available subprocess
 output. It therefore makes the overall orchestrator exit nonzero.
 
+The final outcome is decided after required validation, decision, execution,
+reconciliation and parity audit writes, sanity checks and parity checks. A real
+parity mismatch, check exception or required write failure makes the run fail
+with account/date/path context. Failure does not imply that submitted orders
+were rolled back: inspect persisted broker IDs before any retry.
+
+Valid open paper orders remain pending. The existing parity report records
+`execution_pending=true` and `reconciled_successfully=false`; a pending-only run
+returns zero and logs incomplete reconciliation, but does not send an `ok`
+notification. Fully reconciled runs send `ok` only after all required checks and
+writes pass. Runs with hard failures send one final `failed` outcome even when
+other orders remain pending. Dry-run parity uses preview targets and writes its
+JSON report without updating the decision database.
+
 ## Data freshness
 
 `refresh_fmp_daily.py` reads every configured account's Adaptive Rotation YAML,

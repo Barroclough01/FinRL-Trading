@@ -508,7 +508,10 @@ def save_validation_result(
             with open(log_path, "r") as f:
                 data = json.load(f)
         except Exception as e:
-            logger.warning(f"Could not read existing pre-trade validation log: {e}")
+            raise RuntimeError(
+                f"Cannot read required validation audit {log_path} for "
+                f"{account_name} on {run_date}: {e}"
+            ) from e
 
     # Add/update this account's validation result
     data[account_name] = {
@@ -525,7 +528,10 @@ def save_validation_result(
             json.dump(data, f, indent=2)
         logger.info(f"Pre-trade validation log saved to {log_path}")
     except Exception as e:
-        logger.warning(f"Could not save pre-trade validation log: {e}")
+        raise RuntimeError(
+            f"Cannot write required validation audit {log_path} for "
+            f"{account_name} on {run_date}: {e}"
+        ) from e
 
 
 def compute_file_hash(path: Path) -> str:
@@ -541,10 +547,12 @@ def compute_file_hash(path: Path) -> str:
 def save_strategy_decision(run_date: str, account_name: str, record: dict) -> None:
     """Save normalized decision record to SQLite and JSONL mirror."""
     db_path = Path("data/finrl_trading.db")
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    save_errors = []
 
     # 1. SQLite Save
+    conn = None
     try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS strategy_decisions (
@@ -605,14 +613,17 @@ def save_strategy_decision(run_date: str, account_name: str, record: dict) -> No
             ),
         )
         conn.commit()
-        conn.close()
         logger.info(
             f"Saved strategy decision to SQLite for account={account_name}, date={run_date}"
         )
-    except sqlite3.Error as exc:
+    except Exception as exc:
         logger.error(
             f"Failed to save strategy decision to SQLite: {exc}", exc_info=True
         )
+        save_errors.append(f"{db_path}: {exc}")
+    finally:
+        if conn is not None:
+            conn.close()
 
     # 2. JSONL Mirror Append
     jsonl_path = Path("logs/strategy_decisions.jsonl")
@@ -629,6 +640,15 @@ def save_strategy_decision(run_date: str, account_name: str, record: dict) -> No
     except Exception as e:
         logger.error(
             f"Failed to append strategy decision to JSONL mirror: {e}", exc_info=True
+        )
+        save_errors.append(f"{jsonl_path}: {e}")
+
+    if save_errors:
+        raise RuntimeError(
+            f"Required decision audit failed for {account_name} on {run_date}: "
+            + "; ".join(save_errors)
+            + ". Inspect persisted orders before retrying; "
+            "submission may have occurred."
         )
 
 
@@ -706,11 +726,11 @@ def reconcile_post_trade(run_date: str, account_name: str, record: dict) -> dict
             f"{failed_count} submitted order(s) failed or were rejected by the broker."
         )
 
-    reconciled_successfully = len(alerts) == 0
+    reconciled_successfully = len(alerts) == 0 and open_count == 0
 
     return {
         "reconciled_successfully": reconciled_successfully,
-        "discrepancies_found": not reconciled_successfully,
+        "discrepancies_found": bool(alerts),
         "alerts": alerts,
         "target_vs_actual_weights": comparison,
         "orders_summary": {
@@ -737,7 +757,10 @@ def save_reconciliation_report(
             with open(log_path, "r") as f:
                 data = json.load(f)
         except Exception as e:
-            logger.warning(f"Could not read existing reconciliation report: {e}")
+            raise RuntimeError(
+                f"Cannot read required reconciliation audit {log_path} for "
+                f"{account_name} on {run_date}: {e}"
+            ) from e
 
     # Add/update this account's reconciliation result
     if "date" not in data:
@@ -753,7 +776,10 @@ def save_reconciliation_report(
             json.dump(data, f, indent=2)
         logger.info(f"Reconciliation report saved to {log_path}")
     except Exception as e:
-        logger.warning(f"Could not save reconciliation report: {e}")
+        raise RuntimeError(
+            f"Cannot write required reconciliation audit {log_path} for "
+            f"{account_name} on {run_date}: {e}"
+        ) from e
 
 
 def load_accounts_from_env() -> list[dict]:
@@ -1288,29 +1314,36 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
 
 def run_parity_checks(
     run_date: str, accounts: list[dict], results: list[dict], dry_run: bool
-) -> None:
+) -> dict:
     """
     Perform live-vs-replay parity checks for all accounts run on run_date.
     Saves a consolidated report to logs/parity_check_YYYY-MM-DD.json and
-    updates the SQLite strategy_decisions table with the results.
+    updates live SQLite strategy_decisions with the results. Returns the existing
+    report, or raises with required check/write failures after saving evidence.
+    Pending orders prevent completed reconciliation but are not hard failures.
     """
     logger.info("Starting live-vs-replay parity checks...")
     parity_report = {"date": run_date, "dry_run": dry_run, "accounts": {}}
+    hard_failures = []
 
     db_path = Path("data/finrl_trading.db")
 
     for account in accounts:
         name = account["name"]
         config = account["config"]
+        check_errors = []
         logger.info(f"Running parity check for account: {name}")
 
         # 1. Get submitted target weights
         res_entry = next((r for r in results if r.get("account") == name), None)
         submitted_weights = {}
         if res_entry:
-            submitted_weights = res_entry.get("target_weights", {})
+            submitted_weights = res_entry.get(
+                "target_weights", res_entry.get("weights", {})
+            )
 
-        if not submitted_weights and db_path.exists():
+        if not submitted_weights and not dry_run and db_path.exists():
+            conn = None
             try:
                 conn = sqlite3.connect(db_path)
                 row = conn.execute(
@@ -1319,9 +1352,14 @@ def run_parity_checks(
                 ).fetchone()
                 if row and row[0]:
                     submitted_weights = json.loads(row[0])
-                conn.close()
             except Exception as e:
                 logger.warning(f"Could not load submitted weights from DB: {e}")
+                check_errors.append(
+                    f"Cannot read submitted targets from {db_path}: {e}"
+                )
+            finally:
+                if conn is not None:
+                    conn.close()
 
         # 2. Get replay target weights
         replay_weights = {}
@@ -1345,6 +1383,8 @@ def run_parity_checks(
                 if abs(sub_w - rep_w) > 1e-5:
                     determinism_ok = False
             replay_vs_submitted_mae = float(sum(diffs) / len(diffs)) if diffs else 0.0
+            if not determinism_ok:
+                determinism_msg = "Target weights differ by more than 1e-5"
         except Exception as e:
             logger.error(f"Failed to generate replay weights for {name}: {e}")
             determinism_ok = False
@@ -1363,7 +1403,12 @@ def run_parity_checks(
         submitted_orders = []
         submitted_vs_actual_mae = 0.0
         if not dry_run:
+            conn = None
             try:
+                if not db_path.exists():
+                    raise FileNotFoundError(
+                        f"Required parity database missing: {db_path}"
+                    )
                 if db_path.exists():
                     conn = sqlite3.connect(db_path)
                     row = conn.execute(
@@ -1373,6 +1418,10 @@ def run_parity_checks(
                         "WHERE run_date = ? AND account_name = ?",
                         (run_date, name),
                     ).fetchone()
+                    if not row:
+                        raise RuntimeError(
+                            f"Missing strategy decision for {name} on {run_date}"
+                        )
                     if row and row[0]:
                         post_trade_positions = json.loads(row[0])
                         decision_positions = post_trade_positions
@@ -1380,19 +1429,22 @@ def run_parity_checks(
                         decision_created_at = row[3]
                         try:
                             equity = float(row[1]) if row[1] not in (None, "") else 0.0
-                        except (TypeError, ValueError):
+                        except (TypeError, ValueError) as e:
                             equity = 0.0
+                            check_errors.append(f"Invalid decision equity: {e}")
                         for pos in post_trade_positions:
                             sym = pos.get("symbol")
                             try:
                                 mv = float(pos.get("market_value", 0.0) or 0.0)
-                            except (TypeError, ValueError):
+                            except (TypeError, ValueError) as e:
                                 mv = 0.0
+                                check_errors.append(
+                                    f"Invalid decision market value for {sym}: {e}"
+                                )
                             act_w = mv / equity if equity > 0 else 0.0
                             filled_weights[sym] = act_w
                         if len(row) > 2 and row[2]:
                             submitted_orders = json.loads(row[2])
-                    conn.close()
 
                 pending_statuses = {
                     "accepted",
@@ -1404,6 +1456,13 @@ def run_parity_checks(
                     str(order.get("status", "")).lower() in pending_statuses
                     for order in submitted_orders
                 )
+                if any(
+                    str(order.get("status", "")).lower() in {"rejected", "failed"}
+                    for order in submitted_orders
+                ):
+                    check_errors.append(
+                        "Submitted orders include rejected/failed orders"
+                    )
 
                 if filled_weights:
                     all_syms = set(submitted_weights.keys()) | set(
@@ -1421,7 +1480,7 @@ def run_parity_checks(
                     )
                 else:
                     # If we expected trades but got none, check if target weights are 100% cash
-                    if submitted_weights and all(
+                    if execution_pending or all(
                         w == 0.0 for w in submitted_weights.values()
                     ):
                         execution_ok = True
@@ -1430,6 +1489,12 @@ def run_parity_checks(
             except Exception as e:
                 logger.warning(f"Could not load filled weights from DB: {e}")
                 execution_ok = False
+                check_errors.append(
+                    f"Cannot read execution evidence from {db_path}: {e}"
+                )
+            finally:
+                if conn is not None:
+                    conn.close()
         else:
             execution_ok = True
 
@@ -1445,6 +1510,7 @@ def run_parity_checks(
         actual_vs_dashboard_actual_mae = 0.0
         position_quantity_mae = 0.0
         if not dry_run:
+            conn = None
             try:
                 if db_path.exists():
                     conn = sqlite3.connect(db_path)
@@ -1469,9 +1535,8 @@ def run_parity_checks(
                         dashboard_positions = json.loads(snapshot_row[0])
                         dashboard_created_at = snapshot_row[1]
                         dashboard_positions_loaded = True
-                    conn.close()
 
-                if dashboard_target_weights or dashboard_actual_weights:
+                if dashboard_positions_loaded and decision_positions_loaded:
                     all_syms = set(submitted_weights.keys()) | set(
                         dashboard_target_weights.keys()
                     )
@@ -1536,8 +1601,11 @@ def run_parity_checks(
                                 for sym in decision_quantities
                             )
                         )
-                    except (KeyError, TypeError, ValueError):
+                    except (KeyError, TypeError, ValueError) as e:
                         position_quantities_ok = False
+                        check_errors.append(
+                            f"Cannot compare persisted position quantities: {e}"
+                        )
 
                     if not position_quantities_ok:
                         dashboard_ok = False
@@ -1546,11 +1614,17 @@ def run_parity_checks(
             except Exception as e:
                 logger.warning(f"Could not load dashboard weights from DB: {e}")
                 dashboard_ok = False
+                check_errors.append(
+                    f"Cannot read dashboard evidence from {db_path}: {e}"
+                )
+            finally:
+                if conn is not None:
+                    conn.close()
         else:
             dashboard_ok = True
 
         # 5. Compile account parity status
-        mismatches = []
+        mismatches = list(check_errors)
         if not determinism_ok:
             mismatches.append(
                 f"Determinism mismatch (submitted vs replay): {determinism_msg}"
@@ -1566,6 +1640,13 @@ def run_parity_checks(
                 "Dashboard database mismatch (submitted targets or persisted "
                 "position quantities differ)"
             )
+
+        if check_errors or not determinism_ok or (
+            not dry_run and (
+                not dashboard_ok or (not execution_ok and not execution_pending)
+            )
+        ):
+            hard_failures.append(f"{name} on {run_date}: " + "; ".join(mismatches))
 
         reconciled_successfully = len(mismatches) == 0
 
@@ -1601,23 +1682,35 @@ def run_parity_checks(
         parity_report["accounts"][name] = acc_parity
 
         # 6. Update SQLite strategy_decisions table with parity_check JSON
+        conn = None
         try:
-            if db_path.exists():
+            if not dry_run:
+                if not db_path.exists():
+                    raise FileNotFoundError(
+                        f"Required parity database missing: {db_path}"
+                    )
                 conn = sqlite3.connect(db_path)
-                try:
+                columns = {
+                    row[1] for row in conn.execute(
+                        "PRAGMA table_info(strategy_decisions)"
+                    )
+                }
+                if "parity_check" not in columns:
                     conn.execute(
                         "ALTER TABLE strategy_decisions ADD COLUMN parity_check TEXT"
                     )
                     conn.commit()
-                except sqlite3.OperationalError:
-                    pass
 
-                conn.execute(
+                updated = conn.execute(
                     "UPDATE strategy_decisions SET parity_check = ? WHERE run_date = ? AND account_name = ?",
                     (json.dumps(acc_parity), run_date, name),
                 )
+                if updated.rowcount != 1:
+                    raise RuntimeError(
+                        f"Missing strategy decision to persist parity for "
+                        f"{name} on {run_date}"
+                    )
                 conn.commit()
-                conn.close()
                 logger.info(
                     f"Updated SQLite strategy_decisions parity_check for {name}"
                 )
@@ -1625,6 +1718,13 @@ def run_parity_checks(
             logger.error(
                 f"Failed to update strategy_decisions parity_check in SQLite: {e}"
             )
+            hard_failures.append(
+                f"Cannot write required parity audit to {db_path} for {name} "
+                f"on {run_date}: {e}"
+            )
+        finally:
+            if conn is not None:
+                conn.close()
 
     # Save consolidated JSON report
     report_path = Path(f"logs/parity_check_{run_date}.json")
@@ -1634,7 +1734,18 @@ def run_parity_checks(
             json.dump(parity_report, f, indent=2)
         logger.info(f"Saved consolidated parity check report to {report_path}")
     except Exception as e:
-        logger.error(f"Failed to save parity check report: {e}")
+        raise RuntimeError(
+            f"Cannot write required parity audit {report_path}: {e}. "
+            + "; ".join(hard_failures)
+        ) from e
+
+    if hard_failures:
+        raise RuntimeError(
+            f"Required parity checks/audits failed; inspect {report_path}: "
+            + "; ".join(hard_failures)
+            + ". Inspect persisted orders before retrying; do not resubmit blindly."
+        )
+    return parity_report
 
 
 # ---------------------------------------------------------------------------
@@ -1711,6 +1822,13 @@ def main():
         try:
             result = run_account(account, args.date, args.dry_run)
             results.append(result)
+            if result.get("orders_failed", 0):
+                errors.append({
+                    "account": account["name"],
+                    "error": (
+                        f"{result['orders_failed']} paper order submission(s) failed"
+                    ),
+                })
         except Exception as e:
             logger.error(f"Account '{account['name']}' failed: {e}", exc_info=True)
             errors.append({"account": account["name"], "error": str(e)})
@@ -1733,62 +1851,58 @@ def main():
             logger.info(f"Execution log saved: {log_path}")
         except Exception as e:
             logger.warning(f"Could not save execution log: {e}")
+            errors.append({
+                "account": "audit",
+                "error": f"Cannot write required execution audit {log_path}: {e}",
+            })
 
     # Run metrics tracker (always on live runs, even if all accounts failed)
-    metrics_warning = None
     if not args.dry_run:
-        metrics_ok, metrics_error = run_metrics_tracker(args.date, Path(project_root))
+        try:
+            metrics_ok, metrics_error = run_metrics_tracker(
+                args.date, Path(project_root)
+            )
+        except Exception as e:
+            metrics_ok, metrics_error = (
+                False, f"Metrics check failed on {args.date}: {e}"
+            )
         if not metrics_ok:
             errors.append({"account": "metrics", "error": metrics_error})
         elif metrics_error:
-            metrics_warning = metrics_error
             logger.warning(metrics_error)
-        
+
         # Run required RL offline tracking after live metrics.
-        rl_ok, rl_error = run_rl_tracker(args.date, Path(project_root))
+        try:
+            rl_ok, rl_error = run_rl_tracker(args.date, Path(project_root))
+        except Exception as e:
+            rl_ok, rl_error = False, f"Offline RL check failed on {args.date}: {e}"
         if not rl_ok:
             logger.error(rl_error)
             errors.append({"account": "RL", "error": rl_error})
 
-    if not args.dry_run and results:
-        failures = run_post_run_sanity_checks(args.date, accounts, results, errors)
-        if failures:
-            for failure in failures:
-                logger.error("Sanity check failed: %s", failure)
-            notify_status(
-                args.notify_webhook,
-                {
-                    "status": "failed",
-                    "date": args.date,
-                    "accounts": sorted([a["name"] for a in accounts]),
-                    "errors": errors,
-                    "sanity_failures": failures,
-                },
+    failures = []
+    if not args.dry_run:
+        try:
+            failures = run_post_run_sanity_checks(
+                args.date, accounts, results, list(errors)
             )
-            sys.exit(1)
+        except Exception as e:
+            failures = [f"Sanity check failed on {args.date}: {e}"]
+        for failure in failures:
+            logger.error("Sanity check failed: %s", failure)
 
-        logger.info("Post-run sanity checks passed")
-        notify_status(
-            args.notify_webhook,
-            {
-                "status": "ok",
-                "date": args.date,
-                "accounts": sorted([a["name"] for a in accounts]),
-                "orders_failed": {
-                    r["account"]: r.get("orders_failed", 0) for r in results
-                },
-            },
-        )
-
-    # Run parity checks (for both dry-run and live executions)
+    # Complete required checks and audit writes before deciding final status.
+    parity_report = {}
     try:
-        run_parity_checks(args.date, accounts, results, args.dry_run)
+        parity_report = run_parity_checks(args.date, accounts, results, args.dry_run)
     except Exception as e:
         logger.error(f"Parity checks failed to run: {e}", exc_info=True)
+        errors.append({"account": "parity", "error": str(e)})
 
-    if errors:
+    if errors or failures:
         logger.error(
-            f"{len(errors)} account(s) failed: {[e['account'] for e in errors]}"
+            "Final run failed on %s: %s required errors, %s sanity failures",
+            args.date, len(errors), len(failures),
         )
         notify_status(
             args.notify_webhook,
@@ -1797,9 +1911,34 @@ def main():
                 "date": args.date,
                 "accounts": sorted([a["name"] for a in accounts]),
                 "errors": errors,
+                "sanity_failures": failures,
             },
         )
         sys.exit(1)
+    elif not args.dry_run:
+        pending_accounts = [
+            name for name, report in parity_report["accounts"].items()
+            if report["execution_pending"]
+        ]
+        if pending_accounts:
+            logger.warning(
+                "Required checks/audits completed; orders pending for %s. "
+                "Reconciliation is incomplete; no success notification sent.",
+                pending_accounts,
+            )
+        elif results:
+            logger.info("All required checks and audit writes passed")
+            notify_status(
+                args.notify_webhook,
+                {
+                    "status": "ok",
+                    "date": args.date,
+                    "accounts": sorted([a["name"] for a in accounts]),
+                    "orders_failed": {
+                        r["account"]: r.get("orders_failed", 0) for r in results
+                    },
+                },
+            )
 
 
 if __name__ == "__main__":
