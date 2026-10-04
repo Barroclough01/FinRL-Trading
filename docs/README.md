@@ -29,6 +29,12 @@ separates current operating guidance from dated history and design records.
 - [`weekly_comparison_journal.md`](weekly_comparison_journal.md): historical
   review snapshots and templates. Never use its last row as current health.
 
+## Proposed designs
+
+The separate [execution recovery proposal](execution_recovery_proposal.md), dated
+2026-10-04, is pending user approval. Only its existing-contract open-order guard
+is implemented; the durable journal and recovery interface are proposed.
+
 ## Completed design plans
 
 These files explain why the present workflow has its current artifacts. Their

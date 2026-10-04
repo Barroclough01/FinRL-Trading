@@ -428,15 +428,39 @@ class AlpacaManager:
         )
         default_tif = 'opg' if use_opg else 'day'
 
-        # Only cancel open orders when we intend to place new ones
+        # Existing open orders may belong to an earlier, partially completed run.
+        # Never cancel or replace them as part of another rebalance attempt.
         will_place_orders = (
             (not dry_run) and (is_open or use_opg or queue_for_next_open)
         )
         if will_place_orders:
             try:
-                self.cancel_all_orders(account_name)
-            except Exception as e:
-                self.logger.warning(f"Failed to cancel open orders before rebalance: {e}")
+                open_orders = self.get_orders(
+                    status='open', account_name=account.name
+                )
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot verify open orders for {account.name}: {exc}. "
+                    "Rebalance refused; inspect broker orders before retrying."
+                ) from exc
+            if not isinstance(open_orders, list):
+                raise ValueError(
+                    f"Cannot verify open orders for {account.name}: invalid response. "
+                    "Rebalance refused; inspect broker orders before retrying."
+                )
+            if open_orders:
+                order_ids = [
+                    str(order.get('id', 'unknown'))
+                    if isinstance(order, dict) else 'unknown'
+                    for order in open_orders[:5]
+                ]
+                raise ValueError(
+                    f"Rebalance refused for {account.name}: "
+                    f"{len(open_orders)} open order(s), "
+                    f"including {', '.join(order_ids)}. "
+                    "Existing orders were left unchanged; "
+                    "reconcile them before retrying."
+                )
 
         # Ensure asset metadata is available
         self._ensure_assets_loaded()

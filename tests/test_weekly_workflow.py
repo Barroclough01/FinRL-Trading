@@ -1644,7 +1644,7 @@ def test_alpaca_manager_normalization_with_skipped_assets(
     assert res_weights["MCHP"] == pytest.approx(0.50, abs=1e-4)
 
 
-def test_alpaca_manager_queues_day_orders_for_next_open():
+def test_alpaca_manager_queues_day_orders_for_next_open(monkeypatch):
     """Next-open mode must use DAY for whole and fractional shares."""
     from src.trading.alpaca_manager import AlpacaAccount, AlpacaManager
 
@@ -1653,6 +1653,7 @@ def test_alpaca_manager_queues_day_orders_for_next_open():
     manager._assets_loaded = True
     manager._is_market_open = MagicMock(return_value=False)
     manager.cancel_all_orders = MagicMock(return_value=0)
+    monkeypatch.setattr(manager, "get_orders", MagicMock(return_value=[]))
     manager.get_positions = MagicMock(return_value=[])
     manager.get_portfolio_value = MagicMock(return_value=100_000.0)
     manager.get_account_info = MagicMock(return_value={"buying_power": "100000"})
