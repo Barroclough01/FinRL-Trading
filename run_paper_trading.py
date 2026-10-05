@@ -76,6 +76,14 @@ logger = logging.getLogger(__name__)
 # Default config (single-account fallback)
 # ---------------------------------------------------------------------------
 DEFAULT_CONFIG = "src/strategies/AdaptiveRotationConf_v1.2.2.yaml"
+_ATTEMPT_DIR: Path | None = None
+_FRESH_ACCOUNTS: set[str] = set()
+
+
+def execution_audit_path(filename: str) -> Path:
+    if _ATTEMPT_DIR is not None:
+        return _ATTEMPT_DIR / filename
+    return Path(f"logs/{filename}")
 
 
 # ---------------------------------------------------------------------------
@@ -102,9 +110,9 @@ def get_ar_weights(
 
     config_name = Path(config_path).stem
     suffix = "_replay" if is_replay else ""
-    json_output_path = os.path.join(
-        project_root, "logs", f"target_weights_{config_name}_{run_date}{suffix}.json"
-    )
+    json_output_path = str((Path(project_root) / execution_audit_path(
+        f"target_weights_{config_name}_{run_date}{suffix}.json"
+    )).absolute())
 
     # Ensure output directory exists
     Path(json_output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +135,10 @@ def get_ar_weights(
         json_output_path,
     ]
     if account_name:
-        cmd.extend(["--audit-suffix", account_name])
+        audit_suffix = account_name
+        if _ATTEMPT_DIR is not None:
+            audit_suffix += "_" + _ATTEMPT_DIR.name
+        cmd.extend(["--audit-suffix", audit_suffix])
 
     result = subprocess.run(
         cmd,
@@ -499,7 +510,7 @@ def save_validation_result(
     """Save validation status to logs/pre_trade_validation_YYYY-MM-DD.json"""
     from datetime import datetime
 
-    log_path = Path(f"logs/pre_trade_validation_{run_date}.json")
+    log_path = execution_audit_path(f"pre_trade_validation_{run_date}.json")
 
     # Read existing log if it exists
     data = {}
@@ -748,7 +759,7 @@ def save_reconciliation_report(
     run_date: str, account_name: str, recon_result: dict
 ) -> None:
     """Save the post-trade reconciliation report to logs/reconciliation_YYYY-MM-DD.json."""
-    log_path = Path(f"logs/reconciliation_{run_date}.json")
+    log_path = execution_audit_path(f"reconciliation_{run_date}.json")
 
     # Read existing report if it exists
     data = {}
@@ -986,7 +997,7 @@ def run_post_run_sanity_checks(
     if missing_accounts:
         failures.append(f"missing execution results for account(s): {missing_accounts}")
 
-    execution_log = Path(f"logs/execution_{run_date}.json")
+    execution_log = execution_audit_path(f"execution_{run_date}.json")
     if not execution_log.exists():
         failures.append(f"missing execution log: {execution_log}")
 
@@ -1032,7 +1043,9 @@ def run_post_run_sanity_checks(
     return failures
 
 
-def run_metrics_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]:
+def run_metrics_tracker(run_date: str, project_root: Path, *,
+                        execution_log: Path | None = None,
+                        accounts: list[str] | None = None) -> tuple[bool, str | None]:
     """
     Run track_metrics.py after a live paper trading session.
 
@@ -1045,8 +1058,14 @@ def run_metrics_tracker(run_date: str, project_root: Path) -> tuple[bool, str | 
     import subprocess
 
     logger.info("Running metrics tracker (full snapshot)...")
+    command = [sys.executable, "track_metrics.py", "--date", run_date]
+    if execution_log is not None:
+        command.extend(["--execution-log", str(execution_log.absolute())])
+    if accounts is not None:
+        for name in accounts:
+            command.extend(["--account", name])
     full_proc = subprocess.run(
-        [sys.executable, "track_metrics.py", "--date", run_date],
+        command,
         cwd=project_root,
     )
     if full_proc.returncode == 0:
@@ -1106,6 +1125,105 @@ def run_rl_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]
 
 
 def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
+    """Default-disabled durable execution; repeated sessions observe receipts only."""
+    global _ATTEMPT_DIR
+    from src.trading import execution_journal as journal
+
+    if dry_run or not journal.enabled():
+        return _run_account(account, run_date, dry_run)
+    journal.require_execution_host(Path(project_root))
+    previous_attempt = _ATTEMPT_DIR
+    if previous_attempt is None:
+        _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
+    try:
+        return _run_journal_account(account, run_date)
+    finally:
+        _ATTEMPT_DIR = previous_attempt
+
+
+def _run_journal_account(account: dict, run_date: str) -> dict:
+    from src.trading import execution_journal as journal
+
+    root = Path(project_root)
+    journal.require_execution_host(root)
+    if account["name"].upper() == "RL":
+        raise ValueError("RL remains offline and cannot open an execution session")
+    executor = get_executor_for_account(account)
+    executor.alpaca._journal_transport = True
+    endpoint, broker_id = journal.identity(executor.alpaca, account["name"])
+    attempt = _ATTEMPT_DIR or journal.new_attempt(root)
+    with journal.account_lock(root, endpoint, broker_id):
+        store = journal.ExecutionJournal(root)
+        try:
+            weights = get_target_weights(
+                account["config"], run_date, account_name=account["name"]
+            )
+            import hashlib
+
+            config_hash = hashlib.sha256(
+                Path(account["config"]).read_bytes()
+            ).hexdigest()
+            existing_session = store.conn.execute(
+                "SELECT 1 FROM execution_sessions WHERE session_id=?",
+                (journal.digest([endpoint, broker_id, run_date]),),
+            ).fetchone()
+            if existing_session is None:
+                comparison_db = root / "data" / "finrl_trading.db"
+                if comparison_db.is_file():
+                    with sqlite3.connect(
+                        comparison_db.resolve().as_uri() + "?mode=ro", uri=True
+                    ) as historical:
+                        table = historical.execute(
+                            "SELECT 1 FROM sqlite_master "
+                            "WHERE name='strategy_decisions'"
+                        ).fetchone()
+                        if table and historical.execute(
+                            "SELECT 1 FROM strategy_decisions WHERE run_date=? "
+                            "AND account_name=?", (run_date, account["name"]),
+                        ).fetchone():
+                            raise ValueError(
+                                "Legacy same-session decision exists; adoption held"
+                            )
+                legacy_audit = root / "logs" / f"execution_{run_date}.json"
+                if legacy_audit.is_file():
+                    raise ValueError(
+                        "Legacy same-date execution audit exists; adoption held"
+                    )
+            snapshot = {
+                "positions": executor.alpaca.get_positions(
+                    account_name=account["name"]
+                ),
+                "account": {
+                    k: v for k, v in executor.alpaca.get_account_info(
+                        account_name=account["name"]
+                    ).items() if k in {"id", "cash", "equity", "buying_power"}
+                },
+            }
+            session = store.open_session(
+                endpoint=endpoint, broker_id=broker_id, alias=account["name"],
+                day=run_date, config_hash=config_hash, targets=weights,
+                snapshot=snapshot, attempt=attempt,
+            )
+            if session.repeated:
+                result = session.recover(executor.alpaca, account["name"])
+                if result["failures"]:
+                    raise ValueError(
+                        f"{account['name']} {run_date}: recovery held: "
+                        + "; ".join(result["failures"])
+                    )
+                return {"account": account["name"], "target_weights": weights,
+                        "recovery_only": True, **result}
+            _FRESH_ACCOUNTS.add(account["name"])
+            return _run_account(
+                account, run_date, False, weights=weights, executor=executor,
+                execution_session=session,
+            )
+        finally:
+            store.close()
+
+
+def _run_account(account: dict, run_date: str, dry_run: bool, *,
+                 weights=None, executor=None, execution_session=None) -> dict:
     """
     Run the full paper trading cycle for a single account.
     Returns execution result dict for logging.
@@ -1118,11 +1236,13 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     logger.info(f"{'=' * 50}")
 
     # Step 1: Get target weights
-    weights = get_target_weights(config, run_date, account_name=name)
+    if weights is None:
+        weights = get_target_weights(config, run_date, account_name=name)
 
     # Step 2: Connect and execute
     logger.info(f"Connecting to Alpaca account: {name}")
-    executor = get_executor_for_account(account)
+    if executor is None:
+        executor = get_executor_for_account(account)
 
     # Run pre-trade validation gate
     logger.info("Running pre-trade validation gate...")
@@ -1152,6 +1272,8 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     try:
         pre_trade_positions = executor.alpaca.get_positions(account_name=name)
     except Exception as e:
+        if execution_session is not None:
+            raise
         logger.warning(f"Could not fetch pre-trade positions: {e}")
         pre_trade_positions = []
 
@@ -1172,11 +1294,16 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     market_closed_action = get_market_closed_action()
 
     skipped = False
+    execution_options = (
+        {"execution_session": execution_session}
+        if execution_session is not None else {}
+    )
     if market_open:
         logger.info("Market is open — submitting orders now")
         rebalance_result = executor.alpaca.execute_portfolio_rebalance(
             target_weights=weights,
             account_name=name,
+            **execution_options,
         )
     elif market_closed_action == "next_open":
         logger.info(
@@ -1187,6 +1314,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
             target_weights=weights,
             account_name=name,
             market_closed_action="next_open",
+            **execution_options,
         )
     elif market_closed_action == "opg":
         logger.info("Market closed — submitting OPG orders for the next open")
@@ -1194,6 +1322,7 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
             target_weights=weights,
             account_name=name,
             market_closed_action="opg",
+            **execution_options,
         )
     else:
         logger.info("Market closed and USE_OPG not set — skipping submission")
@@ -1210,6 +1339,8 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
         cash = float(post_info.get("cash", 0))
         equity = float(post_info.get("equity", 0))
     except Exception as e:
+        if execution_session is not None:
+            raise
         logger.warning(f"Could not fetch post-trade account details: {e}")
         post_trade_positions = []
         cash = 0.0
@@ -1217,9 +1348,9 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
 
     # Load strategy output JSON to get metadata
     config_name = Path(config).stem
-    json_output_path = os.path.join(
-        project_root, "logs", f"target_weights_{config_name}_{run_date}.json"
-    )
+    json_output_path = str(Path(project_root) / execution_audit_path(
+        f"target_weights_{config_name}_{run_date}.json"
+    ))
     strategy_meta = {}
     if os.path.exists(json_output_path):
         try:
@@ -1291,6 +1422,15 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
     }
 
     # Save to SQLite and JSONL mirror
+    if execution_session is not None:
+        record["execution_session_id"] = execution_session.session_id
+        record["execution_attempt_id"] = execution_session.attempt.name
+        from src.trading.execution_journal import write_evidence
+
+        write_evidence(
+            execution_session.attempt / f"decision_{execution_session.session_id}.json",
+            record,
+        )
     save_strategy_decision(run_date, name, record)
 
     # Run post-trade reconciliation and save report
@@ -1313,7 +1453,8 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
 
 
 def run_parity_checks(
-    run_date: str, accounts: list[dict], results: list[dict], dry_run: bool
+    run_date: str, accounts: list[dict], results: list[dict], dry_run: bool,
+    *, persist_decisions: bool = True, persist_accounts: set[str] | None = None,
 ) -> dict:
     """
     Perform live-vs-replay parity checks for all accounts run on run_date.
@@ -1684,7 +1825,9 @@ def run_parity_checks(
         # 6. Update SQLite strategy_decisions table with parity_check JSON
         conn = None
         try:
-            if not dry_run:
+            if not dry_run and persist_decisions and (
+                persist_accounts is None or name in persist_accounts
+            ):
                 if not db_path.exists():
                     raise FileNotFoundError(
                         f"Required parity database missing: {db_path}"
@@ -1727,7 +1870,7 @@ def run_parity_checks(
                 conn.close()
 
     # Save consolidated JSON report
-    report_path = Path(f"logs/parity_check_{run_date}.json")
+    report_path = execution_audit_path(f"parity_check_{run_date}.json")
     try:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w") as f:
@@ -1754,6 +1897,18 @@ def run_parity_checks(
 
 
 def main():
+    global _ATTEMPT_DIR, _FRESH_ACCOUNTS
+    try:
+        _main()
+    finally:
+        _ATTEMPT_DIR = None
+        _FRESH_ACCOUNTS = set()
+
+
+def _main():
+    global _ATTEMPT_DIR, _FRESH_ACCOUNTS
+    _ATTEMPT_DIR = None
+    _FRESH_ACCOUNTS = set()
     parser = argparse.ArgumentParser(
         description="Run AR paper trading (single or multi-account)"
     )
@@ -1799,6 +1954,12 @@ def main():
         logger.warning("!!!" + "=" * 50 + "!!!")
         args.dry_run = True
 
+    from src.trading import execution_journal as journal
+
+    if not args.dry_run and journal.enabled():
+        journal.require_execution_host(Path(project_root))
+        _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
+
     logger.info(f"Paper trading run: {args.date}")
 
     # Load all accounts
@@ -1835,7 +1996,7 @@ def main():
 
     # Save combined execution log
     if not args.dry_run:
-        log_path = f"logs/execution_{args.date}.json"
+        log_path = execution_audit_path(f"execution_{args.date}.json")
         try:
             with open(log_path, "w") as f:
                 json.dump(
@@ -1856,12 +2017,21 @@ def main():
                 "error": f"Cannot write required execution audit {log_path}: {e}",
             })
 
-    # Run metrics tracker (always on live runs, even if all accounts failed)
-    if not args.dry_run:
+    # Repeated sessions are receipt observations; never rebuild their history.
+    durable_run = _ATTEMPT_DIR is not None
+    recovery_only = durable_run and not _FRESH_ACCOUNTS
+    if not args.dry_run and not recovery_only:
         try:
-            metrics_ok, metrics_error = run_metrics_tracker(
-                args.date, Path(project_root)
-            )
+            if durable_run:
+                metrics_ok, metrics_error = run_metrics_tracker(
+                    args.date, Path(project_root),
+                    execution_log=execution_audit_path(f"execution_{args.date}.json"),
+                    accounts=sorted(_FRESH_ACCOUNTS),
+                )
+            else:
+                metrics_ok, metrics_error = run_metrics_tracker(
+                    args.date, Path(project_root)
+                )
         except Exception as e:
             metrics_ok, metrics_error = (
                 False, f"Metrics check failed on {args.date}: {e}"
@@ -1872,16 +2042,18 @@ def main():
             logger.warning(metrics_error)
 
         # Run required RL offline tracking after live metrics.
-        try:
-            rl_ok, rl_error = run_rl_tracker(args.date, Path(project_root))
-        except Exception as e:
-            rl_ok, rl_error = False, f"Offline RL check failed on {args.date}: {e}"
+        rl_ok, rl_error = True, None
+        if not durable_run or len(_FRESH_ACCOUNTS) == len(accounts):
+            try:
+                rl_ok, rl_error = run_rl_tracker(args.date, Path(project_root))
+            except Exception as e:
+                rl_ok, rl_error = False, f"Offline RL check failed on {args.date}: {e}"
         if not rl_ok:
             logger.error(rl_error)
             errors.append({"account": "RL", "error": rl_error})
 
     failures = []
-    if not args.dry_run:
+    if not args.dry_run and not recovery_only:
         try:
             failures = run_post_run_sanity_checks(
                 args.date, accounts, results, list(errors)
@@ -1894,7 +2066,15 @@ def main():
     # Complete required checks and audit writes before deciding final status.
     parity_report = {}
     try:
-        parity_report = run_parity_checks(args.date, accounts, results, args.dry_run)
+        if durable_run:
+            parity_report = run_parity_checks(
+                args.date, accounts, results, args.dry_run,
+                persist_accounts=_FRESH_ACCOUNTS,
+            )
+        else:
+            parity_report = run_parity_checks(
+                args.date, accounts, results, args.dry_run
+            )
     except Exception as e:
         logger.error(f"Parity checks failed to run: {e}", exc_info=True)
         errors.append({"account": "parity", "error": str(e)})
@@ -1920,13 +2100,17 @@ def main():
             name for name, report in parity_report["accounts"].items()
             if report["execution_pending"]
         ]
+        pending_accounts.extend(
+            r["account"] for r in results if r.get("execution_pending")
+            and r["account"] not in pending_accounts
+        )
         if pending_accounts:
             logger.warning(
                 "Required checks/audits completed; orders pending for %s. "
                 "Reconciliation is incomplete; no success notification sent.",
                 pending_accounts,
             )
-        elif results:
+        elif results and not recovery_only:
             logger.info("All required checks and audit writes passed")
             notify_status(
                 args.notify_webhook,

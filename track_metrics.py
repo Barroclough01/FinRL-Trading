@@ -1328,6 +1328,14 @@ def main():
         action="store_true",
         help="Skip recording, just regenerate dashboard",
     )
+    parser.add_argument(
+        "--execution-log", type=Path,
+        help="Explicit current immutable execution audit for targets",
+    )
+    parser.add_argument(
+        "--account", action="append", default=None,
+        help="Record only this configured account; may be repeated",
+    )
     args = parser.parse_args()
 
     conn = sqlite3.connect(DB_PATH)
@@ -1335,6 +1343,11 @@ def main():
 
     if not args.report_only:
         accounts = load_accounts_from_env()
+        if args.account is not None:
+            configured = {a["name"] for a in accounts}
+            if set(args.account) - configured:
+                parser.error("Unknown account selected for metrics snapshot")
+            accounts = [a for a in accounts if a["name"] in args.account]
         benchmark = fetch_benchmark_prices(date.fromisoformat(args.date))
 
         if benchmark.get("spy_close"):
@@ -1344,11 +1357,19 @@ def main():
             )
 
         # Load latest execution log for target weights
-        exec_log_path = Path(f"logs/execution_{args.date}.json")
+        exec_log_path = args.execution_log or Path(f"logs/execution_{args.date}.json")
         target_weights_by_account = {}
+        if args.execution_log is not None and not exec_log_path.is_file():
+            raise ValueError(
+                f"Required immutable execution audit missing: {exec_log_path}"
+            )
         if exec_log_path.exists():
             with open(exec_log_path) as f:
                 exec_log = json.load(f)
+            if args.execution_log is not None and exec_log.get("date") != args.date:
+                raise ValueError(
+                    "Immutable execution audit date does not match snapshot"
+                )
             for entry in exec_log.get("accounts", []):
                 target_weights_by_account[entry["account"]] = entry.get(
                     "target_weights", {}
@@ -1359,6 +1380,11 @@ def main():
             logger.info(f"Fetching snapshot: {account['name']}")
             try:
                 alpaca = get_alpaca_snapshot(account)
+                if (args.execution_log is not None
+                        and account["name"] not in target_weights_by_account):
+                    raise ValueError(
+                        "Current immutable audit has no targets for account"
+                    )
                 target_weights = target_weights_by_account.get(account["name"], {})
                 record_snapshot(
                     conn, args.date, account, alpaca, benchmark, target_weights

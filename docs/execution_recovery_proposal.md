@@ -1,15 +1,17 @@
 # Paper execution recovery decision
 
-Prepared 2026-10-04. Proposal only for the durable contract below. No journal,
-new CLI, automatic recovery, scheduler or broker action has been implemented.
+Prepared and approved 2026-10-04. The conservative contract below is implemented
+in source, default-disabled. Operational activation, authenticated recovery and
+orders remain outside this release. See [current operations](execution_recovery.md).
 
 ## Recommendation and choices
 
-Approve a separate execution journal and broker-read-only recovery path, with
+The user approved a separate execution journal and broker-read-only recovery path, with
 single-writer account locking and frozen order intents written before submission.
 Keep uncertain submissions held for human review; do not automatically resubmit
 after a lost response. This adds a consequential data model and interface, so it
-requires a separate user decision under Chief of Staff's AGENTS.md.
+received explicit user approval. The global rule now says to ask before
+destructive actions; source implementation and publication are authorized.
 
 | Choice | Benefit | Remaining cost or risk |
 | --- | --- | --- |
@@ -17,7 +19,7 @@ requires a separate user decision under Chief of Staff's AGENTS.md.
 | Separate journal and conservative recovery (recommended) | Preserve intent and attempts across process failure; read receipts without replacing orders | New durable tables, locking and recovery interface; unknown outcomes may need manual investigation |
 | Journal with automatic resume/resubmission | Less manual handling | Larger execution policy decision; a missing receipt does not establish non-acceptance; defer |
 
-## Evidence from the current source
+## Evidence from baseline 8569d25
 
 - `src/trading/alpaca_manager.py::execute_portfolio_rebalance` previously called
   `cancel_all_orders` before planning every live rebalance, including `next_open`.
@@ -48,7 +50,7 @@ tests reproduced the issue. No authenticated broker reads, orders/cancellations,
 operational reruns or comparison-history remediation were performed. Current
 broker state and later fills remain unchecked.
 
-## Recommended contract for approval
+## Approved contract
 
 1. **Scope and identity.** Support only the existing two paper accounts and the
    established WSL execution host. Resolve account aliases to the broker account
@@ -147,10 +149,8 @@ conservative local policy above is a design recommendation.
 | Recovery/export repeat | Immutable prior attempts remain; original intent/IDs retained; no historical metrics rewrite |
 | Offline RL or native developer process | No Alpaca order execution; existing chronology/parity tests still pass |
 
-Approval question: **Approve implementing this separate paper execution journal,
-canonical account/session identity, WSL writer lock, pre-POST durable client IDs,
-immutable attempt evidence and broker-read-only recovery contract, with every
-uncertain or unattempted interrupted submission held and automatic resume deferred?**
-Approval would authorize source/test/docs implementation, verified publication
-and established source synchronization, not orders, cancellation, runtime journal
-activation, authenticated recovery, history changes or additional schedules.
+Decision: the user approved the recommended conservative contract. Approval
+authorizes source/test/docs implementation, verified publication and established
+source synchronization. Orders, cancellation, runtime journal activation,
+authenticated recovery, history changes and additional schedules remain outside
+this release. Automatic resume remains deferred.

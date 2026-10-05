@@ -243,7 +243,11 @@ class AlpacaManager:
         # Place order
         response = self._api_request("POST", "/v2/orders", json_body=payload, account=account)
 
-        # Convert to OrderResponse
+        return self._parse_order_response(response)
+
+    @staticmethod
+    def _parse_order_response(response: Dict[str, Any]) -> OrderResponse:
+        """Preserve the existing response conversion for journaled submissions."""
         return OrderResponse(
             order_id=response['id'],
             status=response['status'],
@@ -394,7 +398,8 @@ class AlpacaManager:
     def execute_portfolio_rebalance(self, target_weights: Dict[str, float],
                                    account_name: Optional[str] = None,
                                    dry_run: bool = False,
-                                   market_closed_action: str = 'skip') -> Dict[str, Any]:
+                                   market_closed_action: str = 'skip',
+                                   execution_session=None) -> Dict[str, Any]:
         """
         Execute portfolio rebalance to target weights.
 
@@ -416,6 +421,8 @@ class AlpacaManager:
         account = self._get_account(account_name)
 
         # Detect market status and decide order TIF
+        if execution_session is not None:
+            self._journal_transport = True
         is_open = self._is_market_open()
         valid_closed_actions = {'skip', 'opg', 'next_open'}
         if market_closed_action not in valid_closed_actions:
@@ -462,12 +469,40 @@ class AlpacaManager:
                     "reconcile them before retrying."
                 )
 
+        def submit_phase(phase, orders):
+            if execution_session is None:
+                return self.place_orders_batch(orders, account_name)
+            from src.trading.execution_journal import decimal_text
+
+            payloads = [{
+                'symbol': order.symbol.upper(), 'qty': decimal_text(order.quantity),
+                'side': order.side.lower(), 'type': order.order_type.lower(),
+                'time_in_force': (
+                    'day' if abs(order.quantity - round(order.quantity)) > 1e-6
+                    else order.time_in_force
+                ),
+                'extended_hours': order.extended_hours,
+            } for order in orders]
+            receipts = execution_session.submit_batch(
+                phase, payloads, lambda payload: self._api_request(
+                    'POST', '/v2/orders', json_body=payload, account=account,
+                    allow_redirects=False,
+                )
+            )
+            return [self._parse_order_response(receipt) for receipt in receipts]
+
         # Ensure asset metadata is available
         self._ensure_assets_loaded()
 
         # Get current positions and portfolio value
         positions = self.get_positions(account_name)
         portfolio_value = self.get_portfolio_value(account_name)
+        if execution_session is not None and (
+            not math.isfinite(portfolio_value) or portfolio_value <= 0
+        ):
+            raise ValueError(
+                "Journal rebalance requires a finite positive portfolio value"
+            )
 
         # Calculate current weights
         current_weights = {}
@@ -542,8 +577,16 @@ class AlpacaManager:
                 try:
                     price = self._get_latest_price(symbol, account=account)
                 except Exception as exc:
+                    if execution_session is not None:
+                        raise
                     print(f"Failed to get latest price for {symbol}: {exc}")
                     price = None
+                if execution_session is not None and (
+                    price is None or not math.isfinite(price) or price <= 0
+                ):
+                    raise ValueError(
+                        f"Journal rebalance requires a valid price for {symbol}"
+                    )
                 if price is None:
                     try:
                         # fallback to position avg price if available
@@ -579,16 +622,22 @@ class AlpacaManager:
             # no side effects; keep state as-is for planning
             pass
         else:
-            if sell_orders:
+            if sell_orders or execution_session is not None:
                 # Apply time_in_force
                 for o in sell_orders:
                     o.time_in_force = default_tif
-                results_sell = self.place_orders_batch(sell_orders, account_name)
+                results_sell = submit_phase('sell', sell_orders)
                 self.logger.info(f"Executed {len(results_sell)} sell orders in rebalance phase 1")
 
             # Refresh state after sells
             positions = self.get_positions(account_name)
             portfolio_value = self.get_portfolio_value(account_name)
+            if execution_session is not None and (
+                not math.isfinite(portfolio_value) or portfolio_value <= 0
+            ):
+                raise ValueError(
+                    "Journal rebalance requires valid post-sell portfolio value"
+                )
             current_weights = {}
             for position in positions:
                 symbol = position['symbol']
@@ -612,7 +661,15 @@ class AlpacaManager:
                 try:
                     price = self._get_latest_price(symbol, account=account)
                 except Exception:
+                    if execution_session is not None:
+                        raise
                     price = None
+                if execution_session is not None and (
+                    price is None or not math.isfinite(price) or price <= 0
+                ):
+                    raise ValueError(
+                        f"Journal rebalance requires a valid price for {symbol}"
+                    )
                 if price is None:
                     try:
                         pos_map = {p['symbol']: p for p in positions}
@@ -630,8 +687,18 @@ class AlpacaManager:
         # Get current buying power, apply safety buffer
         try:
             acct = self.get_account_info(account_name)
+            if execution_session is not None and (
+                not isinstance(acct, dict) or 'buying_power' not in acct
+            ):
+                raise ValueError("Journal rebalance requires observed buying power")
             buying_power = float(acct.get('buying_power', 0))
+            if execution_session is not None and (
+                not math.isfinite(buying_power) or buying_power < 0
+            ):
+                raise ValueError("Journal rebalance requires valid buying power")
         except Exception:
+            if execution_session is not None:
+                raise
             buying_power = 0.0
         budget = max(0.0, buying_power * 0.98)
         scale = min(1.0, (budget / total_desired)) if total_desired > 0 else 0.0
@@ -657,11 +724,11 @@ class AlpacaManager:
         if dry_run or (not will_place_orders):
             pass
         else:
-            if buy_orders:
+            if buy_orders or execution_session is not None:
                 # Apply time_in_force
                 for o in buy_orders:
                     o.time_in_force = default_tif
-                results_buy = self.place_orders_batch(buy_orders, account_name)
+                results_buy = submit_phase('buy', buy_orders)
                 self.logger.info(f"Executed {len(results_buy)} buy orders in rebalance phase 2")
 
         # If dry-run or market closed and skipping, return plan only
@@ -687,6 +754,8 @@ class AlpacaManager:
             }
 
         all_results = results_sell + results_buy
+        if execution_session is not None and will_place_orders:
+            execution_session.finish()
         if all_results:
             return {
                 'orders_placed': len(all_results),
@@ -711,6 +780,12 @@ class AlpacaManager:
             return
         try:
             assets = self._api_request("GET", "/v2/assets", params={"status": "active"}, account=self._get_account())
+            if getattr(self, '_journal_transport', False):
+                if not isinstance(assets, list):
+                    raise ValueError("Invalid bulk asset metadata response")
+                for asset in assets:
+                    self._validate_asset_info(asset, asset.get('symbol', '')
+                                              if isinstance(asset, dict) else '')
             if isinstance(assets, list):
                 for a in assets:
                     sym = a.get('symbol')
@@ -719,19 +794,40 @@ class AlpacaManager:
                 self._assets_loaded = True
                 self.logger.info(f"Cached {len(self._asset_cache)} active assets from Alpaca")
         except Exception as e:
+            if getattr(self, '_journal_transport', False):
+                raise ValueError(f"Cannot verify asset metadata: {e}") from e
             self.logger.warning(f"Failed to load assets list: {e}")
+
+    @staticmethod
+    def _validate_asset_info(info, symbol):
+        if (not isinstance(info, dict) or not symbol
+                or info.get('symbol') != symbol.upper()
+                or type(info.get('tradable')) is not bool
+                or type(info.get('fractionable')) is not bool
+                or info.get('status') not in {'active', 'inactive'}):
+            raise ValueError(
+                f"Invalid eligibility/fractionability metadata for {symbol}"
+            )
 
     def _get_asset_info(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get asset info for a symbol, using cache then API fallback."""
         sym = (symbol or "").upper()
         if sym in self._asset_cache:
+            if getattr(self, '_journal_transport', False):
+                self._validate_asset_info(self._asset_cache[sym], sym)
             return self._asset_cache[sym]
         try:
             info = self._api_request("GET", f"/v2/assets/{sym}", account=self._get_account())
+            if getattr(self, '_journal_transport', False):
+                self._validate_asset_info(info, sym)
             if isinstance(info, dict):
                 self._asset_cache[sym] = info
                 return info
-        except Exception:
+        except Exception as exc:
+            if getattr(self, '_journal_transport', False):
+                raise ValueError(
+                    f"Cannot verify asset metadata for {sym}: {exc}"
+                ) from exc
             return None
         return None
 
@@ -749,8 +845,15 @@ class AlpacaManager:
 
     def _get_market_clock(self) -> Optional[Dict[str, Any]]:
         try:
-            return self._api_request("GET", "/v2/clock", account=self._get_account())
+            clock = self._api_request("GET", "/v2/clock", account=self._get_account())
+            if getattr(self, '_journal_transport', False) and (
+                not isinstance(clock, dict) or type(clock.get('is_open')) is not bool
+            ):
+                raise ValueError("Invalid observed market clock")
+            return clock
         except Exception as e:
+            if getattr(self, '_journal_transport', False):
+                raise ValueError(f"Cannot verify market clock: {e}") from e
             self.logger.warning(f"Failed to get market clock: {e}")
             return None
 
@@ -783,6 +886,7 @@ class AlpacaManager:
         json_body: Optional[Dict] = None,
         params: Optional[Dict] = None,
         timeout: int = 30,
+        allow_redirects: bool = True,
     ) -> Any:
         """
         Make API request to Alpaca.
@@ -800,6 +904,9 @@ class AlpacaManager:
         """
         if account is None:
             account = self._get_account()
+
+        if getattr(self, '_journal_transport', False):
+            allow_redirects = False
 
         url = f"{account.base_url}{path}"
         headers = {
@@ -821,6 +928,7 @@ class AlpacaManager:
                     json=json_body,
                     params=params,
                     timeout=timeout,
+                    allow_redirects=allow_redirects,
                 )
             except (
                 requests.exceptions.ConnectionError,
@@ -844,6 +952,8 @@ class AlpacaManager:
             except requests.exceptions.RequestException as e:
                 raise RuntimeError(f"Request failed: {e}") from e
 
+            if not allow_redirects and 300 <= response.status_code < 400:
+                raise RuntimeError("Alpaca redirect refused; acceptance remains unknown")
             if response.status_code >= 400:
                 error_info = (
                     response.json()

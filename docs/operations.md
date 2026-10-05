@@ -69,9 +69,9 @@ final failed outcome; it does not authorize cancellation or replacement.
 
 This guard is not durable session recovery: completed same-session reruns,
 concurrent writers and accepted orders with lost responses remain unresolved.
-The existing same-date execution summary can also be overwritten by a failed
-rerun. See [the proposed recovery contract](execution_recovery_proposal.md)
-before treating a full rerun as safe.
+The legacy same-date execution summary can also be overwritten by a failed
+rerun. The approved [execution journal](execution_recovery.md) addresses these
+gaps when explicitly activated; source installation leaves it disabled.
 
 The orchestrator runs each configured account sequentially. On non-dry runs it
 then records/regenerates live metrics, invokes offline RL tracking, runs sanity
