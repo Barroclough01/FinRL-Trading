@@ -1,0 +1,34 @@
+[
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\backup_finrl.py",
+    "Hash": "2BD48B8103F65CB6C6A6A6C536666A3C5756403AA333A23C98CFC115656AFF9D"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\restore_latest.py",
+    "Hash": "8FBB2C2F427DD1BDADD07DC0E8124E7925A8B3675B87D943C94DA7DACF2ACBEA"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\README.md",
+    "Hash": "9F5E730B3E59ADDB95CCED93F4F35C7B79112B8C6C2C6BB13E0AD67B1CE56BE9"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\repository.config",
+    "Hash": "D9CE3F949BE97CAE7D396B742CB05AAEE5DCF9346EDF57D47EBB989B80E20221"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery-key.txt",
+    "Hash": "D10EF70B5C34818CB41EA624D159E5132C32F4FAD88E00594C5F2EC49D287D77"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-run.json",
+    "Hash": "6CEEA7B16614D4B2A106405FB2CB994B17E2884D827F93188CC4448368A1D957"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-restore.json",
+    "Hash": "31B795B22E4A87626DF02513B9080992923DF26998C02582FDFFAFBDCDAD0BF9"
+  },
+  {
+    "Path": "C:\\Users\\paxto\\stock-trading\\run_paper_trading.ps1",
+    "Hash": "78EB6CF05CC54EEBE788814E4D521270AAC1F1DB823EA8BA5B679F29E5AC80E0"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "barrier": {
+    "landlock_abi": 3,
+    "primary_write_denied": [
+      "/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db",
+      "/mnt/c/Users/paxto/FinRL-Trading/run_paper_trading.py"
+    ],
+    "network_socket_denied": true,
+    "write_allowed_only": [
+      "/home/paxto/.cache/finrl-backup-proof-20261010/fixtures"
+    ]
+  },
+  "outcome": {
+    "generated": 2
+  }
+}

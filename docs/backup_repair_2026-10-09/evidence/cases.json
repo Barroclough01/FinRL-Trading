@@ -1,0 +1,170 @@
+{
+  "barrier": {
+    "landlock_abi": 3,
+    "primary_write_denied": [
+      "/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db",
+      "/mnt/c/Users/paxto/FinRL-Trading/run_paper_trading.py"
+    ],
+    "network_socket_denied": true,
+    "write_allowed_only": [
+      "/home/paxto/.cache/finrl-backup-proof-20261010/tests-marker-final"
+    ]
+  },
+  "outcome": [
+    {
+      "case": "missing-journal",
+      "result": "rejected",
+      "error": "Missing or unsafe database: paper_execution_journal.sqlite3"
+    },
+    {
+      "case": "corrupt-journal",
+      "result": "rejected",
+      "error": "file is not a database"
+    },
+    {
+      "case": "missing-reference",
+      "result": "rejected",
+      "error": "Missing referenced attempt: attempt-main"
+    },
+    {
+      "case": "missing-receipt",
+      "result": "held",
+      "holds": [
+        "abandoned_attempt:attempt-abandoned",
+        "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted",
+        "missing_receipt:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+      ]
+    },
+    {
+      "case": "unknown-intent",
+      "result": "held",
+      "holds": [
+        "abandoned_attempt:attempt-abandoned",
+        "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted",
+        "intent_attempted_unknown:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d",
+        "missing_receipt:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+      ]
+    },
+    {
+      "case": "interrupted-session",
+      "result": "held",
+      "holds": [
+        "abandoned_attempt:attempt-abandoned",
+        "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted",
+        "interrupted_session:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+      ]
+    },
+    {
+      "case": "target-mismatch",
+      "result": "rejected",
+      "error": "Frozen target hash mismatch"
+    },
+    {
+      "case": "client-mismatch",
+      "result": "rejected",
+      "error": "Unstable client identity"
+    },
+    {
+      "case": "foreign-key-violation",
+      "result": "rejected",
+      "error": "Journal foreign key violation"
+    },
+    {
+      "case": "evidence-reference-mismatch",
+      "result": "rejected",
+      "error": "Immutable evidence reference mismatch: decision_FinRL.json"
+    },
+    {
+      "case": "receipt-state-mismatch",
+      "result": "rejected",
+      "error": "Receipt state or payload mismatch"
+    },
+    {
+      "case": "removed-fk-same-columns",
+      "result": "rejected",
+      "error": "Unexpected journal schema: execution_events"
+    },
+    {
+      "case": "legacy-pre-journal",
+      "result": "verified",
+      "execution_authorized": false
+    },
+    {
+      "case": "partial-and-abandoned-attempt",
+      "result": "held",
+      "holds": [
+        "abandoned_attempt:attempt-abandoned",
+        "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted"
+      ]
+    },
+    {
+      "case": "journal-present",
+      "result": "held",
+      "error": "Journal-era artifacts observed; production capture held pending global writer barrier"
+    },
+    {
+      "case": "journal-deleted-after-observation",
+      "result": "held",
+      "error": "Journal-era production capture held: approved global writer barrier required"
+    },
+    {
+      "case": "malformed-marker",
+      "result": "held"
+    },
+    {
+      "case": "dangling-marker-symlink",
+      "result": "held"
+    },
+    {
+      "case": "source-wsl-sidecar",
+      "result": "held"
+    },
+    {
+      "case": "source-wsl-attempt",
+      "result": "held"
+    },
+    {
+      "case": "source-wsl-lock",
+      "result": "held"
+    },
+    {
+      "case": "source-wsl-dangling-journal",
+      "result": "held"
+    },
+    {
+      "case": "source-native-sidecar",
+      "result": "held"
+    },
+    {
+      "case": "source-native-attempt",
+      "result": "held"
+    },
+    {
+      "case": "source-native-lock",
+      "result": "held"
+    },
+    {
+      "case": "source-native-dangling-journal",
+      "result": "held"
+    },
+    {
+      "case": "missing-checkout",
+      "result": "held"
+    },
+    {
+      "case": "journal-without-contract",
+      "result": "rejected",
+      "error": "Journal artifacts without recovery contract"
+    },
+    {
+      "case": "forged-pre-journal-authorization",
+      "result": "rejected",
+      "error": "Restored snapshot cannot authorize execution"
+    },
+    {
+      "case": "manifest-hash-mismatch",
+      "result": "rejected",
+      "error": "Restored file inventory or hashes do not match the snapshot manifest"
+    }
+  ]
+}

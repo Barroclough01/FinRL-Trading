@@ -1,0 +1,63 @@
+{
+  "barrier": {
+    "landlock_abi": 3,
+    "primary_write_denied": [
+      "/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db",
+      "/mnt/c/Users/paxto/FinRL-Trading/run_paper_trading.py"
+    ],
+    "network_socket_denied": true,
+    "write_allowed_only": [
+      "/home/paxto/.cache/finrl-backup-proof-20261010/capture-v2-reviewed"
+    ]
+  },
+  "outcome": {
+    "files_verified": 5,
+    "database_integrity": "ok",
+    "recovery": {
+      "format_version": 1,
+      "coverage": "sealed_synthetic_journal",
+      "execution_authorized": false,
+      "cutoff_utc": "2026-10-10T16:01:32.825095+00:00",
+      "capture_barrier": "Cooperating fixture global flock through export and inventory; Landlock process isolation + seccomp; synthetic only",
+      "journal": {
+        "schema_version": 1,
+        "database_sha256": "ca65274e68351684432b13c64ee965884ad190d689b8e849ebb000f3458982e1",
+        "row_counts": {
+          "account_bindings": 1,
+          "execution_sessions": 1,
+          "order_intents": 1,
+          "execution_events": 2
+        },
+        "rows_sha256": "bffa696f4fc8980131690855e420daa34e0871d04a4c3d04894d6b098e9eb243",
+        "session_ids": [
+          "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+        ],
+        "client_ids": [
+          "fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+        ],
+        "attempt_directories": [
+          "attempt-abandoned",
+          "attempt-interrupted",
+          "attempt-main"
+        ],
+        "evidence_refs": [
+          [
+            "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+            "attempt-main",
+            "wsl/logs/execution_attempts/attempt-main/decision_FinRL.json",
+            "197524018cfc39bc6e392471c2fcccad90104298bd45d4e728794982068011f1"
+          ]
+        ],
+        "holds": [
+          "abandoned_attempt:attempt-abandoned",
+          "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted"
+        ],
+        "execution_authorized": false
+      }
+    },
+    "writer_conflict": {
+      "exit": 23,
+      "message": "fixture writer blocked before attempt creation"
+    }
+  }
+}

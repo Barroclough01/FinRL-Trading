@@ -1,0 +1,25 @@
+{
+  "native": {
+    "observed_utc": "2026-10-10T16:10:22.327887+00:00",
+    "protected_inventory_equal": true,
+    "gate_equal": true,
+    "head_before_publication_equal": true,
+    "matching_processes": []
+  },
+  "wsl": {
+    "observed_utc": "2026-10-10T16:10:33.965433+00:00",
+    "protected_inventory_equal": true,
+    "gate_equal": true,
+    "head_before_publication_equal": true,
+    "matching_processes": []
+  },
+  "live_helpers_match_reviewed": true,
+  "external_non_helper_preservation": {
+    "C:\\Users\\paxto\\PaxtonBackups\\tools\\repository.config": true,
+    "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery-key.txt": true,
+    "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-run.json": true,
+    "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-restore.json": true,
+    "C:\\Users\\paxto\\stock-trading\\run_paper_trading.ps1": true
+  },
+  "tasks_unchanged": true
+}

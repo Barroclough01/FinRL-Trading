@@ -1,0 +1,122 @@
+{
+  "observed_utc": "2026-10-10T16:02:54.277254+00:00",
+  "receipts": [
+    {
+      "version": 1,
+      "snapshot_id": "40f3a97cdbd0ab3ae82275f8e826eba3",
+      "destination": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\restored-v1",
+      "validation": {
+        "files_verified": 6,
+        "database_integrity": "ok",
+        "recovery": {
+          "format_version": 1,
+          "coverage": "sealed_synthetic_journal",
+          "execution_authorized": false,
+          "cutoff_utc": "2026-10-10T16:01:32.102043+00:00",
+          "capture_barrier": "Cooperating fixture global flock through export and inventory; Landlock process isolation + seccomp; synthetic only",
+          "journal": {
+            "schema_version": 1,
+            "database_sha256": "35bb4716b6134da34f632cb31fef91a807aa5a96630561a8fee6e91d6b4fdc16",
+            "row_counts": {
+              "account_bindings": 1,
+              "execution_sessions": 1,
+              "order_intents": 1,
+              "execution_events": 2
+            },
+            "rows_sha256": "054760ba112fcd4d234c90c1e130771befe96fdb30f94cf611bddde7c3fdfb02",
+            "session_ids": [
+              "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+            ],
+            "client_ids": [
+              "fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "attempt_directories": [
+              "attempt-abandoned",
+              "attempt-interrupted",
+              "attempt-main"
+            ],
+            "evidence_refs": [
+              [
+                "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+                "attempt-main",
+                "wsl/logs/execution_attempts/attempt-main/decision_FinRL.json",
+                "86f12afff479ba835483603eaff8b4f10930e1c09f40755c1b2f584cffde6eba"
+              ]
+            ],
+            "holds": [
+              "abandoned_attempt:attempt-abandoned",
+              "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted",
+              "intent_attempted_unknown:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d",
+              "interrupted_session:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+              "missing_receipt:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "execution_authorized": false
+          }
+        }
+      },
+      "manifest_sha256": "454dcefc86a7d0ad6341e4bfa05b98047a4edb0f36bf4c9a543729119f2a256c"
+    },
+    {
+      "version": 2,
+      "snapshot_id": "145d2e16bf128e26c5fe4fa31cf590b3",
+      "destination": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\restored-v2",
+      "validation": {
+        "files_verified": 5,
+        "database_integrity": "ok",
+        "recovery": {
+          "format_version": 1,
+          "coverage": "sealed_synthetic_journal",
+          "execution_authorized": false,
+          "cutoff_utc": "2026-10-10T16:01:32.825095+00:00",
+          "capture_barrier": "Cooperating fixture global flock through export and inventory; Landlock process isolation + seccomp; synthetic only",
+          "journal": {
+            "schema_version": 1,
+            "database_sha256": "ca65274e68351684432b13c64ee965884ad190d689b8e849ebb000f3458982e1",
+            "row_counts": {
+              "account_bindings": 1,
+              "execution_sessions": 1,
+              "order_intents": 1,
+              "execution_events": 2
+            },
+            "rows_sha256": "bffa696f4fc8980131690855e420daa34e0871d04a4c3d04894d6b098e9eb243",
+            "session_ids": [
+              "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+            ],
+            "client_ids": [
+              "fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "attempt_directories": [
+              "attempt-abandoned",
+              "attempt-interrupted",
+              "attempt-main"
+            ],
+            "evidence_refs": [
+              [
+                "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+                "attempt-main",
+                "wsl/logs/execution_attempts/attempt-main/decision_FinRL.json",
+                "197524018cfc39bc6e392471c2fcccad90104298bd45d4e728794982068011f1"
+              ]
+            ],
+            "holds": [
+              "abandoned_attempt:attempt-abandoned",
+              "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted"
+            ],
+            "execution_authorized": false
+          }
+        }
+      },
+      "manifest_sha256": "842c0d18695699e85e9c4c131a80adad8b1523e3910e36d021469bbd93d4dd97"
+    }
+  ],
+  "existing_destination_refused": true,
+  "older_version_recovered_after_new_version": true,
+  "all_prior_snapshot_ids_preserved": true,
+  "helper_hashes": {
+    "backup_finrl.py": "5c21c8a031a17c798fe5eaeea00c32f6e4cec3a38941a8bf97cbbcf23e54429e",
+    "recovery_contract.py": "f67b82047b12977f578bccf19bee6c3d9da6353a151fae70da90388d0a7b584d",
+    "restore_latest.py": "1db7963ad5acfe7256e3fc81cebfaf003280a57557b1f5985db66218515da0d5"
+  },
+  "scratch": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010",
+  "kopia_version": "0.23.1 build: 72ec08fd8edb86c67ed27099bf1b955e1f308ffa from: kopia/kopia"
+}

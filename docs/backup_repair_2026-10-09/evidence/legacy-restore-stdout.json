@@ -1,0 +1,1 @@
+{"time_utc": "2026-10-10T16:03:42.205705+00:00", "status": "success", "snapshot_id": "6c41793089ccdc0bfbbfc05ce81c4b3b", "files_verified": 387, "database_integrity": "ok", "recovery": {"coverage": "legacy_pre_journal", "execution_authorized": false}, "destination": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\restored-legacy-pre-journal"}

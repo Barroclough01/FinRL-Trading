@@ -1,0 +1,19 @@
+{
+  "observed_utc": "2026-10-10T16:09:44.200544+00:00",
+  "status": "installed-reviewed-bytes",
+  "history_directory": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T160944Z",
+  "preserved_original_hashes": {
+    "backup_finrl.py": "3a4c4ca49da89ab0567965b195d234f757d0ffd4877311446f229c85c5c13d4e",
+    "README.md": "83842501ea7201bcb9ad08d38a8b2f7b738f37e359c66742c4cb32e398923f18",
+    "restore_latest.py": "6254e12ef70d8c97e9915f93da9258e5907b21a6d54a2b7840ae9f7ad66f65ce"
+  },
+  "installed_hashes": {
+    "backup_finrl.py": "2bd48b8103f65cb6c6a6a6c536666a3c5756403aa333a23c98cfc115656aff9d",
+    "README.md": "9f5e730b3e59addb95cced93f4f35c7b79112b8c6c2c6bb13e0ad67b1ce56be9",
+    "recovery_contract.py": "a46e94cc690aee41cdd0d2033f66cc835e5a6b8773c3626bd3115cfa5fbbca47",
+    "restore_latest.py": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea"
+  },
+  "backup_lock_held_during_install": true,
+  "normal_backup_invoked": false,
+  "activation_changed": false
+}

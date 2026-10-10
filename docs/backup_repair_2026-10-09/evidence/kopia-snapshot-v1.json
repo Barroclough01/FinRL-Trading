@@ -1,0 +1,26 @@
+{
+  "id": "40f3a97cdbd0ab3ae82275f8e826eba3",
+  "source": {
+    "host": "acer-swift-go",
+    "userName": "paxto",
+    "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\synthetic-runtime"
+  },
+  "description": "",
+  "startTime": "2026-10-10T16:02:50.2535725Z",
+  "endTime": "2026-10-10T16:02:50.2627887Z",
+  "rootEntry": {
+    "name": "synthetic-runtime",
+    "type": "d",
+    "mode": "0777",
+    "mtime": "2026-10-10T16:01:32.126435Z",
+    "obj": "k43a83b827d73693608197fa7ab292ad6",
+    "summ": {
+      "size": 51642,
+      "files": 7,
+      "symlinks": 0,
+      "dirs": 8,
+      "maxTime": "2026-10-10T16:01:32.126435Z",
+      "numFailed": 0
+    }
+  }
+}
