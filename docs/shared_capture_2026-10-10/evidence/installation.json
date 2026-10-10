@@ -1,0 +1,52 @@
+{
+  "observed_utc": "2026-10-10T18:04:59.360369+00:00",
+  "source_commit": "65310fb2a6ef3187edb0cc41c1218558d74395e5",
+  "installed": {
+    "capture_runtime.py": {
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\capture_runtime.py",
+      "sha256": "6f853bb0173044b49dbe39c648515bd537ed36729beb87b9ff8b0ab6ddda291b"
+    },
+    "recovery_contract.py": {
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery_contract.py",
+      "sha256": "a73f3f051d55c09f70b2681ff66a1da43acc6892657828d22adedc8184995096"
+    },
+    "backup_finrl.py": {
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\backup_finrl.py",
+      "sha256": "daef0a91bc315aaf3e578860651f5109b19d452a23060820b26b6ceb99d33386"
+    },
+    "README.md": {
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\README.md",
+      "sha256": "7bda74c69101234b7037fd2893df4cdee2be9dccf7f5e8e33f45055cbc648f57"
+    }
+  },
+  "originals": {
+    "backup_finrl.py": {
+      "sha256": "2bd48b8103f65cb6c6a6a6c536666a3c5756403aa333a23c98cfc115656aff9d",
+      "live_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\backup_finrl.py",
+      "preserved_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T180459Z\\backup_finrl.py"
+    },
+    "recovery_contract.py": {
+      "sha256": "a46e94cc690aee41cdd0d2033f66cc835e5a6b8773c3626bd3115cfa5fbbca47",
+      "live_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery_contract.py",
+      "preserved_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T180459Z\\recovery_contract.py"
+    },
+    "restore_latest.py": {
+      "sha256": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea",
+      "live_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\restore_latest.py",
+      "preserved_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T180459Z\\restore_latest.py"
+    },
+    "README.md": {
+      "sha256": "9f5e730b3e59addb95cced93f4f35c7b79112b8c6c2c6bb13e0ad67b1ce56be9",
+      "live_path": "C:\\Users\\paxto\\PaxtonBackups\\README.md",
+      "preserved_path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T180459Z\\README.md"
+    }
+  },
+  "backup_run_lock_held": true,
+  "normal_backup_invoked": false,
+  "activation_changed": false,
+  "failed_attempt_originals_retained": "C:/Users/paxto/PaxtonBackups/tools/helper-history/20261010T180354Z",
+  "README_prior_installed_identity_verified": true,
+  "history": "C:\\Users\\paxto\\PaxtonBackups\\tools\\helper-history\\20261010T180459Z",
+  "capture_runtime_previously_absent": true,
+  "restore_latest_unchanged_sha256": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea"
+}

@@ -1,0 +1,1346 @@
+{
+  "branch": "codex/paper-comparison-reliability",
+  "gate_file": [],
+  "gate_process": null,
+  "head": "5ec847c26ceb6bf2c1a2c245621a967fdce67680",
+  "inventory": {
+    ".env": {
+      "bytes": 5365,
+      "exists": true,
+      "sha256": "ecfe899e2680d7542a22f2aeec277815552767c584e3661e2c83a5d0418805aa"
+    },
+    "data/finrl_trading.db": {
+      "bytes": 446754816,
+      "exists": true,
+      "sha256": "2d69d61c2bbba9eacd4d56c98f108a6e160cabd1c606ab107f0b83c407a97aca"
+    },
+    "data/paper_execution_journal.sqlite3": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data/paper_execution_journal.sqlite3-journal": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data/paper_execution_journal.sqlite3-shm": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data/paper_execution_journal.sqlite3-wal": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "logs/comparison_metrics_2026-05-31.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "0174912778c753c4832bf16833d95b7cb6cdda83625f1cbc34978bf7494bae9b"
+    },
+    "logs/comparison_metrics_2026-06-06.json": {
+      "bytes": 3000,
+      "exists": true,
+      "sha256": "00a7c435007ba56a76ecb198cc62ab90d90f76c11c8e3abcb0e514f32dfabfdb"
+    },
+    "logs/comparison_metrics_2026-06-07.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "8cdea8e2ca05cbbeb19eed206a93e11f501e6aa8914e482c35101dfee734904a"
+    },
+    "logs/comparison_metrics_2026-06-12.json": {
+      "bytes": 2890,
+      "exists": true,
+      "sha256": "73713a01bc114e3a7789406469cfc7720b281e259fe6e6ab8908153242b38823"
+    },
+    "logs/comparison_metrics_2026-06-19.json": {
+      "bytes": 2947,
+      "exists": true,
+      "sha256": "2aa5ac2acddedd2b3313e741bd4b88e5449e6bb3355983e6d861b5d06acf56a1"
+    },
+    "logs/comparison_metrics_2026-06-20.json": {
+      "bytes": 2937,
+      "exists": true,
+      "sha256": "8538bd7da5b213b3ff328e6b5aabd9a7a0b169da6ff98c3b87daf92c854f1549"
+    },
+    "logs/comparison_metrics_2026-06-26.json": {
+      "bytes": 3007,
+      "exists": true,
+      "sha256": "75ad678ff276e6ddd0748722e259762828721f8530bb1276c4101cd8c153c77a"
+    },
+    "logs/comparison_metrics_2026-06-28.json": {
+      "bytes": 3008,
+      "exists": true,
+      "sha256": "047a5fa9870ad090a6041b779a15e3abf3a2195d377d6458ecf43046dacd1bc6"
+    },
+    "logs/comparison_metrics_2026-07-03.json": {
+      "bytes": 2937,
+      "exists": true,
+      "sha256": "eaf4ae4cf93464a1f4b5ec5e2a73cfd3031f994d5ea2fa37f67fd0caa893b65a"
+    },
+    "logs/comparison_metrics_2026-07-05.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "887161c3058fd068ae1f72bbde1a2a86b76548152e84d5bb020fb5f181467232"
+    },
+    "logs/comparison_metrics_2026-07-10.json": {
+      "bytes": 2962,
+      "exists": true,
+      "sha256": "43b595f3307c93dc938ad14e7bfbadb486999855926d3148fdeed538372a5db7"
+    },
+    "logs/comparison_metrics_2026-07-12.json": {
+      "bytes": 2962,
+      "exists": true,
+      "sha256": "553ec78fc446ed04edfc495fbd1ec96aea6058e8f56efaf7c14709ab98c4cdec"
+    },
+    "logs/comparison_metrics_2026-07-17.json": {
+      "bytes": 2963,
+      "exists": true,
+      "sha256": "2d832ea1e33498b79d8f9ff056ec59471329d21c1e646ff1986ef1273c6c5809"
+    },
+    "logs/comparison_metrics_2026-07-24.json": {
+      "bytes": 2994,
+      "exists": true,
+      "sha256": "ff9133c5f216e6de030d08a5106bbb52ca6748017916b18b6c9ee3e846c61b23"
+    },
+    "logs/comparison_metrics_2026-07-25.json": {
+      "bytes": 2994,
+      "exists": true,
+      "sha256": "b63c05722c502eed4f0e574c3b6c911f38278f43ada8e12ae047bad0d93ea49b"
+    },
+    "logs/comparison_metrics_2026-07-31.json": {
+      "bytes": 2978,
+      "exists": true,
+      "sha256": "815656e802c47b84848bff2b822f88b6a49d0ee8a5b52f0b29ed67964d740cd0"
+    },
+    "logs/comparison_metrics_2026-08-02.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "023cd8c072636f8be6e9e36e043dc3121bc1245e959f91622afc78c0311d61e2"
+    },
+    "logs/comparison_metrics_2026-08-07.json": {
+      "bytes": 2990,
+      "exists": true,
+      "sha256": "878bde0f89b51412b32ef8a7508595a4a85c5e6d463557484c2fb3fd187f35be"
+    },
+    "logs/comparison_metrics_2026-08-14.json": {
+      "bytes": 2996,
+      "exists": true,
+      "sha256": "b95eabab44654f4b874731fc427bac3a2cb6a878a7288ef2168c8bd14b0caa3d"
+    },
+    "logs/comparison_metrics_2026-08-15.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "20d9d116bef5ba698a46f4963a74cbbfb00288c2481209d1823e8a3f41373153"
+    },
+    "logs/comparison_metrics_2026-08-16.json": {
+      "bytes": 2920,
+      "exists": true,
+      "sha256": "3da9cb4b1802ca259c199ae3095bdf6418b7d0252e565fc9fb293c998f04313b"
+    },
+    "logs/comparison_metrics_2026-08-21.json": {
+      "bytes": 2965,
+      "exists": true,
+      "sha256": "b386e25bf20fa58f58cf11ce8bbcbd6b8724b9e0ff7431ef38a503289219e630"
+    },
+    "logs/comparison_metrics_2026-08-29.json": {
+      "bytes": 2993,
+      "exists": true,
+      "sha256": "cd01c74519d958e80743169b85fc51b3f80f5f0155199caab696974390a1921d"
+    },
+    "logs/comparison_metrics_2026-08-31.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "3c92f38ccacae6fd0b03b29483f1c869b7705cd1c1323545be2713a3bc3614e3"
+    },
+    "logs/comparison_metrics_2026-09-04.json": {
+      "bytes": 2983,
+      "exists": true,
+      "sha256": "73e9c969585eb9bd5a989e3c5ccc3ff0ae3845a672321da8a30e801f9ecf8cd1"
+    },
+    "logs/comparison_metrics_2026-09-05.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "2a2118ba7536610f10737e3718ddc6f1f97d628f348916d635aba1f98d8a3cc2"
+    },
+    "logs/comparison_metrics_2026-09-07.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "1cf69ec53ac2469143b6dc6d69a6257fc6772bc24c845adae14576b398d8c768"
+    },
+    "logs/comparison_metrics_2026-09-11.json": {
+      "bytes": 2969,
+      "exists": true,
+      "sha256": "519c2751defae66771a4961291c4f9baea57bd2291de142af06b426a75143a0b"
+    },
+    "logs/comparison_metrics_2026-09-12.json": {
+      "bytes": 280,
+      "exists": true,
+      "sha256": "ec060808b2df2dabbd8324b74fe585d5e409068b744391e7d9a9cd905d927577"
+    },
+    "logs/comparison_metrics_2026-09-18.json": {
+      "bytes": 2968,
+      "exists": true,
+      "sha256": "d363e9c0e1a29304dffc07eddf100ad4459a099cf5408159692ef1246d4974aa"
+    },
+    "logs/comparison_metrics_2026-09-25.json": {
+      "bytes": 3369,
+      "exists": true,
+      "sha256": "7e0636cd7fc4a28dbacb9476fb23c1ed534f0ef63d6fa59ec45952f3ef3ab33a"
+    },
+    "logs/comparison_metrics_2026-09-27.json": {
+      "bytes": 433,
+      "exists": true,
+      "sha256": "170779cdff1c25544d15a2f24b9970024d111e5ac5b13fdcbdabc532c425b5d5"
+    },
+    "logs/comparison_metrics_2026-10-02.json": {
+      "bytes": 3314,
+      "exists": true,
+      "sha256": "45b316f66adc9805d6d83ae521120b9ad26b4c6d507a0c547ef2cd570fc64a56"
+    },
+    "logs/comparison_metrics_2026-10-09.json": {
+      "bytes": 3361,
+      "exists": true,
+      "sha256": "754b347ae37f6184ab0720da06ca927b26b566983f68f17dc336f06d33dbc013"
+    },
+    "logs/comparison_metrics_latest.csv": {
+      "bytes": 1645,
+      "exists": true,
+      "sha256": "df4b4b38adf77951f303149ad637d03d2238b59c19dd7ee7fbf5df59920c6a47"
+    },
+    "logs/dashboard.html": {
+      "bytes": 1012017,
+      "exists": true,
+      "sha256": "01f02e1fe2c6bd84cd98640d97a80512f29dddc7ff8ce6785c8231a61cc77b79"
+    },
+    "logs/execution_2026-04-26.json": {
+      "bytes": 234,
+      "exists": true,
+      "sha256": "2134b4fb840666471ae70a901a3860b136d0e3835f9c76d73f64529bffb2bc58"
+    },
+    "logs/execution_2026-05-01.json": {
+      "bytes": 315,
+      "exists": true,
+      "sha256": "598439900526c0c14a94865bd777860ea8c9b41579af39c03a411e9a3a2f9a05"
+    },
+    "logs/execution_2026-05-08.json": {
+      "bytes": 180,
+      "exists": true,
+      "sha256": "28a5fa437d2caf14a678eba55ca43ce0a7eab456f1d628529452820d1d283f33"
+    },
+    "logs/execution_2026-05-10.json": {
+      "bytes": 727,
+      "exists": true,
+      "sha256": "55aa90b46858baf9a5e818d9239bf98d9d24b20d2e290e46acd9eb81caef1690"
+    },
+    "logs/execution_2026-05-15.json": {
+      "bytes": 724,
+      "exists": true,
+      "sha256": "e7119314f6a529a43fa07ecd96452b62bfdde5cd696740f8ee77cc98e8a0ed70"
+    },
+    "logs/execution_2026-05-22.json": {
+      "bytes": 722,
+      "exists": true,
+      "sha256": "3e4f767ad6f498e949b8e5a52d9445426ccb1b2f224fbdd5a063e73de9bfc9f5"
+    },
+    "logs/execution_2026-05-29.json": {
+      "bytes": 727,
+      "exists": true,
+      "sha256": "7e4d9e4583dd351e3040ec7678fa4f74103c55404fe7ba5d6ba179aa47f8241e"
+    },
+    "logs/execution_2026-06-05.json": {
+      "bytes": 314,
+      "exists": true,
+      "sha256": "5e9102d27df5c31be0cdbf3ab2d9fcbd5504099f88f54784b99d63fd4243f8bb"
+    },
+    "logs/execution_2026-06-12.json": {
+      "bytes": 758,
+      "exists": true,
+      "sha256": "f761df9b58a4c492ca1403766765f13e4e03d87322c86f15f22a1beb2ea66a6c"
+    },
+    "logs/execution_2026-06-19.json": {
+      "bytes": 760,
+      "exists": true,
+      "sha256": "cdbb3a71a9f87dfbb63628f3c99cb07220b500785b620aae269e5f7a1945b910"
+    },
+    "logs/execution_2026-06-26.json": {
+      "bytes": 760,
+      "exists": true,
+      "sha256": "20ad8226242d3efbf3edaf71d823bb476be44fe67b2edd3513b096adc8b4f41e"
+    },
+    "logs/execution_2026-07-03.json": {
+      "bytes": 762,
+      "exists": true,
+      "sha256": "2ed7c25eef159ecca0f3d643edf0ad04dfd10e6f2734fc354bb02af6cf87a3a1"
+    },
+    "logs/execution_2026-07-10.json": {
+      "bytes": 763,
+      "exists": true,
+      "sha256": "fde7f59ad155ec4feeddac7d1096db7a4477b0efdd1ebe6cec3e54237ff9f196"
+    },
+    "logs/execution_2026-07-17.json": {
+      "bytes": 860,
+      "exists": true,
+      "sha256": "538121ff397146c6c89aa5e592abbef07662c334e86170a6ac93f95e99938f38"
+    },
+    "logs/execution_2026-07-24.json": {
+      "bytes": 339,
+      "exists": true,
+      "sha256": "ceb369d35e808d951b0d06a72a5a0ac9190800617531c4375c6fea26f3bf3010"
+    },
+    "logs/execution_2026-07-31.json": {
+      "bytes": 988,
+      "exists": true,
+      "sha256": "192066477f5c6b64afcdf3a9f6f1802ce299f7cc78e4b762bde3dec70e543654"
+    },
+    "logs/execution_2026-08-07.json": {
+      "bytes": 986,
+      "exists": true,
+      "sha256": "5c2c020863aedde572a9bcea8513fcbf0d0775255791b5c91750daae85bc89f8"
+    },
+    "logs/execution_2026-08-14.json": {
+      "bytes": 986,
+      "exists": true,
+      "sha256": "59133da0cc300db324cfd7255b5a8d8de2275775a87d59f27166526f2ace59e8"
+    },
+    "logs/execution_2026-08-16.json": {
+      "bytes": 988,
+      "exists": true,
+      "sha256": "ac1f2725d10f0f27b01041761d4ce9246c72341eb213d05f39ee6a4f71ae01ed"
+    },
+    "logs/execution_2026-08-21.json": {
+      "bytes": 987,
+      "exists": true,
+      "sha256": "b6c4a1be0dafa8a3c731ffa168635a1404881488f10fa9e76fc99c9a6524ec31"
+    },
+    "logs/execution_2026-08-29.json": {
+      "bytes": 986,
+      "exists": true,
+      "sha256": "e9e02d2759f0ffa3d6daba94994fc3cb61bf84ecc9e24c6e1ee950aab2995ebb"
+    },
+    "logs/execution_2026-09-11.json": {
+      "bytes": 967,
+      "exists": true,
+      "sha256": "a29f8fcdd2d528ad1519c4933ea45202390c8a65df6878c48ec80b5d0a7f36ef"
+    },
+    "logs/execution_2026-09-18.json": {
+      "bytes": 995,
+      "exists": true,
+      "sha256": "c2b7a9a3a0361f07cb975270ec4d42ad9cc6e4f2def7caf2237c7acbb5c54266"
+    },
+    "logs/execution_2026-09-25.json": {
+      "bytes": 990,
+      "exists": true,
+      "sha256": "85fe6c7f29f423983736d7bad9ad9e562a95e376fa8881a92333b655b2f218f1"
+    },
+    "logs/execution_2026-10-02.json": {
+      "bytes": 878,
+      "exists": true,
+      "sha256": "5b222a71bacf1d37d5afd81cac9e5f278013d7907bbb9d9b1dbe3cc07776b5a4"
+    },
+    "logs/execution_2026-10-09.json": {
+      "bytes": 657,
+      "exists": true,
+      "sha256": "739702bcdbf4982e1f1b240a9515ead572dd7093827c5ada723ec19ad772b231"
+    },
+    "logs/paper_trading_2026-04-26.log": {
+      "bytes": 11063,
+      "exists": true,
+      "sha256": "ec2f7b3c2d38bd28b2c0ce623387568ff40f5d2f2d6a175b221d8cfc71956724"
+    },
+    "logs/paper_trading_2026-05-01.log": {
+      "bytes": 2072,
+      "exists": true,
+      "sha256": "00c1e50ab20833f4847cd17eaf531d50dfbf078d58e9c461b1ef6cb5f8235895"
+    },
+    "logs/paper_trading_2026-05-08.log": {
+      "bytes": 2196,
+      "exists": true,
+      "sha256": "c63e1208af7f3c3ef6485e18d1d3558430a92f7805d2b3b6588f08b2482c2edd"
+    },
+    "logs/paper_trading_2026-05-10.log": {
+      "bytes": 20920,
+      "exists": true,
+      "sha256": "1bf4a7a5a8b7f5cf777283a9cab8b2e4fbfc829964e1a5edcce770784ba65aca"
+    },
+    "logs/paper_trading_2026-05-15.log": {
+      "bytes": 4391,
+      "exists": true,
+      "sha256": "c8449000084bd71e364e84a602f3e59b2c823e5f7e743429eb2d6546cf17958f"
+    },
+    "logs/paper_trading_2026-05-17.log": {
+      "bytes": 1371,
+      "exists": true,
+      "sha256": "6d3051278ac07c400cf422fbfecf447296023b8e13a2c7d95def6a59a79ab9ad"
+    },
+    "logs/paper_trading_2026-05-22.log": {
+      "bytes": 3266,
+      "exists": true,
+      "sha256": "89ebabffcd01845615fc17bb1e2fb69beb7c3afbfda81546e6c53d38bed8853c"
+    },
+    "logs/paper_trading_2026-05-29.log": {
+      "bytes": 4149,
+      "exists": true,
+      "sha256": "65a29bb49785b9973ed1a2227b64afd01e09abf1717cd20366f5c21940dc02a6"
+    },
+    "logs/paper_trading_2026-05-31.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-06-05.log": {
+      "bytes": 8205,
+      "exists": true,
+      "sha256": "3f5d54ff460fd8097448b44680cdc6336afc9d5a27bd8ba172dc75c52f9c23ab"
+    },
+    "logs/paper_trading_2026-06-07.log": {
+      "bytes": 4358,
+      "exists": true,
+      "sha256": "52927a11b28c0a082bde527d28e4185b5df762d2c70bb35748aa95e38d6969bf"
+    },
+    "logs/paper_trading_2026-06-12.log": {
+      "bytes": 48343,
+      "exists": true,
+      "sha256": "298c059ec08998bf41da6bf76fe3ce243ffe14dac07e532aabacd3c171c64a21"
+    },
+    "logs/paper_trading_2026-06-19.log": {
+      "bytes": 7497,
+      "exists": true,
+      "sha256": "62cba9fccb903ba54814d1f93424e72c5946bf79b3befebc745fa0dfb1ac1af8"
+    },
+    "logs/paper_trading_2026-06-26.log": {
+      "bytes": 7152,
+      "exists": true,
+      "sha256": "18ee63994c02bda3a2ae145d7373058708f6a6f5b72239db494c71d5e2044764"
+    },
+    "logs/paper_trading_2026-07-03.log": {
+      "bytes": 7639,
+      "exists": true,
+      "sha256": "b02cb7d4de47d56b017831f30706fbaa0d7044a8334ecddcc55e756a6a407ecb"
+    },
+    "logs/paper_trading_2026-07-05.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-07-10.log": {
+      "bytes": 7207,
+      "exists": true,
+      "sha256": "a08a413c59efb9ec5631fcec63612b03134cf57bfc78d2dce668a46435995db3"
+    },
+    "logs/paper_trading_2026-07-12.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-07-17.log": {
+      "bytes": 7608,
+      "exists": true,
+      "sha256": "0a1b906505bca22e7de9f9afd70edc6d7aed519a0971b0555efd6ffa90b7ce65"
+    },
+    "logs/paper_trading_2026-07-24.log": {
+      "bytes": 6797,
+      "exists": true,
+      "sha256": "837fb39d0801f7e6ee200caba6aefb6e929d42a5cd5fad77e8d6a661f1ebd263"
+    },
+    "logs/paper_trading_2026-07-25.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-07-31.log": {
+      "bytes": 10271,
+      "exists": true,
+      "sha256": "d25a1b1314828c85ecb052f13a78639a12f7243a2260cfa04f6d85b9a9f95b9c"
+    },
+    "logs/paper_trading_2026-08-02.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-08-07.log": {
+      "bytes": 10722,
+      "exists": true,
+      "sha256": "0bdb58ec9c9e3a722955bf9e5c1b8ac39678116d0edefe25e9f5811c027066d1"
+    },
+    "logs/paper_trading_2026-08-09.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-08-14.log": {
+      "bytes": 10523,
+      "exists": true,
+      "sha256": "beb9389e1a3a96621447bba8aef8e37d8fb161dad43c9c94c27989e93d743cbf"
+    },
+    "logs/paper_trading_2026-08-15.log": {
+      "bytes": 2604,
+      "exists": true,
+      "sha256": "adf4ed5ba5a003061f899a1b9517ab73a36ecf4254b2f9e2a98e165fb871972e"
+    },
+    "logs/paper_trading_2026-08-16.log": {
+      "bytes": 8467,
+      "exists": true,
+      "sha256": "885309e102761696918e5b49f783927c9992fe958d86ce0e65dae8acccae8069"
+    },
+    "logs/paper_trading_2026-08-21.log": {
+      "bytes": 8473,
+      "exists": true,
+      "sha256": "3dfcf1ade4a65e9cd31494443cc9816683dcdc300d64da7a4a4ee1b6a815be8a"
+    },
+    "logs/paper_trading_2026-08-23.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-08-29.log": {
+      "bytes": 7841,
+      "exists": true,
+      "sha256": "c9c808baca661265b4fc904b78d1f3dbca23631e71758dd34e59c6b26d8b032c"
+    },
+    "logs/paper_trading_2026-08-31.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-09-04.log": {
+      "bytes": 8466,
+      "exists": true,
+      "sha256": "9372a7358bba36575155ec9c8a4294831bb955edf219dcf54011a5d37b08d403"
+    },
+    "logs/paper_trading_2026-09-05.log": {
+      "bytes": 1838,
+      "exists": true,
+      "sha256": "6d218f206e13c31781e21e67952302e51a5d05b4111f5f4f4d7e25bd51f3032e"
+    },
+    "logs/paper_trading_2026-09-07.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-09-11.log": {
+      "bytes": 6800,
+      "exists": true,
+      "sha256": "28895cde863146d328b698ee61e57b0b61bfab6db898444753cfb863296f0c45"
+    },
+    "logs/paper_trading_2026-09-12.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-09-18.log": {
+      "bytes": 8561,
+      "exists": true,
+      "sha256": "b059553ae5d98d3859657f7fd8d438d825b013eaa76937f03611c93886dc4012"
+    },
+    "logs/paper_trading_2026-09-26.log": {
+      "bytes": 7679,
+      "exists": true,
+      "sha256": "b919516f9398f30939ac023055b27dccad85752c2ff4ec204cf7a931b650a7bf"
+    },
+    "logs/paper_trading_2026-09-27.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-09-29.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs/paper_trading_2026-10-02.log": {
+      "bytes": 8003,
+      "exists": true,
+      "sha256": "0b98abe9efc24956b333ab6c405d1830c12f82f3ef729887c7e7a207683504f2"
+    },
+    "logs/paper_trading_2026-10-10.log": {
+      "bytes": 6599,
+      "exists": true,
+      "sha256": "aa71047da5783bf3a267eb1307491149685cdc7de31ebf8d740c6c79ffdfee9d"
+    },
+    "logs/paper_trading_cron.log": {
+      "bytes": 599742,
+      "exists": true,
+      "sha256": "ea3d48f86e236fda092e6aa15d85f315fff5544b72d5f156219b05726b115b7c"
+    },
+    "logs/parity_check_2026-06-05.json": {
+      "bytes": 2020,
+      "exists": true,
+      "sha256": "297599e08b5c76e7e967250cf2d38c0461eab7be997391c2166dc615335d74a3"
+    },
+    "logs/parity_check_2026-06-06.json": {
+      "bytes": 1691,
+      "exists": true,
+      "sha256": "5a642d62cc9c5194d403b6e6103e2e8f243475615a65a50b00307efe95081a6a"
+    },
+    "logs/parity_check_2026-06-12.json": {
+      "bytes": 877,
+      "exists": true,
+      "sha256": "349b9621028091ffbb041d80d8005e3fd0518088561231132d1e900958773153"
+    },
+    "logs/parity_check_2026-06-19.json": {
+      "bytes": 3002,
+      "exists": true,
+      "sha256": "634369dd5fa2cce1de731025b01578e369f85a30f5aa7fef697a3244dd9e02f1"
+    },
+    "logs/parity_check_2026-06-26.json": {
+      "bytes": 3307,
+      "exists": true,
+      "sha256": "3eedc632c9c606f4d16ce488b5c477e20fdd4b9b6a8f0bd6720529ecbc5bced7"
+    },
+    "logs/parity_check_2026-07-03.json": {
+      "bytes": 3183,
+      "exists": true,
+      "sha256": "9fbf4a137ed1aa3bdbf4412898463f27f184fa10d5c09911cc31115ad623147a"
+    },
+    "logs/parity_check_2026-07-10.json": {
+      "bytes": 3606,
+      "exists": true,
+      "sha256": "5f0d9d561684a5650a6c0106884fbd026ce910f2dbea93c9ea4a4d1dfd807482"
+    },
+    "logs/parity_check_2026-07-17.json": {
+      "bytes": 4433,
+      "exists": true,
+      "sha256": "b5f489dec04745036052117dff03b6c08b9b7b9b9e4b6e65c3e3668b3fc06619"
+    },
+    "logs/parity_check_2026-07-24.json": {
+      "bytes": 3523,
+      "exists": true,
+      "sha256": "3434ca54a1135911509d0061a7a9bc473112ca6950b999232f8adaae29340b49"
+    },
+    "logs/parity_check_2026-07-31.json": {
+      "bytes": 5016,
+      "exists": true,
+      "sha256": "43afdb25a1ddfffed4e8cd1e19f13d2307d4ce983e5b857fada366e7e8acf3fa"
+    },
+    "logs/parity_check_2026-08-07.json": {
+      "bytes": 5212,
+      "exists": true,
+      "sha256": "30a81b026eae57db2bedf9e5738dd70458a98f9586f6627f3b9bc4cc74896416"
+    },
+    "logs/parity_check_2026-08-14.json": {
+      "bytes": 5314,
+      "exists": true,
+      "sha256": "c51817a29ac850b7968609f505014ccd901e96f62fadbcc469468ffbdc020d5f"
+    },
+    "logs/parity_check_2026-08-15.json": {
+      "bytes": 994,
+      "exists": true,
+      "sha256": "1dfe30e6cb25e211f925e2ba43398dffce71d150de6f70ca19c7b5c14e0bd259"
+    },
+    "logs/parity_check_2026-08-16.json": {
+      "bytes": 5318,
+      "exists": true,
+      "sha256": "ec637eebab52ea53393f64e2afa4778cad14b9b7f6aa33aca68b76191cc083f0"
+    },
+    "logs/parity_check_2026-08-21.json": {
+      "bytes": 5386,
+      "exists": true,
+      "sha256": "f2f788b8688a6992232f4cfc1a24e97f60cdf4576d6b6892297097f5d4232d73"
+    },
+    "logs/parity_check_2026-08-29.json": {
+      "bytes": 5174,
+      "exists": true,
+      "sha256": "45d556c24bb632279261dc08cf68c2de3a68ede239a718c02ffcdad19046f1bb"
+    },
+    "logs/parity_check_2026-09-04.json": {
+      "bytes": 6091,
+      "exists": true,
+      "sha256": "539bc37c2e540cf77a58e02eb2b0c91635d790a00a58f56322d2528474481486"
+    },
+    "logs/parity_check_2026-09-18.json": {
+      "bytes": 6444,
+      "exists": true,
+      "sha256": "bcb97d47abf1a2b386da84f3592e8effca1bc88acdd1a24fa3215d40e34d1357"
+    },
+    "logs/parity_check_2026-10-02.json": {
+      "bytes": 6106,
+      "exists": true,
+      "sha256": "882fba41925e74838792f094a59e99499152bca5a4f74423e1d5fd82ffdcd360"
+    },
+    "logs/parity_check_2026-10-09.json": {
+      "bytes": 5306,
+      "exists": true,
+      "sha256": "f628b369f26f8c9ed62e096beaae73b2cc194c3a43ccb1f4379bc9b9f88409c3"
+    },
+    "logs/pre_trade_validation_2026-06-05.json": {
+      "bytes": 465,
+      "exists": true,
+      "sha256": "b555fca72930d4aba9fea0eacf77b8e2172ed78abd34f01e4140ad7fd642da74"
+    },
+    "logs/pre_trade_validation_2026-06-06.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "12a26f8064dd4a0e6201696db1ca9511e895e191749d66fadf892e7804da2c21"
+    },
+    "logs/pre_trade_validation_2026-06-12.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "80e8c441861efea255667d0d37933e6aa881aa990c7b841b12645133d9ca564f"
+    },
+    "logs/pre_trade_validation_2026-06-19.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "1483a7f815815adb3f6f1481a7ac900b03acb8d4552ed9e88498ce9c52ab6ef1"
+    },
+    "logs/pre_trade_validation_2026-06-26.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "66b19c334e8fa22923520263f29cefb389bf6972e1ed8b5898849932282bcfef"
+    },
+    "logs/pre_trade_validation_2026-07-03.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "7fb968be64a672a7b84f5b3b26f226c80d019e6f62f14349e562564e4ead0a63"
+    },
+    "logs/pre_trade_validation_2026-07-10.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "1e050a9202ab8c3cb7f450c9d99af7b53fb30e91b3884a17cf24eed080aebf61"
+    },
+    "logs/pre_trade_validation_2026-07-17.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "016e0d281e611633cf6dfcea4ed03628033afe0eadbe0ad0a5b1cd5721618672"
+    },
+    "logs/pre_trade_validation_2026-07-24.json": {
+      "bytes": 555,
+      "exists": true,
+      "sha256": "b9fb15dd63ce3b9ecf7558c4e71b3956ed95ab6461b76091ab7979d86ac33c3a"
+    },
+    "logs/pre_trade_validation_2026-07-31.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "eb3db01c38735b1322c9049ffd48b4b0d94e04c4ac8c8beaf28c97b36c405b0b"
+    },
+    "logs/pre_trade_validation_2026-08-07.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "a9e1b1b430b14986862cc041bcf161453ac640b07268df5084c24413665cebe1"
+    },
+    "logs/pre_trade_validation_2026-08-14.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "dda73cdfe40cc076f0f9876b251cff320eac6079d6df96bbbc2d33dcf09ff914"
+    },
+    "logs/pre_trade_validation_2026-08-15.json": {
+      "bytes": 169,
+      "exists": true,
+      "sha256": "6f7fedf60994638b18b261ad99f4f692073f5d97de967fee0c0fc7c1bc1943d8"
+    },
+    "logs/pre_trade_validation_2026-08-16.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "f3912d7ea59afa5c4f3c4bf45c5e76f44a1fa2579d5098fca72aca6ec456eeac"
+    },
+    "logs/pre_trade_validation_2026-08-21.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "cdc09d6f58a2c0bf85ee11a149560f9fee7eeb59362d8f47078587dcc0f41709"
+    },
+    "logs/pre_trade_validation_2026-08-29.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "061f0666893119619db5e920c1608271cfa7c606a0ee16d3daf4337773d3910f"
+    },
+    "logs/pre_trade_validation_2026-09-04.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "6addabbf5e1bfbbe9bed2eb4f1ce1c6ae76a70e343ad1b1dfa8e0e40b07d1aa9"
+    },
+    "logs/pre_trade_validation_2026-09-11.json": {
+      "bytes": 785,
+      "exists": true,
+      "sha256": "d458c183a1fc5cd420d213025fe54570cea025028c051c3d09070810df05112d"
+    },
+    "logs/pre_trade_validation_2026-09-18.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "d491643e29c723d8194be7a30aec143d7b1848c3b2b1ae7876d99bc929fbd9f3"
+    },
+    "logs/pre_trade_validation_2026-09-25.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "640887078b776abadb08e6d30ed45f2b6a6d5e0d3774ff8416fc2a2e961d0259"
+    },
+    "logs/pre_trade_validation_2026-10-02.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "cc37cf4189ac64847c606498119e557825a5a249e70a8414acc1d3ad1e0093cd"
+    },
+    "logs/pre_trade_validation_2026-10-09.json": {
+      "bytes": 333,
+      "exists": true,
+      "sha256": "2b22a69fc0b85f350b8f6036e19e93331e4f66dbdf531aaad8f75cbf582f7ab8"
+    },
+    "logs/reconciliation_2026-06-12.json": {
+      "bytes": 2806,
+      "exists": true,
+      "sha256": "c59668a8e72313ccb7a47119510325683b19fb0ae6897db32c3cade495668172"
+    },
+    "logs/reconciliation_2026-06-19.json": {
+      "bytes": 2801,
+      "exists": true,
+      "sha256": "6692765de2156d074a0fb69f53598891b8c0db12828ae9e7534bea91ad83f10c"
+    },
+    "logs/reconciliation_2026-06-26.json": {
+      "bytes": 3037,
+      "exists": true,
+      "sha256": "84e45558083930f8e3c7d596b86d3ce3eeb231f23a5ad9429db3a7974ebc495a"
+    },
+    "logs/reconciliation_2026-07-03.json": {
+      "bytes": 3036,
+      "exists": true,
+      "sha256": "331b9feacc3748b7052898d3466a3d086e78a75cdb5009a33a6c14818c7652ae"
+    },
+    "logs/reconciliation_2026-07-10.json": {
+      "bytes": 3851,
+      "exists": true,
+      "sha256": "33431cb016976d6ae1ca592b8a1f0993309ab9a58b48fa50aba9ad6105226edf"
+    },
+    "logs/reconciliation_2026-07-17.json": {
+      "bytes": 4994,
+      "exists": true,
+      "sha256": "e1b08ff779b1f6effc8e38709422ab39b545ead97bbe65e341b788df366ad5a5"
+    },
+    "logs/reconciliation_2026-07-31.json": {
+      "bytes": 7048,
+      "exists": true,
+      "sha256": "1a525e5e9500272e4c6bb87b92ffd60871b3f37b0e58fa5a995ca96ceac200c9"
+    },
+    "logs/reconciliation_2026-08-07.json": {
+      "bytes": 6989,
+      "exists": true,
+      "sha256": "3d420f1b92da00da2c1896c3846666636ec05023bfb872ecba0c44b996d8cf08"
+    },
+    "logs/reconciliation_2026-08-14.json": {
+      "bytes": 6990,
+      "exists": true,
+      "sha256": "71bd34c2b4db15bdddfd32827feee0843e3d59a11784e766f96f1298478d33de"
+    },
+    "logs/reconciliation_2026-08-16.json": {
+      "bytes": 7236,
+      "exists": true,
+      "sha256": "fecee70bdb0e4e3a268a4431d15f0d008e2206d8c1a56eb59166f90de34dcd0c"
+    },
+    "logs/reconciliation_2026-08-21.json": {
+      "bytes": 7370,
+      "exists": true,
+      "sha256": "551a1f8b3fca336f013d7e5830da67acad0a9eea377b4ad7a46840742e6a5723"
+    },
+    "logs/reconciliation_2026-08-29.json": {
+      "bytes": 5279,
+      "exists": true,
+      "sha256": "b5b3422d79dd88db5ea45db5cc082ba55eef23ca03df2b83345f29325702d25b"
+    },
+    "logs/reconciliation_2026-09-04.json": {
+      "bytes": 7435,
+      "exists": true,
+      "sha256": "61b48192bc43ca955b39ed437840154b991ae6d197d3dcb41c389d1947441fda"
+    },
+    "logs/reconciliation_2026-09-11.json": {
+      "bytes": 3875,
+      "exists": true,
+      "sha256": "54c4fbdd466a7606c36fcc7d1ea79b928109201360d871fc7a14e9263a8c7055"
+    },
+    "logs/reconciliation_2026-09-18.json": {
+      "bytes": 8283,
+      "exists": true,
+      "sha256": "0d6965ec1ef266cd2ee2b363bdc7c49a9ae5f127dbe9b958bd4d19751391363f"
+    },
+    "logs/reconciliation_2026-09-25.json": {
+      "bytes": 8007,
+      "exists": true,
+      "sha256": "dab93d8562f3b244324db22cb4aad74db4f3a19d6876e66e17dcd34994101282"
+    },
+    "logs/reconciliation_2026-10-02.json": {
+      "bytes": 7446,
+      "exists": true,
+      "sha256": "04dcca41e051fd3b99a62260ff34f50b82fb677913c40b8f754f1765bf643d4a"
+    },
+    "logs/reconciliation_2026-10-09.json": {
+      "bytes": 6868,
+      "exists": true,
+      "sha256": "929e0a8a5900f0fa76459ce1afe4a1e4a4d7ddf380fb1eb327616aa8ebb5647f"
+    },
+    "logs/rl_candidate_eval.json": {
+      "bytes": 6838,
+      "exists": true,
+      "sha256": "30348d26f064435b8487646493571f00540c2ded7604f443e4f3e54d17ec4b9d"
+    },
+    "logs/rl_candidate_weights_drl_weight_2026-06-12.json": {
+      "bytes": 6863,
+      "exists": true,
+      "sha256": "acc16e99bcb325d6735a5a8623c18d13446b2794e6e9ff5fc28a39b094f5ff18"
+    },
+    "logs/rl_offline_gate_2026-05-17.json": {
+      "bytes": 871,
+      "exists": true,
+      "sha256": "4420764d83b41850713fcf40dde3058b2014863046f9f18db142bb513717afaa"
+    },
+    "logs/rl_offline_gate_2026-06-12.json": {
+      "bytes": 2561,
+      "exists": true,
+      "sha256": "29ad8f131fc8b268cbd2c9c1c6db8e3bd67ac6f7d203a80859ad7a65850a04cd"
+    },
+    "logs/rl_offline_gate_2026-07-12.json": {
+      "bytes": 2561,
+      "exists": true,
+      "sha256": "6323fad3db2fdea35cd9b2cb84790ff5165351758251c0e14a58a35cb0a1b1ab"
+    },
+    "logs/rl_training_2026-07-12.log": {
+      "bytes": 307184,
+      "exists": true,
+      "sha256": "499b79fe38c061e54f4520239a6780204d6e9420a370e183b3f47baacda2c3ca"
+    },
+    "logs/strategy_decisions.jsonl": {
+      "bytes": 545710,
+      "exists": true,
+      "sha256": "67b4f1f5ad00c5e97e0e24fb18f7b617935a59656c6bc371dc2c99be8040457b"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-05.json": {
+      "bytes": 589,
+      "exists": true,
+      "sha256": "fbe9523c9dc6c6585d6fc8be31680c7454a0801f687e66b420ed6917d530db7d"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-05_replay.json": {
+      "bytes": 589,
+      "exists": true,
+      "sha256": "fbe9523c9dc6c6585d6fc8be31680c7454a0801f687e66b420ed6917d530db7d"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-06_replay.json": {
+      "bytes": 589,
+      "exists": true,
+      "sha256": "eaf54124421ff1f564ba74a21a0bf2535e96d8be1c2dda0bbb57cee7e44ed094"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-12.json": {
+      "bytes": 490,
+      "exists": true,
+      "sha256": "2e5080402a595d54a64b420714c9fa9e98ad271aeeb56bb16c5d49e9444c58bc"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-12_replay.json": {
+      "bytes": 490,
+      "exists": true,
+      "sha256": "2e5080402a595d54a64b420714c9fa9e98ad271aeeb56bb16c5d49e9444c58bc"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-19.json": {
+      "bytes": 487,
+      "exists": true,
+      "sha256": "8d8a6f724063f16ad9ea633fb5059aed5a28f2c1a06759ad198abd68cafdcb2c"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-19_replay.json": {
+      "bytes": 490,
+      "exists": true,
+      "sha256": "563585d64c87a0bde407c8d73144b1457ff1aaab208ef234b7fefe797566b6ff"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-26.json": {
+      "bytes": 487,
+      "exists": true,
+      "sha256": "8b7f13da09828243b9a31ac1a59bfa282327cd8f4b195840c85c9f6ca9d118ec"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-06-26_replay.json": {
+      "bytes": 490,
+      "exists": true,
+      "sha256": "40563e0d9fb3a6e77ac55568c643c92f2ef2ac82a43b59f249ab1491d19ffdd2"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-03.json": {
+      "bytes": 487,
+      "exists": true,
+      "sha256": "d83894f1264f9588443996f1235bad15dcdc3b4c6a9028882ad893afe6701c0a"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-03_replay.json": {
+      "bytes": 490,
+      "exists": true,
+      "sha256": "53fd96f9d8a8c1f464e8ff54268645b142f81fe5285330f7b1b8b339f461c91e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-10.json": {
+      "bytes": 508,
+      "exists": true,
+      "sha256": "377e1be8d84c25dbecc53f4e5a7b03bb272e6101c7084ff30dda071ed237cf19"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-10_replay.json": {
+      "bytes": 511,
+      "exists": true,
+      "sha256": "e225c1f8b6e2328875627510ccdc93942043632baa750c0c1bc6115f3b426f50"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-17.json": {
+      "bytes": 530,
+      "exists": true,
+      "sha256": "726412b03de5b717ac09c137303e2398d542fbdaa0beabdb3d7fbd2ddcb739f0"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-17_replay.json": {
+      "bytes": 533,
+      "exists": true,
+      "sha256": "92532470f4f2005e2741c7fda3e5c079b3cc8427c46f462c26e72e00a48c03f2"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-24.json": {
+      "bytes": 654,
+      "exists": true,
+      "sha256": "72db6fa0773d340e10a715d16727cbb06864fb197f5e18bd2c9a46eff5658578"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-24_replay.json": {
+      "bytes": 657,
+      "exists": true,
+      "sha256": "1947e366e0cc0787f76d488d6ec934964e14fb095b92049bca6c9f5d8e4f53a5"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-31.json": {
+      "bytes": 631,
+      "exists": true,
+      "sha256": "bcce9eda4d1fe9972fa9528d80ac36250413ffdd27bc9cc25195d189e86e500e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-07-31_replay.json": {
+      "bytes": 634,
+      "exists": true,
+      "sha256": "bea18bd4fc819544c6445bef79a5193cc9513326335fb01a7d31aa1ea47b440e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-07.json": {
+      "bytes": 648,
+      "exists": true,
+      "sha256": "a3bf3090f48749d5befd32c843f2f4f0abfd26f9fd77436b8bf4d7379a90be07"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-07_replay.json": {
+      "bytes": 651,
+      "exists": true,
+      "sha256": "52de290c76f5ee249fb947c152ded8ace199f8c44340e1ee1c278fdee29c4920"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-14.json": {
+      "bytes": 650,
+      "exists": true,
+      "sha256": "b141a6c7f4d3fac65e783c39e7658ffe8228fa9ba0be477277399089b04206ff"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-14_replay.json": {
+      "bytes": 653,
+      "exists": true,
+      "sha256": "66b7f78ac4fc5d16bc9b7860602673f151c70d08a15347e20c0f72b854663fa4"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-16.json": {
+      "bytes": 650,
+      "exists": true,
+      "sha256": "612c48434dbe296112709c4bdccfc29d828eb58d4bf12e3f92b5afd02848f9a6"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-16_replay.json": {
+      "bytes": 653,
+      "exists": true,
+      "sha256": "8846683a41dc547ed6146ac23b2ff1997fed0142deb8ab9bd799a4fd1533b5ee"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-21.json": {
+      "bytes": 652,
+      "exists": true,
+      "sha256": "6cb33a079582155fa61f6659731b9e4c986dfd3e7c2b76abd0d60cf6af353986"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-21_replay.json": {
+      "bytes": 655,
+      "exists": true,
+      "sha256": "27784ec4ca0b9184271f06c8b737749713f5d45c16739e962dcf609acf5ba0d5"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-29.json": {
+      "bytes": 652,
+      "exists": true,
+      "sha256": "16a14250f1179c1f3ffee56aa14251d8387e8cc1b76ec8f9a7fbbb0c50fabbde"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-08-29_replay.json": {
+      "bytes": 655,
+      "exists": true,
+      "sha256": "092ec8f6e2e0b9dcdc3c85d996e8c56f6120ec36c159690f2339b77d86f7850d"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-04.json": {
+      "bytes": 641,
+      "exists": true,
+      "sha256": "2d205207bbfce993b5b41dd1171ad760d0a4e505fe0d77384b05bcfc0f522060"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-04_replay.json": {
+      "bytes": 644,
+      "exists": true,
+      "sha256": "fb988955d9e3d0fcdaeef7a28aec72a37c922cf551724e02502c1777a3b4cc80"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-11.json": {
+      "bytes": 661,
+      "exists": true,
+      "sha256": "073f847c56dd37e364ef42ac0ef3f1ebe7588481cd706932dbf5e8b712148957"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-18.json": {
+      "bytes": 661,
+      "exists": true,
+      "sha256": "ef599a1f9d5542797f27bcb07c2210a6d38844a577361c6d25b0666b77af7d1b"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-18_replay.json": {
+      "bytes": 664,
+      "exists": true,
+      "sha256": "54347525327b4245581bf9ec0b74ee9195b95ad94dbcfe742a06bfa2f361974d"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-09-25.json": {
+      "bytes": 641,
+      "exists": true,
+      "sha256": "b7dcbc75098994007ea35dc9736e74089c25797bc264d1261184d7e71e6f7982"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-10-02.json": {
+      "bytes": 663,
+      "exists": true,
+      "sha256": "e0868ec6b4069d8f24652994e3c7da25bf2533956f12b86bd124ebbaa26f31ad"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-10-02_replay.json": {
+      "bytes": 663,
+      "exists": true,
+      "sha256": "e0868ec6b4069d8f24652994e3c7da25bf2533956f12b86bd124ebbaa26f31ad"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-10-09.json": {
+      "bytes": 518,
+      "exists": true,
+      "sha256": "e525b6a88db374fe68e05c6c39380eac4a6c49315013f3424cf7789a337f8c59"
+    },
+    "logs/target_weights_AdaptiveRotationConf_baseline_2026-10-09_replay.json": {
+      "bytes": 518,
+      "exists": true,
+      "sha256": "e525b6a88db374fe68e05c6c39380eac4a6c49315013f3424cf7789a337f8c59"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-05.json": {
+      "bytes": 535,
+      "exists": true,
+      "sha256": "da7fbd6a7ec92664bd3a65d2a1f404a914fd08d44ab730b3968961d95b8b4db9"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-05_replay.json": {
+      "bytes": 535,
+      "exists": true,
+      "sha256": "da7fbd6a7ec92664bd3a65d2a1f404a914fd08d44ab730b3968961d95b8b4db9"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-06.json": {
+      "bytes": 535,
+      "exists": true,
+      "sha256": "ab11b81910fe9ddd1edc7ff03b722bc0f20d2a2ddbda3a4e8f34837380ca14ab"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-06_replay.json": {
+      "bytes": 535,
+      "exists": true,
+      "sha256": "ab11b81910fe9ddd1edc7ff03b722bc0f20d2a2ddbda3a4e8f34837380ca14ab"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-12.json": {
+      "bytes": 512,
+      "exists": true,
+      "sha256": "f1281057a9fb390d70434d4dc02cf260d5b3fa1c640a2be99207b3c0d3aa4d1b"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-12_replay.json": {
+      "bytes": 518,
+      "exists": true,
+      "sha256": "a04e39aeefc28805c4116f86b485aed192d26a551859b05e43a9ca369560997e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-19.json": {
+      "bytes": 512,
+      "exists": true,
+      "sha256": "b650bcb8ac97f6415867e03a470e8fb9fadcc973dede1f74f7ffeee374c6e2d9"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-19_replay.json": {
+      "bytes": 518,
+      "exists": true,
+      "sha256": "e8c1743aa5ed945db2a0257b428e61728a9887c9ee21c6594bb266f167310dc7"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-26.json": {
+      "bytes": 514,
+      "exists": true,
+      "sha256": "f60f647b57baccfdbfb4f3d019c0a6ffe09a23a495b250a9dc5af44a906828d9"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-06-26_replay.json": {
+      "bytes": 520,
+      "exists": true,
+      "sha256": "152fff2381d2bb8e91b8aeccdb2248223ededfee1d2aab2dc3b2f1aa99670544"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-03.json": {
+      "bytes": 514,
+      "exists": true,
+      "sha256": "ad29a0c1b906d9eca3414c86e563ea634f8994740ef0e064fea4c22df96e3dee"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-03_replay.json": {
+      "bytes": 520,
+      "exists": true,
+      "sha256": "11dde29c242351358493f754e9a5556d534e7749e9ec66773d690d9df5de7367"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-10.json": {
+      "bytes": 510,
+      "exists": true,
+      "sha256": "7ffeb3a2969158b51f3442da0062e87de4a6f9dc91e051f323adfedd5f7eee17"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-10_replay.json": {
+      "bytes": 516,
+      "exists": true,
+      "sha256": "1e49890ace474fea7b993901a6f54cbd337b01d18b5d5a3a0eda9f5d0b927f15"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-17.json": {
+      "bytes": 641,
+      "exists": true,
+      "sha256": "a7044070ec18ca672faa32de88ba872ff1e34286c4612b6362a6ec6fd28f532f"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-17_replay.json": {
+      "bytes": 647,
+      "exists": true,
+      "sha256": "cdfed5a0c56f896ff9bb2d3d2516e5bec02135233e81534b6071ecffb8975b85"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-24.json": {
+      "bytes": 656,
+      "exists": true,
+      "sha256": "1661fda49c0106d6741a5cf8f04dc3ee204418f042a38deb5fd592ff611a338b"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-24_replay.json": {
+      "bytes": 662,
+      "exists": true,
+      "sha256": "8bf1ce4fcf0142672521af83e50e870b12450e9273a11983de85601e19afbf6a"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-31.json": {
+      "bytes": 635,
+      "exists": true,
+      "sha256": "4659572ff0daf9f57279f1319bca9928ede368668b7fe42d4d87cf9afc75bc3a"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-07-31_replay.json": {
+      "bytes": 641,
+      "exists": true,
+      "sha256": "82b72193f04c2d5cf3ebe915e6e71688a64af87af839e940211a55f0966ebc6e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-07.json": {
+      "bytes": 635,
+      "exists": true,
+      "sha256": "1e73c6142605dfc72a4251f2dc716cfdd5f2028c1a47df9bf44dc2a6600b2748"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-07_replay.json": {
+      "bytes": 641,
+      "exists": true,
+      "sha256": "e5c2748c818e87e23b7209df16a96407aae89657a2f8893ece7bc260f24ccedb"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-14.json": {
+      "bytes": 653,
+      "exists": true,
+      "sha256": "69b294cb1ccd88bec010f0306d9d6c7f967217d81c7537fe29c0d809d4d359c1"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-14_replay.json": {
+      "bytes": 659,
+      "exists": true,
+      "sha256": "ccdc5fe0a3c9550f4030c60c534ab51dd94fe948285e00b0ae9f5179dda41b3f"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-15.json": {
+      "bytes": 655,
+      "exists": true,
+      "sha256": "38a4166ba8affcf9e4960970f00ecc6d3162d82b0f15203031618bb7259fa00c"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-15_replay.json": {
+      "bytes": 661,
+      "exists": true,
+      "sha256": "809c3dbb4f6907fe21e61286ec2308c37a685d0ffe54f1515a7884930999fd3a"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-16.json": {
+      "bytes": 655,
+      "exists": true,
+      "sha256": "3457255eea1691b39bdc2cb63cd909e24bc6639e9557b32bb49dfcb99ff8b782"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-16_replay.json": {
+      "bytes": 661,
+      "exists": true,
+      "sha256": "fc4044782b9cefa938d544e15a3b0186f4b9ce9091817963b9501ab87837d0ec"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-21.json": {
+      "bytes": 656,
+      "exists": true,
+      "sha256": "0fb4dc4336242460a4c5ded5d0ca180e3e30569aad2d2348b746a588d336d615"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-21_replay.json": {
+      "bytes": 662,
+      "exists": true,
+      "sha256": "c0ddfcdf34c613532e93404cd74f39a37548b5566c41ec5c9c0eaa0898dcfd96"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-29.json": {
+      "bytes": 656,
+      "exists": true,
+      "sha256": "f0e24163c973d3e54328d777267ff9f2ff4771e93cd59aa50803989691c71cc1"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-08-29_replay.json": {
+      "bytes": 662,
+      "exists": true,
+      "sha256": "f39408d35745056df5158e92eefdd4f6a827f79487bbd683a201bdcd6c591a33"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-04.json": {
+      "bytes": 656,
+      "exists": true,
+      "sha256": "159a333b80313ec2adb35cada552bcd3c93bb1dd64f0b28e2a4e00cb0a5515c9"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-04_replay.json": {
+      "bytes": 662,
+      "exists": true,
+      "sha256": "aae35d8655a535aa43b9e21f643c9183137a5d5f0ac533fe4f996f4fa963ed24"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-11.json": {
+      "bytes": 658,
+      "exists": true,
+      "sha256": "6e62b4cc7d05fe3d57e8d29b6ee151cca74bbef5003129c2348e1ebbd618673e"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-18.json": {
+      "bytes": 640,
+      "exists": true,
+      "sha256": "e03448acb26180b2e5f1914358808182c7aed4ba823fe8674f2423000d3ddec4"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-18_replay.json": {
+      "bytes": 646,
+      "exists": true,
+      "sha256": "0c0789b1a091ba1eee353e7c962e807ba560763fd858cd6b655e28a7d9747fb1"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-09-25.json": {
+      "bytes": 657,
+      "exists": true,
+      "sha256": "4fa22eaf1c9b3dd669db29c28722c260b1ce9e7fb6ac15508d0a2c37a8751fbb"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-10-02.json": {
+      "bytes": 517,
+      "exists": true,
+      "sha256": "788e4d0db98720fae37e17765eb1b4c18ee98d88f0c351a3b32ff24b298b88b8"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-10-02_replay.json": {
+      "bytes": 517,
+      "exists": true,
+      "sha256": "788e4d0db98720fae37e17765eb1b4c18ee98d88f0c351a3b32ff24b298b88b8"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-10-09.json": {
+      "bytes": 411,
+      "exists": true,
+      "sha256": "6dab84c33eabbf4cc322976470dbabe7d21803e352e41c8367387d0c003e95cb"
+    },
+    "logs/target_weights_AdaptiveRotationConf_v1.2.2_2026-10-09_replay.json": {
+      "bytes": 411,
+      "exists": true,
+      "sha256": "6dab84c33eabbf4cc322976470dbabe7d21803e352e41c8367387d0c003e95cb"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/README.txt": {
+      "bytes": 482,
+      "exists": true,
+      "sha256": "2922962037d8d62d14887c297bd536282595ef90b12eb8a36b1c348e81c90551"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/execution_2026-06-06.json": {
+      "bytes": 201,
+      "exists": true,
+      "sha256": "74249b7e7861e9997773dba01254e4c8a6e93c1e0bc6eab1d2d758e736ade778"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/execution_2026-09-04.json": {
+      "bytes": 128,
+      "exists": true,
+      "sha256": "6beefd2fd2ca1b2a3a4d3aaabf76c031366d651cceab043648c269c9457291d2"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/parity_check_2026-05-31.json": {
+      "bytes": 1057,
+      "exists": true,
+      "sha256": "e0e6ca1f9cf00dc6ce03e78f6b92e772dd6eaf717e4348b1a55ed0ae91a14298"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/rl_candidate_weights_drl_weight_2026-05-31.json": {
+      "bytes": 200,
+      "exists": true,
+      "sha256": "ca0463b5d77809d1d1e09453bec7af07809121d596bd149e3f1da7b528d1617f"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/target_weights_AdaptiveRotationConf_baseline_2026-06-06.json": {
+      "bytes": 200,
+      "exists": true,
+      "sha256": "fe7c14a48915c06525b566d61e0c3a9837f58db0ad855d13b64b1c834f179e38"
+    },
+    "logs/test_fixture_quarantine/2026-09-30-c9e77a9/target_weights_AdaptiveRotationConf_v1.2.2_2026-05-31.json": {
+      "bytes": 271,
+      "exists": true,
+      "sha256": "c12d33ae1273354612080bd7e057614cbb96a35388e93bfa2ad8bf966c2a3662"
+    }
+  },
+  "matching_processes": [],
+  "observed_utc": "2026-10-10T18:03:14.020829+00:00",
+  "root": "/home/paxto/stock-trading/FinRL-Trading"
+}

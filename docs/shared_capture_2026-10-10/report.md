@@ -1,10 +1,15 @@
 # Shared execution/capture barrier, October 10
 
-Implementation and isolated proof are ready for Chief/peer release gates.
-Nothing has been committed, pushed, synchronized to WSL or installed by this
-integration yet. Paper activation remains OFF. This is the separately approved
-successor to the helper-only repair; it creates no primary journal, attempt or
-capture lock during verification and invokes no broker/ordinary production run.
+**Published, source synchronized and helpers installed; paper activation remains OFF.**
+Chief and independent peer release gates passed. Operational source commit
+`65310fb2a6ef3187edb0cc41c1218558d74395e5` is published and the authoritative
+WSL source was cleanly fast-forwarded to it before helper installation. See
+[dated source/deployment receipt](evidence/source-release.json),
+[installation/original identities](evidence/installation.json), and the
+[final repository HEAD receipt](C:/Users/paxto/.codex/tmp/finrl-shared-capture-checks/release.json).
+The last receipt is outside Git to record the final documentation-only closeout
+commit without a self-referential commit hash. No primary journal, attempt or
+capture lock was created; no broker or ordinary production run was invoked.
 
 ## Behavior and exact guarantee
 
@@ -99,9 +104,9 @@ is synthesized and restore never permits automatic execution or recovery.
   original before-inventory helper did not enumerate capture-lock absence; the
   kernel negative controls enforce no test-process primary writes throughout.
 
-## Release plan and remaining activation boundary
+## Release evidence and remaining activation boundary
 
-After both gates, publish only this scope on native current branch
+Both release gates passed; the completed release followed this sequence. Publish only this scope on native current branch
 `codex/paper-comparison-reliability`, preserving the unrelated untracked readiness
 document. Verify exact live origin commit and upstream 0/0. Check scheduled WSL
 source is clean, default-off and has no active conflicting operational process;
@@ -123,3 +128,11 @@ procedure, deliberate journal-required marker, canonical paper identities,
 review of unresolved/legacy evidence and isolated activation prerequisites.
 This integration neither activates the gate nor authorizes orders, cancellation,
 primary recovery, scheduling changes or real-money actions.
+
+The first installer attempt safely stopped before live replacements because the
+external README belongs at `PaxtonBackups/README.md`. Its three original helper
+copies remain in `tools/helper-history/20261010T180354Z`; the corrected installation
+preserved all four originals at `20261010T180459Z` and verified the existing README
+against its prior installed identity. No installed bytes changed in the failed
+attempt. Earlier failed pytest output is JSON-encoded in tracked evidence to
+preserve raw whitespace exactly; its original file remains in task scratch.
