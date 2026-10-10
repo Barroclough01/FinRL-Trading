@@ -1,0 +1,33 @@
+{
+  "native": {
+    "before_utc": "2026-10-10T16:50:24.363426+00:00",
+    "after_utc": "2026-10-10T17:05:46.312173+00:00",
+    "inventory_unchanged": true,
+    "head_unchanged": true,
+    "gate_unchanged": true,
+    "entries": 18
+  },
+  "wsl": {
+    "before_utc": "2026-10-10T16:50:32.790125+00:00",
+    "after_utc": "2026-10-10T17:05:54.347124+00:00",
+    "inventory_unchanged": true,
+    "head_unchanged": true,
+    "gate_unchanged": true,
+    "entries": 267
+  },
+  "tasks": {
+    "unchanged": true
+  },
+  "external": {
+    "unchanged": true
+  },
+  "supplementary_absence_probe": {
+    "C:\\Users\\paxto\\FinRL-Trading\\data\\execution_capture.lock": false,
+    "C:\\Users\\paxto\\FinRL-Trading\\data\\paper_execution_journal.sqlite3": false,
+    "C:\\Users\\paxto\\FinRL-Trading\\logs\\execution_attempts": false,
+    "\\\\wsl.localhost\\Ubuntu\\home\\paxto\\stock-trading\\FinRL-Trading\\data\\execution_capture.lock": false,
+    "\\\\wsl.localhost\\Ubuntu\\home\\paxto\\stock-trading\\FinRL-Trading\\data\\paper_execution_journal.sqlite3": false,
+    "\\\\wsl.localhost\\Ubuntu\\home\\paxto\\stock-trading\\FinRL-Trading\\logs\\execution_attempts": false,
+    "C:/Users/paxto/PaxtonBackups/tools/journal-required.json": false
+  }
+}

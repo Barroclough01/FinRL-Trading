@@ -7,6 +7,7 @@ import platform
 import sqlite3
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -16,6 +17,10 @@ GATE = "PAPER_EXECUTION_JOURNAL_ENABLED"
 PAPER_ENDPOINT = "https://paper-api.alpaca.markets"
 SCHEMA_VERSION = 1
 ALGORITHM_VERSION = "phased-rebalance-v1"
+EXECUTION_ROOT = Path("/home/paxto/stock-trading/FinRL-Trading")
+_CAPTURE_OWNER: ContextVar[tuple[int, Path, int] | None] = ContextVar(
+    "execution_capture_owner", default=None
+)
 PENDING = frozenset(
     {
         "new",
@@ -52,6 +57,78 @@ def require_execution_host(root: Path | None = None) -> None:
         )
 
 
+def require_capture_ownership(path: Path) -> None:
+    """Fail closed for future production mutation call sites outside the barrier."""
+    root = EXECUTION_ROOT.resolve()
+    if not path.resolve().is_relative_to(root):
+        return  # Disposable low-level fixtures are not production entry points.
+    if (_CAPTURE_OWNER.get() or ())[:2] != (os.getpid(), root):
+        raise ValueError("Execution held: global capture writer ownership required")
+
+
+@contextmanager
+def capture_writer(root: Path):
+    """WSL shared, nonblocking barrier; nested writers reuse the outer lifetime."""
+    require_execution_host(root)
+    import fcntl
+
+    owner = (os.getpid(), root.resolve())
+    if (_CAPTURE_OWNER.get() or ())[:2] == owner:
+        yield
+        return
+    if _CAPTURE_OWNER.get() is not None:
+        raise ValueError("Execution held: another capture root is already owned")
+    # Never remove this inode: unlinking could split cooperating lock ownership.
+    directory = root / "data"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "execution_capture.lock"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "a+b") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ValueError(
+                "Execution held: backup capture owns the global barrier; "
+                "inspect backup status before an explicit retry"
+            ) from exc
+        token = _CAPTURE_OWNER.set((*owner, handle.fileno()))
+        try:
+            yield
+        finally:
+            _CAPTURE_OWNER.reset(token)
+            # Close only; inherited child descriptors retain ownership on parent exit.
+
+
+def capture_subprocess_kwargs(env=None) -> dict:
+    """Retain a verified inherited lease; this grants no mutation authority."""
+    child_env = (os.environ if env is None else env).copy()
+    owner = _CAPTURE_OWNER.get()
+    fd = owner[2] if owner and owner[0] == os.getpid() else None
+    if fd is None and "FINRL_CAPTURE_DESCRIPTOR" in child_env:
+        try:
+            fd = int(child_env["FINRL_CAPTURE_DESCRIPTOR"])
+            expected = EXECUTION_ROOT / "data/execution_capture.lock"
+            if expected.is_symlink():
+                raise ValueError("capture lock symlink")
+            actual, wanted = os.fstat(fd), expected.stat()
+            if (actual.st_dev, actual.st_ino) != (wanted.st_dev, wanted.st_ino):
+                raise ValueError("capture descriptor inode mismatch")
+            locks = Path(f"/proc/self/fdinfo/{fd}").read_text()
+            if not any(
+                "FLOCK" in line and "READ" in line
+                for line in locks.splitlines()
+                if line.startswith("lock:")
+            ):
+                raise ValueError("capture descriptor has no shared lease")
+            require_execution_host(EXECUTION_ROOT)
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"Inherited capture descriptor held: {exc}") from exc
+    if fd is None:
+        return {}
+    child_env["FINRL_CAPTURE_DESCRIPTOR"] = str(fd)
+    return {"pass_fds": (fd,), "env": child_env}
+
+
 def canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
@@ -84,6 +161,7 @@ def identity(manager: Any, alias: str) -> tuple[str, str]:
 @contextmanager
 def account_lock(root: Path, endpoint: str, broker_id: str):
     require_execution_host(root)
+    require_capture_ownership(root)
     import fcntl
 
     directory = root / "data" / "execution_locks"
@@ -103,6 +181,7 @@ def account_lock(root: Path, endpoint: str, broker_id: str):
 
 
 def new_attempt(root: Path) -> Path:
+    require_capture_ownership(root)
     path = root / "logs" / "execution_attempts" / uuid.uuid4().hex
     path.mkdir(parents=True, exist_ok=False)
     return path
@@ -110,6 +189,7 @@ def new_attempt(root: Path) -> Path:
 
 def write_evidence(path: Path, value: Any) -> None:
     """Exclusive, fsynced evidence; never truncate an earlier attempt."""
+    require_capture_ownership(path)
     with path.open("x", encoding="utf-8") as handle:
         json.dump(value, handle, indent=2, default=str, allow_nan=False)
         handle.flush()
@@ -123,6 +203,7 @@ def write_evidence(path: Path, value: Any) -> None:
 
 class ExecutionJournal:
     def __init__(self, root: Path, *, create: bool = True):
+        require_capture_ownership(root)
         self.path = root / "data" / "paper_execution_journal.sqlite3"
         self.connection: sqlite3.Connection | None = None
         if not create and not self.path.is_file():
@@ -192,6 +273,7 @@ class ExecutionJournal:
 
     @property
     def conn(self) -> sqlite3.Connection:
+        require_capture_ownership(self.path)
         if self.connection is None:
             raise ValueError(f"Journal closed: {self.path}")
         return self.connection

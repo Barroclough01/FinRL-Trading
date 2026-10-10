@@ -80,6 +80,18 @@ _ATTEMPT_DIR: Path | None = None
 _FRESH_ACCOUNTS: set[str] = set()
 
 
+def _run_subprocess(*args, **kwargs):
+    # Journal strategy children can write immutable attempt evidence. Inherit the
+    # same open-file description so a killed parent cannot release their barrier.
+    import subprocess
+
+    from src.trading.execution_journal import capture_subprocess_kwargs
+
+    capture = capture_subprocess_kwargs(kwargs.get("env"))
+    kwargs.update(capture)
+    return subprocess.run(*args, **kwargs)
+
+
 def execution_audit_path(filename: str) -> Path:
     if _ATTEMPT_DIR is not None:
         return _ATTEMPT_DIR / filename
@@ -101,7 +113,6 @@ def get_ar_weights(
     Run Adaptive Rotation strategy for run_date and return target weights dict.
     Returns {ticker: weight} e.g. {"DOW": 0.2143, "LYB": 0.2143, ...}
     """
-    import subprocess
     import json
 
     logger.info(
@@ -140,7 +151,7 @@ def get_ar_weights(
             audit_suffix += "_" + _ATTEMPT_DIR.name
         cmd.extend(["--audit-suffix", audit_suffix])
 
-    result = subprocess.run(
+    result = _run_subprocess(
         cmd,
         capture_output=True,
         text=True,
@@ -201,7 +212,6 @@ def get_rl_candidate_weights(
     Returns {ticker: weight} from the structured JSON output written by
     src/strategies/run_rl_candidate_strategy.py.
     """
-    import subprocess
 
     logger.info(f"Running RL candidate strategy for date: {run_date}")
 
@@ -228,7 +238,7 @@ def get_rl_candidate_weights(
         json_output_path,
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
+    result = _run_subprocess(cmd, capture_output=True, text=True, cwd=project_root)
     if result.returncode != 0:
         logger.error(f"RL candidate strategy failed:\n{result.stderr}")
         raise RuntimeError("RL candidate strategy run failed")
@@ -1055,7 +1065,6 @@ def run_metrics_tracker(run_date: str, project_root: Path, *,
 
     Returns (success, error_message).
     """
-    import subprocess
 
     logger.info("Running metrics tracker (full snapshot)...")
     command = [sys.executable, "track_metrics.py", "--date", run_date]
@@ -1064,7 +1073,7 @@ def run_metrics_tracker(run_date: str, project_root: Path, *,
     if accounts is not None:
         for name in accounts:
             command.extend(["--account", name])
-    full_proc = subprocess.run(
+    full_proc = _run_subprocess(
         command,
         cwd=project_root,
     )
@@ -1076,7 +1085,7 @@ def run_metrics_tracker(run_date: str, project_root: Path, *,
         "Full metrics run failed (exit %s); refreshing dashboard from existing DB...",
         full_proc.returncode,
     )
-    report_proc = subprocess.run(
+    report_proc = _run_subprocess(
         [sys.executable, "track_metrics.py", "--report-only", "--date", run_date],
         cwd=project_root,
     )
@@ -1097,11 +1106,10 @@ def run_metrics_tracker(run_date: str, project_root: Path, *,
 
 def run_rl_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]:
     """Run the required offline-RL snapshot step and return its status."""
-    import subprocess
 
     logger.info("Running RL offline tracking...")
     try:
-        rl_proc = subprocess.run(
+        rl_proc = _run_subprocess(
             [sys.executable, "track_rl_offline.py", "--date", run_date],
             cwd=project_root,
             capture_output=True,
@@ -1131,14 +1139,14 @@ def run_account(account: dict, run_date: str, dry_run: bool) -> dict:
 
     if dry_run or not journal.enabled():
         return _run_account(account, run_date, dry_run)
-    journal.require_execution_host(Path(project_root))
-    previous_attempt = _ATTEMPT_DIR
-    if previous_attempt is None:
-        _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
-    try:
-        return _run_journal_account(account, run_date)
-    finally:
-        _ATTEMPT_DIR = previous_attempt
+    with journal.capture_writer(Path(project_root)):
+        previous_attempt = _ATTEMPT_DIR
+        if previous_attempt is None:
+            _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
+        try:
+            return _run_journal_account(account, run_date)
+        finally:
+            _ATTEMPT_DIR = previous_attempt
 
 
 def _run_journal_account(account: dict, run_date: str) -> dict:
@@ -1146,6 +1154,7 @@ def _run_journal_account(account: dict, run_date: str) -> dict:
 
     root = Path(project_root)
     journal.require_execution_host(root)
+    journal.require_capture_ownership(root)
     if account["name"].upper() == "RL":
         raise ValueError("RL remains offline and cannot open an execution session")
     executor = get_executor_for_account(account)
@@ -1957,9 +1966,18 @@ def _main():
     from src.trading import execution_journal as journal
 
     if not args.dry_run and journal.enabled():
-        journal.require_execution_host(Path(project_root))
-        _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
+        with journal.capture_writer(Path(project_root)):
+            try:
+                _ATTEMPT_DIR = journal.new_attempt(Path(project_root))
+                return _main_run(args)
+            finally:
+                _ATTEMPT_DIR = None
+                _FRESH_ACCOUNTS = set()
+    return _main_run(args)
 
+
+def _main_run(args):
+    global _FRESH_ACCOUNTS
     logger.info(f"Paper trading run: {args.date}")
 
     # Load all accounts

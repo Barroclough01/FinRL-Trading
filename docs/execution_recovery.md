@@ -113,3 +113,21 @@ External cash changes are observed, not fully attributed to fees/settlement.
 Cross-host coordination, automatic resume and legacy-history migration are outside
 this contract. Native/WSL operational gate remains disabled in this source release;
 no authenticated recovery, actual paper order or cancellation was used to validate it.
+# October 10 capture coordination
+
+Enabled scheduled WSL execution/recovery now acquires shared ownership of
+`data/execution_capture.lock` before attempt/journal creation and retains it
+through final writes and cleanup. Account locks are inside this global barrier.
+The backup helper uses exclusive nonblocking ownership through both transaction-
+consistent SQLite exports, attempt inventory/copy and recovery validation. A
+conflict holds and requires explicit review/retry; never unlink the lock inode.
+Children and the RL reporting descendant retain inherited shared ownership after
+parent termination. Descriptor transport never grants execution authority.
+
+This covers cooperating durable writers and the enabled main's comparison tail,
+not standalone comparison/backfill/price-sync tools, manual edits or other hosts.
+Valid unresolved evidence is captured with holds; corrupt/missing/mismatched or
+truncated required evidence refuses a complete snapshot. See the dated
+[implementation proof](shared_capture_2026-10-10/report.md). Activation remains
+off and still needs the separate approved activation procedure and monotonic
+journal-required marker. This source/backup integration authorizes no broker run.

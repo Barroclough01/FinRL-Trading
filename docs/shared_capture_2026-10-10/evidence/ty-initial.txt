@@ -1,0 +1,196 @@
+error[unresolved-attribute]: Module `msvcrt` has no member `locking`
+   --> docs/backup_repair_2026-10-09/helpers/backup_finrl.py:230:13
+    |
+230 |             msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    |             ^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `locking` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `LK_NBLCK`
+   --> docs/backup_repair_2026-10-09/helpers/backup_finrl.py:230:43
+    |
+230 |             msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    |                                           ^^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `LK_NBLCK` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `locking`
+   --> docs/backup_repair_2026-10-09/helpers/backup_finrl.py:237:13
+    |
+237 |             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    |             ^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `locking` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `LK_UNLCK`
+   --> docs/backup_repair_2026-10-09/helpers/backup_finrl.py:237:43
+    |
+237 |             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    |                                           ^^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `LK_UNLCK` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[invalid-argument-type]: Argument to function `module_from_spec` is incorrect
+  --> docs/backup_repair_2026-10-09/helpers/capture_runtime.py:16:46
+   |
+16 |     module = importlib.util.module_from_spec(spec)
+   |                                              ^^^^ Expected `ModuleSpec`, found `ModuleSpec | None`
+   |
+info: element `None` of union `ModuleSpec | None` is not assignable to `ModuleSpec`
+info: Function defined here
+  --> stdlib/_frozen_importlib.pyi:44:5
+   |
+44 | def module_from_spec(spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
+   |     ^^^^^^^^^^^^^^^^ ------------------------------------ Parameter declared here
+   |
+
+error[unresolved-attribute]: Attribute `loader` is not defined on `None` in union `ModuleSpec | None`
+  --> docs/backup_repair_2026-10-09/helpers/capture_runtime.py:17:5
+   |
+17 |     spec.loader.exec_module(module)
+   |     ^^^^^^^^^^^
+   |
+
+error[unresolved-attribute]: Attribute `exec_module` is not defined on `None` in union `Loader | None`
+  --> docs/backup_repair_2026-10-09/helpers/capture_runtime.py:17:5
+   |
+17 |     spec.loader.exec_module(module)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+error[invalid-argument-type]: Argument to bound method `ContextVar.set` is incorrect
+  --> src/trading/execution_journal.py:92:36
+   |
+92 |         token = _CAPTURE_OWNER.set((*owner, handle.fileno()))
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^ Expected `None`, found `tuple[int, Path, int]`
+   |
+info: Method defined here
+  --> stdlib/_contextvars.pyi:37:9
+   |
+37 |     def set(self, value: _T, /) -> Token[_T]:
+   |         ^^^       --------- Parameter declared here
+   |
+
+error[invalid-argument-type]: Argument to function `module_from_spec` is incorrect
+  --> tests/test_capture_barrier.py:26:51
+   |
+26 | capture_runtime = importlib.util.module_from_spec(spec)
+   |                                                   ^^^^ Expected `ModuleSpec`, found `ModuleSpec | None`
+   |
+info: element `None` of union `ModuleSpec | None` is not assignable to `ModuleSpec`
+info: Function defined here
+  --> stdlib/_frozen_importlib.pyi:44:5
+   |
+44 | def module_from_spec(spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
+   |     ^^^^^^^^^^^^^^^^ ------------------------------------ Parameter declared here
+   |
+
+error[unresolved-attribute]: Attribute `loader` is not defined on `None` in union `ModuleSpec | None`
+  --> tests/test_capture_barrier.py:27:1
+   |
+27 | spec.loader.exec_module(capture_runtime)
+   | ^^^^^^^^^^^
+   |
+
+error[unresolved-attribute]: Attribute `exec_module` is not defined on `None` in union `Loader | None`
+  --> tests/test_capture_barrier.py:27:1
+   |
+27 | spec.loader.exec_module(capture_runtime)
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+error[unsupported-operator]: Unsupported `/` operation
+   --> tests/test_capture_barrier.py:147:32
+    |
+147 |         journal.write_evidence(runner._ATTEMPT_DIR / "final.json", {})
+    |                                -------------------^^^------------
+    |                                |                     |
+    |                                |                     Has type `Literal["final.json"]`
+    |                                Has type `Path | None`
+    |
+
+error[invalid-argument-type]: Argument to function `module_from_spec` is incorrect
+   --> tests/test_capture_barrier.py:274:47
+    |
+274 |     fixture = importlib.util.module_from_spec(spec)
+    |                                               ^^^^ Expected `ModuleSpec`, found `ModuleSpec | None`
+    |
+info: element `None` of union `ModuleSpec | None` is not assignable to `ModuleSpec`
+info: Function defined here
+  --> stdlib/_frozen_importlib.pyi:44:5
+   |
+44 | def module_from_spec(spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
+   |     ^^^^^^^^^^^^^^^^ ------------------------------------ Parameter declared here
+   |
+
+error[unresolved-attribute]: Attribute `loader` is not defined on `None` in union `ModuleSpec | None`
+   --> tests/test_capture_barrier.py:275:5
+    |
+275 |     spec.loader.exec_module(fixture)
+    |     ^^^^^^^^^^^
+    |
+
+error[unresolved-attribute]: Attribute `exec_module` is not defined on `None` in union `Loader | None`
+   --> tests/test_capture_barrier.py:275:5
+    |
+275 |     spec.loader.exec_module(fixture)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+
+error[invalid-argument-type]: Argument to function `module_from_spec` is incorrect
+   --> tests/test_capture_barrier.py:358:46
+    |
+358 |     module = importlib.util.module_from_spec(spec)
+    |                                              ^^^^ Expected `ModuleSpec`, found `ModuleSpec | None`
+    |
+info: element `None` of union `ModuleSpec | None` is not assignable to `ModuleSpec`
+info: Function defined here
+  --> stdlib/_frozen_importlib.pyi:44:5
+   |
+44 | def module_from_spec(spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
+   |     ^^^^^^^^^^^^^^^^ ------------------------------------ Parameter declared here
+   |
+
+error[unresolved-attribute]: Attribute `loader` is not defined on `None` in union `ModuleSpec | None`
+   --> tests/test_capture_barrier.py:359:5
+    |
+359 |     spec.loader.exec_module(module)
+    |     ^^^^^^^^^^^
+    |
+
+error[unresolved-attribute]: Attribute `exec_module` is not defined on `None` in union `Loader | None`
+   --> tests/test_capture_barrier.py:359:5
+    |
+359 |     spec.loader.exec_module(module)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+
+Found 18 diagnostics

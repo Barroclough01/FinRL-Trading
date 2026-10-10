@@ -661,7 +661,9 @@ def main():
         import subprocess
 
         cmd = [sys.executable, "track_metrics.py", "--report-only", "--date", args.date]
-        subprocess.run(cmd, cwd=project_root)
+        from src.trading.execution_journal import capture_subprocess_kwargs
+
+        subprocess.run(cmd, cwd=project_root, **capture_subprocess_kwargs())
         logger.info("Dashboard regeneration complete")
     except Exception as e:
         logger.warning(f"Could not regenerate dashboard: {e}")

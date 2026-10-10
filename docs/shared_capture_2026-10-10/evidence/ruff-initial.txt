@@ -1,0 +1,500 @@
+F401 [*] `hashlib` imported but unused
+ --> docs\backup_repair_2026-10-09\helpers\backup_finrl.py:3:8
+  |
+1 | """Local FinRL evidence backup. Never invokes project runners or broker APIs."""
+2 |
+3 | import hashlib
+  |        ^^^^^^^
+4 | import json
+5 | import msvcrt
+  |
+help: Remove unused import: `hashlib`
+
+F401 [*] `recovery_contract.CONTRACT` imported but unused
+  --> docs\backup_repair_2026-10-09\helpers\backup_finrl.py:14:31
+   |
+12 | from pathlib import Path
+13 |
+14 | from recovery_contract import CONTRACT
+   |                               ^^^^^^^^
+15 |
+16 | ROOT = Path(__file__).resolve().parent
+   |
+help: Remove unused import: `recovery_contract.CONTRACT`
+
+E501 Line too long (90 > 88)
+  --> docs\backup_repair_2026-10-09\helpers\backup_finrl.py:32:89
+   |
+30 |     for source in (WSL_ROOT, WINDOWS_ROOT):
+31 |         if not source.is_dir() or source.is_symlink():
+32 |             raise RuntimeError("Required source checkout unavailable/unsafe; backup held")
+   |                                                                                         ^^
+33 |     if marker.exists():
+34 |         state = json.loads(marker.read_text(encoding="utf-8"))
+   |
+
+E501 Line too long (89 > 88)
+  --> docs\backup_repair_2026-10-09\helpers\backup_finrl.py:35:89
+   |
+33 |     if marker.exists():
+34 |         state = json.loads(marker.read_text(encoding="utf-8"))
+35 |         if state.get("journal_required") is not True or state.get("format_version") != 1:
+   |                                                                                         ^
+36 |             raise RuntimeError("Invalid journal-required marker; backup held")
+37 |     def observed(source):
+   |
+
+E501 Line too long (90 > 88)
+  --> docs\backup_repair_2026-10-09\helpers\backup_finrl.py:57:89
+   |
+55 |             os.fsync(handle.fileno())
+56 |     if native:
+57 |         raise RuntimeError("Native journal-era state is outside WSL capture; backup held")
+   |                                                                                         ^^
+58 |     return marker.exists()
+   |
+
+E501 Line too long (92 > 88)
+   --> docs\backup_repair_2026-10-09\helpers\capture_runtime.py:120:89
+    |
+118 |                 for directory in attempts.rglob("*"):
+119 |                     if directory.is_dir():
+120 |                         (stage / contract.ATTEMPTS / directory.relative_to(attempts)).mkdir(
+    |                                                                                         ^^^^
+121 |                             parents=True, exist_ok=True)
+122 |             if checkpoint:
+    |
+
+E501 Line too long (93 > 88)
+   --> docs\backup_repair_2026-10-09\helpers\capture_runtime.py:126:89
+    |
+124 |             state["coverage"] = "coordinated_wsl_journal"
+125 |             state["journal"] = contract.journal_summary(stage)
+126 |         (stage / contract.CONTRACT).write_text(json.dumps(state, indent=2), encoding="utf-8")
+    |                                                                                         ^^^^^
+127 |         manifest = {p.relative_to(stage).as_posix(): contract.hash_file(p)
+128 |                     for p in stage.rglob("*") if p.is_file() and p.name != "SHA256.json"}
+    |
+
+E501 Line too long (89 > 88)
+   --> docs\backup_repair_2026-10-09\helpers\capture_runtime.py:128:89
+    |
+126 |         (stage / contract.CONTRACT).write_text(json.dumps(state, indent=2), encoding="utf-8")
+127 |         manifest = {p.relative_to(stage).as_posix(): contract.hash_file(p)
+128 |                     for p in stage.rglob("*") if p.is_file() and p.name != "SHA256.json"}
+    |                                                                                         ^
+129 |         (stage / "SHA256.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+130 |         result = contract.verify_restore(stage)
+    |
+
+E501 Line too long (92 > 88)
+   --> docs\backup_repair_2026-10-09\helpers\capture_runtime.py:129:89
+    |
+127 |         manifest = {p.relative_to(stage).as_posix(): contract.hash_file(p)
+128 |                     for p in stage.rglob("*") if p.is_file() and p.name != "SHA256.json"}
+129 |         (stage / "SHA256.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    |                                                                                         ^^^^
+130 |         result = contract.verify_restore(stage)
+131 |         if checkpoint:
+    |
+
+E501 Line too long (94 > 88)
+   --> docs\backup_repair_2026-10-09\helpers\recovery_contract.py:288:89
+    |
+286 |                     "Unexpected journal-era artifacts in pre-journal snapshot"
+287 |                 )
+288 |         elif state.get("coverage") in {"sealed_synthetic_journal", "coordinated_wsl_journal"}:
+    |                                                                                         ^^^^^^
+289 |             if journal_summary(dest) != state.get("journal"):
+290 |                 raise ValueError("Restored journal/reference summary mismatch")
+    |
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> run_paper_trading.py:36:1
+   |
+34 |   """
+35 |
+36 | / import argparse
+37 | | import json
+38 | | import logging
+39 | | import math
+40 | | import os
+41 | | import sqlite3
+42 | | import sys
+43 | | import urllib.error
+44 | | import urllib.request
+45 | | from datetime import date
+46 | | from pathlib import Path
+47 | | import pandas as pd
+   | |___________________^
+48 |
+49 |   # ---------------------------------------------------------------------------
+   |
+help: Organize imports
+
+E402 Module level import not at top of file
+  --> run_paper_trading.py:57:1
+   |
+55 |     sys.path.insert(0, os.path.join(project_root, "src"))
+56 |
+57 | from dotenv import load_dotenv
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+58 |
+59 | load_dotenv()
+   |
+
+I001 [*] Import block is un-sorted or un-formatted
+   --> run_paper_trading.py:116:5
+    |
+114 |       Returns {ticker: weight} e.g. {"DOW": 0.2143, "LYB": 0.2143, ...}
+115 |       """
+116 | /     import subprocess
+117 | |     import json
+    | |_______________^
+118 |
+119 |       logger.info(
+    |
+help: Organize imports
+
+F401 [*] `subprocess` imported but unused
+   --> run_paper_trading.py:116:12
+    |
+114 |     Returns {ticker: weight} e.g. {"DOW": 0.2143, "LYB": 0.2143, ...}
+115 |     """
+116 |     import subprocess
+    |            ^^^^^^^^^^
+117 |     import json
+    |
+help: Remove unused import: `subprocess`
+
+E501 Line too long (131 > 88)
+   --> run_paper_trading.py:196:89
+    |
+194 |     # Log some structure details
+195 |     logger.info(
+196 |         f"Strategy run details: Regime={data['regime_state']}, Fallback={data['fallback_status']}, Audit={data['audit_file_path']}"
+    |                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+197 |     )
+    |
+
+F401 [*] `subprocess` imported but unused
+   --> run_paper_trading.py:216:12
+    |
+214 |     src/strategies/run_rl_candidate_strategy.py.
+215 |     """
+216 |     import subprocess
+    |            ^^^^^^^^^^
+217 |
+218 |     logger.info(f"Running RL candidate strategy for date: {run_date}")
+    |
+help: Remove unused import: `subprocess`
+
+E501 Line too long (98 > 88)
+   --> run_paper_trading.py:279:89
+    |
+278 |     logger.info(
+279 |         f"RL candidate target weights ({len(weights)} assets, total={sum(weights.values()):.1%}):"
+    |                                                                                         ^^^^^^^^^^
+280 |     )
+281 |     for tic, w in sorted(weights.items(), key=lambda item: -item[1]):
+    |
+
+E501 Line too long (98 > 88)
+   --> run_paper_trading.py:370:89
+    |
+368 |                 "no negative weights unless shorting is explicitly supported",
+369 |                 f"Negative weight found for {sym}: {w}",
+370 |                 "Shorting is not supported. Ensure all strategy target weights are non-negative.",
+    |                                                                                         ^^^^^^^^^^
+371 |             )
+    |
+
+E501 Line too long (104 > 88)
+   --> run_paper_trading.py:391:89
+    |
+389 |                 False,
+390 |                 "no single symbol exceeds configured maximum weight",
+391 |                 f"Weight for {sym} ({w:.2%}) exceeds maximum allowed weight ({max_single_weight:.2%}).",
+    |                                                                                         ^^^^^^^^^^^^^^^^
+392 |                 "Verify strategy allocation limits and group constraints.",
+393 |             )
+    |
+
+E501 Line too long (91 > 88)
+   --> run_paper_trading.py:508:89
+    |
+506 |             "account cash/equity can be read",
+507 |             f"Failed to read Alpaca account info for {account['name']}: {e}",
+508 |             "Check your Alpaca API credentials, network connection, or Alpaca API status.",
+    |                                                                                         ^^^
+509 |         )
+    |
+
+E501 Line too long (92 > 88)
+   --> run_paper_trading.py:640:89
+    |
+638 |         conn.commit()
+639 |         logger.info(
+640 |             f"Saved strategy decision to SQLite for account={account_name}, date={run_date}"
+    |                                                                                         ^^^^
+641 |         )
+642 |     except Exception as exc:
+    |
+
+E501 Line too long (101 > 88)
+   --> run_paper_trading.py:728:89
+    |
+726 |         elif tgt_w == 0.0 and act_w > 0.01:  # allow tiny fractional dust
+727 |             alerts.append(
+728 |                 f"Unexpected holding: {sym} has actual weight {act_w:.2%} but target weight is 0.0%."
+    |                                                                                         ^^^^^^^^^^^^^
+729 |             )
+730 |         elif drift > 0.02:
+    |
+
+E501 Line too long (92 > 88)
+   --> run_paper_trading.py:732:89
+    |
+730 |         elif drift > 0.02:
+731 |             alerts.append(
+732 |                 f"Weight drift for {sym} ({drift:.2%}) exceeds tolerance threshold of 2.0%."
+    |                                                                                         ^^^^
+733 |             )
+    |
+
+E501 Line too long (91 > 88)
+   --> run_paper_trading.py:773:89
+    |
+771 |     run_date: str, account_name: str, recon_result: dict
+772 | ) -> None:
+773 |     """Save the post-trade reconciliation report to logs/reconciliation_YYYY-MM-DD.json."""
+    |                                                                                         ^^^
+774 |     log_path = execution_audit_path(f"reconciliation_{run_date}.json")
+    |
+
+F401 [*] `subprocess` imported but unused
+    --> run_paper_trading.py:1070:12
+     |
+1068 |     Returns (success, error_message).
+1069 |     """
+1070 |     import subprocess
+     |            ^^^^^^^^^^
+1071 |
+1072 |     logger.info("Running metrics tracker (full snapshot)...")
+     |
+help: Remove unused import: `subprocess`
+
+F401 [*] `subprocess` imported but unused
+    --> run_paper_trading.py:1112:12
+     |
+1110 | def run_rl_tracker(run_date: str, project_root: Path) -> tuple[bool, str | None]:
+1111 |     """Run the required offline-RL snapshot step and return its status."""
+1112 |     import subprocess
+     |            ^^^^^^^^^^
+1113 |
+1114 |     logger.info("Running RL offline tracking...")
+     |
+help: Remove unused import: `subprocess`
+
+E501 Line too long (108 > 88)
+    --> run_paper_trading.py:1504:89
+     |
+1502 |                 conn = sqlite3.connect(db_path)
+1503 |                 row = conn.execute(
+1504 |                     "SELECT target_weights FROM strategy_decisions WHERE run_date = ? AND account_name = ?",
+     |                                                                                         ^^^^^^^^^^^^^^^^^^^^
+1505 |                     (run_date, name),
+1506 |                 ).fetchone()
+     |
+
+E501 Line too long (95 > 88)
+    --> run_paper_trading.py:1636:89
+     |
+1634 |                     )
+1635 |                 else:
+1636 |                     # If we expected trades but got none, check if target weights are 100% cash
+     |                                                                                         ^^^^^^^
+1637 |                     if execution_pending or all(
+1638 |                         w == 0.0 for w in submitted_weights.values()
+     |
+
+E501 Line too long (130 > 88)
+    --> run_paper_trading.py:1672:89
+     |
+1670 |                     conn = sqlite3.connect(db_path)
+1671 |                     rows = conn.execute(
+1672 |                         "SELECT symbol, target_weight, actual_weight FROM weekly_weights WHERE snapshot_date = ? AND account = ?",
+     |                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1673 |                         (run_date, name),
+1674 |                     ).fetchall()
+     |
+
+E501 Line too long (109 > 88)
+    --> run_paper_trading.py:1861:89
+     |
+1860 |                 updated = conn.execute(
+1861 |                     "UPDATE strategy_decisions SET parity_check = ? WHERE run_date = ? AND account_name = ?",
+     |                                                                                         ^^^^^^^^^^^^^^^^^^^^^
+1862 |                     (json.dumps(acc_parity), run_date, name),
+1863 |                 )
+     |
+
+E501 Line too long (96 > 88)
+  --> tests\test_capture_barrier.py:23:89
+   |
+22 | HELPERS = Path(__file__).resolve().parents[1] / "docs/backup_repair_2026-10-09/helpers"
+23 | spec = importlib.util.spec_from_file_location("capture_runtime", HELPERS / "capture_runtime.py")
+   |                                                                                         ^^^^^^^^
+24 | capture_runtime = importlib.util.module_from_spec(spec)
+25 | spec.loader.exec_module(capture_runtime)
+   |
+
+E501 Line too long (96 > 88)
+  --> tests\test_capture_barrier.py:54:89
+   |
+53 | @pytest.mark.parametrize("alias", ["FinRL", "new-never-enumerated-account"])
+54 | def test_capture_blocks_direct_account_before_any_broker_or_artifacts(root, monkeypatch, alias):
+   |                                                                                         ^^^^^^^^
+55 |     core = Mock()
+56 |     monkeypatch.setattr(runner, "_run_journal_account", core)
+   |
+
+E501 Line too long (91 > 88)
+  --> tests\test_capture_barrier.py:88:89
+   |
+87 | def test_production_lowlevel_without_owner_fails_before_artifacts(root):
+88 |     for call in (lambda: journal.new_attempt(root), lambda: journal.ExecutionJournal(root),
+   |                                                                                         ^^^
+89 |                  lambda: journal.write_evidence(root / "logs/new.json", {})):
+90 |         with pytest.raises(ValueError, match="ownership required"):
+   |
+
+E501 Line too long (89 > 88)
+   --> tests\test_capture_barrier.py:155:89
+    |
+153 |     legacy = Mock(return_value={"legacy": True})
+154 |     monkeypatch.setattr(runner, "_run_account", legacy)
+155 |     assert runner.run_account({"name": "FinRL"}, "2026-10-09", False) == {"legacy": True}
+    |                                                                                         ^
+156 |     assert not (root / "data/execution_capture.lock").exists()
+157 |     assert_no_intents(root)
+    |
+
+E501 Line too long (91 > 88)
+   --> tests\test_capture_barrier.py:184:89
+    |
+182 | j.EXECUTION_ROOT = root
+183 | j.require_execution_host = lambda *a: None
+184 | subprocess.Popen([sys.executable, '-B', str(root/'grandchild.py'), str(root), sys.argv[2]],
+    |                                                                                         ^^^
+185 |     **j.capture_subprocess_kwargs())
+186 | (root / 'child-ready').write_text(str(os.getpid()))
+    |
+
+E501 Line too long (90 > 88)
+   --> tests\test_capture_barrier.py:200:89
+    |
+198 |     store = j.ExecutionJournal(root)
+199 |     store.open_session(endpoint=j.PAPER_ENDPOINT, broker_id="fixture", alias="New",
+200 |         day="2026-10-09", config_hash="fixture", targets={}, snapshot={}, attempt=attempt)
+    |                                                                                         ^^
+201 |     store.close()
+202 |     r._run_subprocess([sys.executable, '-B', str(root/'child.py'), str(root), str(attempt/'child-final.json')], check=True)
+    |
+
+E501 Line too long (123 > 88)
+   --> tests\test_capture_barrier.py:202:89
+    |
+200 |         day="2026-10-09", config_hash="fixture", targets={}, snapshot={}, attempt=attempt)
+201 |     store.close()
+202 |     r._run_subprocess([sys.executable, '-B', str(root/'child.py'), str(root), str(attempt/'child-final.json')], check=True)
+    |                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+203 | '''
+204 |     script.write_text(code)
+    |
+
+E501 Line too long (100 > 88)
+   --> tests\test_capture_barrier.py:232:89
+    |
+230 |                     time.sleep(0.02)
+231 |             with sqlite3.connect(root / "data/paper_execution_journal.sqlite3") as db:
+232 |                 assert db.execute("SELECT state FROM execution_sessions").fetchone()[0] == "started"
+    |                                                                                         ^^^^^^^^^^^^
+233 |             assert list((root / "logs/execution_attempts").rglob("child-final.json"))
+234 |         finally:
+    |
+
+E501 Line too long (91 > 88)
+   --> tests\test_capture_barrier.py:266:89
+    |
+264 |     before = sorted(p.relative_to(source).as_posix() for p in source.rglob("*")
+265 |                     if p.is_file())
+266 |     result = capture_runtime.capture(source, root / "captured", contract, checkpoint=check)
+    |                                                                                         ^^^
+267 |     after = sorted(p.relative_to(source).as_posix() for p in source.rglob("*")
+268 |                    if p.is_file())
+    |
+
+E501 Line too long (95 > 88)
+   --> tests\test_capture_barrier.py:273:89
+    |
+271 |                            "attempts_copied", "verified"]
+272 |     assert result["recovery"]["execution_authorized"] is False
+273 |     assert any("intent_attempted_unknown" in h for h in result["recovery"]["journal"]["holds"])
+    |                                                                                         ^^^^^^^
+274 |     assert any("interrupted_session" in h for h in result["recovery"]["journal"]["holds"])
+275 |     assert (root / "captured" / contract.ATTEMPTS / "attempt-abandoned").is_dir()
+    |
+
+E501 Line too long (90 > 88)
+   --> tests\test_capture_barrier.py:274:89
+    |
+272 |     assert result["recovery"]["execution_authorized"] is False
+273 |     assert any("intent_attempted_unknown" in h for h in result["recovery"]["journal"]["holds"])
+274 |     assert any("interrupted_session" in h for h in result["recovery"]["journal"]["holds"])
+    |                                                                                         ^^
+275 |     assert (root / "captured" / contract.ATTEMPTS / "attempt-abandoned").is_dir()
+    |
+
+E501 Line too long (98 > 88)
+   --> tests\test_capture_barrier.py:310:89
+    |
+308 |     monkeypatch.setitem(sys.modules, "msvcrt", types.ModuleType("msvcrt"))
+309 |     monkeypatch.setitem(sys.modules, "recovery_contract", contract)
+310 |     spec = importlib.util.spec_from_file_location("backup_candidate", HELPERS / "backup_finrl.py")
+    |                                                                                         ^^^^^^^^^^
+311 |     module = importlib.util.module_from_spec(spec)
+312 |     spec.loader.exec_module(module)
+    |
+
+E501 Line too long (89 > 88)
+   --> tests\test_capture_barrier.py:316:89
+    |
+316 | def test_journal_appearing_after_initial_probe_makes_marker_monotonic(root, monkeypatch):
+    |                                                                                         ^
+317 |     backup = backup_module(monkeypatch)
+318 |     backup.ROOT = root
+    |
+
+E501 Line too long (95 > 88)
+   --> tests\test_capture_barrier.py:328:89
+    |
+326 |     backup.retain_capture_requirement(captured)
+327 |     assert backup.capture_requirement() is True
+328 |     assert json.loads((root / "journal-required.json").read_text())["journal_required"] is True
+    |                                                                                         ^^^^^^^
+329 |     # Deleted source evidence never relaxes marker requirement; next capture holds.
+330 |     with pytest.raises(ValueError, match="journal-required database missing"):
+    |
+
+E501 Line too long (104 > 88)
+   --> tests\test_capture_barrier.py:334:89
+    |
+334 | @pytest.mark.parametrize("content", ["not-json", "{}", '{"format_version":1,"journal_required":false}'])
+    |                                                                                         ^^^^^^^^^^^^^^^^
+335 | def test_invalid_marker_holds(root, monkeypatch, content):
+336 |     backup = backup_module(monkeypatch)
+    |
+
+Found 45 errors.
+[*] 8 fixable with the `--fix` option.

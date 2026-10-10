@@ -1,0 +1,5 @@
+{"barriers": {"landlock_abi": 3, "primary_write_denied": ["/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db", "/mnt/c/Users/paxto/FinRL-Trading/run_paper_trading.py"], "network_socket_denied": true, "write_allowed_only": ["/home/paxto/.cache/finrl-shared-capture-20261010", "/dev"]}}
+........................................................................ [ 33%]
+........................................................................ [ 66%]
+........................................................................ [100%]
+216 passed in 16.78s

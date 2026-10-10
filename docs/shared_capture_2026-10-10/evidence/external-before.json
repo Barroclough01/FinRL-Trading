@@ -1,0 +1,72 @@
+[
+  {
+    "path": "C:/Users/paxto/stock-trading/run_paper_trading.ps1",
+    "sha256": "78EB6CF05CC54EEBE788814E4D521270AAC1F1DB823EA8BA5B679F29E5AC80E0",
+    "bytes": 2682
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\Backup Now.cmd",
+    "sha256": "A1D9692CE420FC7CA5125A21A1AA1F5EA35F0EFB6971AA72953AC8FBE08B2F8B",
+    "bytes": 65
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\backup_finrl.py",
+    "sha256": "2BD48B8103F65CB6C6A6A6C536666A3C5756403AA333A23C98CFC115656AFF9D",
+    "bytes": 10417
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\kopia.exe",
+    "sha256": "4AD729C180FE9403BEFA016DDA5FB96EC8A20725E6BB67CA134C6B48AB18CE74",
+    "bytes": 53132568
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-restore.json",
+    "sha256": "31B795B22E4A87626DF02513B9080992923DF26998C02582FDFFAFBDCDAD0BF9",
+    "bytes": 276
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\last-run.json",
+    "sha256": "6CEEA7B16614D4B2A106405FB2CB994B17E2884D827F93188CC4448368A1D957",
+    "bytes": 873
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\probe-validation.json",
+    "sha256": "7DFB7FEDF909FA85496DD6BF8F7F1E9B54070E375B6AE32AE9AB1F143DDF7A8E",
+    "bytes": 468
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery_contract.py",
+    "sha256": "A46E94CC690AEE41CDD0D2033F66CC835E5A6B8773C3626BD3115CFA5FBBCA47",
+    "bytes": 12558
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\recovery-key.txt",
+    "sha256": "D10EF70B5C34818CB41EA624D159E5132C32F4FAD88E00594C5F2EC49D287D77",
+    "bytes": 44
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\repository.config",
+    "sha256": "D9CE3F949BE97CAE7D396B742CB05AAEE5DCF9346EDF57D47EBB989B80E20221",
+    "bytes": 579
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\repository.config.mlock",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "bytes": 0
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\Restore Latest.cmd",
+    "sha256": "798936B180946236A42BDF821F513C4EEB1E60BBC44CF7062A0B3B95FDC03FB2",
+    "bytes": 67
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\restore_latest.py",
+    "sha256": "8FBB2C2F427DD1BDADD07DC0E8124E7925A8B3675B87D943C94DA7DACF2ACBEA",
+    "bytes": 2110
+  },
+  {
+    "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\run.lock",
+    "sha256": "5FECEB66FFC86F38D952786C6D696C79C2DBC239DD4E91B46729D73A27FB57E9",
+    "bytes": 1
+  }
+]

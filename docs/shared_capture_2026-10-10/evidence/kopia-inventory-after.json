@@ -1,0 +1,594 @@
+[
+  {
+    "id": "40f3a97cdbd0ab3ae82275f8e826eba3",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\synthetic-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-10T16:02:50.2535725Z",
+    "endTime": "2026-10-10T16:02:50.2627887Z",
+    "stats": {
+      "totalSize": 51642,
+      "excludedTotalSize": 0,
+      "fileCount": 7,
+      "cachedFiles": 0,
+      "nonCachedFiles": 7,
+      "dirCount": 8,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "synthetic-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-10T16:01:32.126435Z",
+      "obj": "k43a83b827d73693608197fa7ab292ad6",
+      "summ": {
+        "size": 51642,
+        "files": 7,
+        "symlinks": 0,
+        "dirs": 8,
+        "maxTime": "2026-10-10T16:01:32.126435Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-2"
+    ]
+  },
+  {
+    "id": "145d2e16bf128e26c5fe4fa31cf590b3",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-backup-proof-20261010\\synthetic-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-10T16:02:51.9597573Z",
+    "endTime": "2026-10-10T16:02:51.9677618Z",
+    "stats": {
+      "totalSize": 51298,
+      "excludedTotalSize": 0,
+      "fileCount": 6,
+      "cachedFiles": 0,
+      "nonCachedFiles": 6,
+      "dirCount": 8,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "synthetic-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-10T16:01:32.8524345Z",
+      "obj": "k38a63dd889afb7b9f2fec3f9ebf49f3e",
+      "summ": {
+        "size": 51298,
+        "files": 6,
+        "symlinks": 0,
+        "dirs": 8,
+        "maxTime": "2026-10-10T16:01:32.8524345Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-1",
+      "daily-1",
+      "weekly-1",
+      "monthly-1"
+    ]
+  },
+  {
+    "id": "122c1cd4af606154cbfe1285aed6e5db",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-20261010\\synthetic-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-10T17:02:24.7849762Z",
+    "endTime": "2026-10-10T17:02:24.7937224Z",
+    "stats": {
+      "totalSize": 51748,
+      "excludedTotalSize": 0,
+      "fileCount": 7,
+      "cachedFiles": 0,
+      "nonCachedFiles": 7,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "synthetic-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-10T17:02:22.8945419Z",
+      "obj": "kc3ff2374c332e15153013a7a6a1714d0",
+      "summ": {
+        "size": 51748,
+        "files": 7,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-10T17:02:22.8945419Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-2"
+    ]
+  },
+  {
+    "id": "0fcccce3f68df771e52e41338d04ecdb",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-20261010\\synthetic-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-10T17:02:26.6994993Z",
+    "endTime": "2026-10-10T17:02:26.7092857Z",
+    "stats": {
+      "totalSize": 51377,
+      "excludedTotalSize": 0,
+      "fileCount": 6,
+      "cachedFiles": 0,
+      "nonCachedFiles": 6,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "synthetic-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-10T17:02:22.9568752Z",
+      "obj": "k8a154055928ca232a31b696781cbecd0",
+      "summ": {
+        "size": 51377,
+        "files": 6,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-10T17:02:22.9568752Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-1",
+      "daily-1",
+      "weekly-1",
+      "monthly-1"
+    ]
+  },
+  {
+    "id": "5fc6ce77881142029997821d7f334e14",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\AppData\\Local\\PaxtonBackup\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-03T20:56:14.9906468Z",
+    "endTime": "2026-10-03T20:56:18.8630916Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-03T20:55:52.6658272Z",
+      "obj": "kc347aeea93665a712aefd430b3b97d96",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-03T20:55:52.666827Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-1",
+      "daily-1",
+      "weekly-1",
+      "monthly-1"
+    ]
+  },
+  {
+    "id": "cbf4e4b544bce34e54f43268cbd248cd",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\restore-probe"
+    },
+    "description": "",
+    "startTime": "2026-10-03T23:34:17.1296035Z",
+    "endTime": "2026-10-03T23:34:17.1804284Z",
+    "stats": {
+      "totalSize": 19,
+      "excludedTotalSize": 0,
+      "fileCount": 1,
+      "cachedFiles": 0,
+      "nonCachedFiles": 1,
+      "dirCount": 1,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "restore-probe",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-03T23:34:16.8070437Z",
+      "obj": "kf51daa33b4a78dd60bd79f3594b2ee23",
+      "summ": {
+        "size": 19,
+        "files": 1,
+        "symlinks": 0,
+        "dirs": 1,
+        "maxTime": "2026-10-03T23:34:16.8070437Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-2"
+    ]
+  },
+  {
+    "id": "6bf47efa7ab1ea03f3fac0184cccaaa1",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\restore-probe"
+    },
+    "description": "",
+    "startTime": "2026-10-03T23:34:17.5990655Z",
+    "endTime": "2026-10-03T23:34:17.6249749Z",
+    "stats": {
+      "totalSize": 22,
+      "excludedTotalSize": 0,
+      "fileCount": 1,
+      "cachedFiles": 0,
+      "nonCachedFiles": 1,
+      "dirCount": 1,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "restore-probe",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-03T23:34:16.8070437Z",
+      "obj": "k5fb29c356a125075be1e835bd6b5b51e",
+      "summ": {
+        "size": 22,
+        "files": 1,
+        "symlinks": 0,
+        "dirs": 1,
+        "maxTime": "2026-10-03T23:34:17.2910763Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-1",
+      "daily-1",
+      "weekly-1",
+      "monthly-1"
+    ]
+  },
+  {
+    "id": "f6529bab04c936d6d306a1441c1d4c8a",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-04T00:01:33.2410029Z",
+    "endTime": "2026-10-04T00:01:33.8328961Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-04T00:01:18.8187327Z",
+      "obj": "k2d4c9c9ae6cdfa973a2f83f0e44413b7",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-04T00:01:18.8198812Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "daily-7",
+      "weekly-2"
+    ]
+  },
+  {
+    "id": "e10caf96de005347ee673e75882a03e9",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-05T22:00:20.5023458Z",
+    "endTime": "2026-10-05T22:00:21.53709Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-05T22:00:04.0295722Z",
+      "obj": "kc3c68f22341ac02386e61ed168a78304",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-05T22:00:04.0801557Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "daily-6"
+    ]
+  },
+  {
+    "id": "c6add0f6ff81cfcdb91b29954c783913",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-06T00:01:31.2469182Z",
+    "endTime": "2026-10-06T00:01:32.5370207Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-06T00:01:27.8613647Z",
+      "obj": "ka6955083fbea4979d5900d7d9850cd40",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-06T00:01:27.8613647Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "daily-5"
+    ]
+  },
+  {
+    "id": "91664f9611b41fcdaaeb5db6054e2550",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-07T00:19:36.9453762Z",
+    "endTime": "2026-10-07T00:19:37.8423708Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-07T00:19:32.2892924Z",
+      "obj": "kbc251f6c3538086026ef294111fd8e28",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-07T00:19:32.2916913Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "daily-4"
+    ]
+  },
+  {
+    "id": "b16ad7e70891a11631e521ee5d4adbae",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-08T14:23:55.97813Z",
+    "endTime": "2026-10-08T14:23:56.9237685Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-08T14:23:50.9604818Z",
+      "obj": "kf9524baf6163c5d605ad0d815364ec64",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-08T14:23:50.9604818Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-3",
+      "daily-3"
+    ]
+  },
+  {
+    "id": "d102398b486355fcce00d7263435c3b3",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-09T00:01:59.6541302Z",
+    "endTime": "2026-10-09T00:02:00.5112735Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-09T00:01:54.6097695Z",
+      "obj": "k5540beca0e1d75fdf871ee809e20f8e9",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-09T00:01:54.6132923Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-2",
+      "daily-2"
+    ]
+  },
+  {
+    "id": "6c41793089ccdc0bfbbfc05ce81c4b3b",
+    "source": {
+      "host": "acer-swift-go",
+      "userName": "paxto",
+      "path": "C:\\Users\\paxto\\PaxtonBackups\\tools\\staging\\finrl-runtime"
+    },
+    "description": "",
+    "startTime": "2026-10-10T13:03:01.6530476Z",
+    "endTime": "2026-10-10T13:03:02.1694702Z",
+    "stats": {
+      "totalSize": 483318333,
+      "excludedTotalSize": 0,
+      "fileCount": 388,
+      "cachedFiles": 0,
+      "nonCachedFiles": 388,
+      "dirCount": 9,
+      "excludedFileCount": 0,
+      "excludedDirCount": 0,
+      "ignoredErrorCount": 0,
+      "errorCount": 0
+    },
+    "rootEntry": {
+      "name": "finrl-runtime",
+      "type": "d",
+      "mode": "0777",
+      "mtime": "2026-10-10T13:02:05.7650812Z",
+      "obj": "k0da5a1cfed00c73f5fc682911b70e697",
+      "summ": {
+        "size": 483318333,
+        "files": 388,
+        "symlinks": 0,
+        "dirs": 9,
+        "maxTime": "2026-10-10T13:02:05.7680812Z",
+        "numFailed": 0
+      }
+    },
+    "retentionReason": [
+      "latest-1",
+      "daily-1",
+      "weekly-1",
+      "monthly-1"
+    ]
+  }
+]

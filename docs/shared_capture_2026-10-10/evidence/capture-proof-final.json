@@ -1,0 +1,123 @@
+{
+  "barrier": {
+    "landlock_abi": 3,
+    "primary_write_denied": [
+      "/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db",
+      "/mnt/c/Users/paxto/FinRL-Trading/run_paper_trading.py"
+    ],
+    "network_socket_denied": true,
+    "write_allowed_only": [
+      "/home/paxto/.cache/finrl-shared-capture-20261010",
+      "/dev"
+    ]
+  },
+  "outcomes": [
+    {
+      "version": 1,
+      "source": "/home/paxto/.cache/finrl-shared-capture-20261010/journal-source-v1-final",
+      "stage": "/home/paxto/.cache/finrl-shared-capture-20261010/capture-v1-final",
+      "result": {
+        "files_verified": 6,
+        "database_integrity": "ok",
+        "recovery": {
+          "format_version": 1,
+          "execution_authorized": false,
+          "coverage": "coordinated_wsl_journal",
+          "cutoff_utc": "2026-10-10T17:02:22.878438+00:00",
+          "capture_barrier": "WSL execution_capture.lock exclusive flock",
+          "consistency": "journal/attempt cooperating-writer cutoff; each DB transaction-consistent; standalone/manual writers excluded",
+          "journal": {
+            "schema_version": 1,
+            "database_sha256": "988dce9c87c2871f87ff5e23f3dfcad7464591d1b2b6949d4bc424dec25f2fd4",
+            "row_counts": {
+              "account_bindings": 1,
+              "execution_sessions": 1,
+              "order_intents": 1,
+              "execution_events": 2
+            },
+            "rows_sha256": "054760ba112fcd4d234c90c1e130771befe96fdb30f94cf611bddde7c3fdfb02",
+            "session_ids": [
+              "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+            ],
+            "client_ids": [
+              "fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "attempt_directories": [
+              "attempt-abandoned",
+              "attempt-interrupted",
+              "attempt-main"
+            ],
+            "evidence_refs": [
+              [
+                "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+                "attempt-main",
+                "wsl/logs/execution_attempts/attempt-main/decision_FinRL.json",
+                "86f12afff479ba835483603eaff8b4f10930e1c09f40755c1b2f584cffde6eba"
+              ]
+            ],
+            "holds": [
+              "abandoned_attempt:attempt-abandoned",
+              "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted",
+              "intent_attempted_unknown:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d",
+              "interrupted_session:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+              "missing_receipt:fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "execution_authorized": false
+          }
+        }
+      }
+    },
+    {
+      "version": 2,
+      "source": "/home/paxto/.cache/finrl-shared-capture-20261010/journal-source-v2-final",
+      "stage": "/home/paxto/.cache/finrl-shared-capture-20261010/capture-v2-final",
+      "result": {
+        "files_verified": 5,
+        "database_integrity": "ok",
+        "recovery": {
+          "format_version": 1,
+          "execution_authorized": false,
+          "coverage": "coordinated_wsl_journal",
+          "cutoff_utc": "2026-10-10T17:02:22.941988+00:00",
+          "capture_barrier": "WSL execution_capture.lock exclusive flock",
+          "consistency": "journal/attempt cooperating-writer cutoff; each DB transaction-consistent; standalone/manual writers excluded",
+          "journal": {
+            "schema_version": 1,
+            "database_sha256": "c701112340e11ec32d7de571af0fa0a069e782508d09675500a076c9d190fe5f",
+            "row_counts": {
+              "account_bindings": 1,
+              "execution_sessions": 1,
+              "order_intents": 1,
+              "execution_events": 2
+            },
+            "rows_sha256": "bffa696f4fc8980131690855e420daa34e0871d04a4c3d04894d6b098e9eb243",
+            "session_ids": [
+              "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30"
+            ],
+            "client_ids": [
+              "fr-525532297294f1dd5d3cea1f27ff6987cd17f04d"
+            ],
+            "attempt_directories": [
+              "attempt-abandoned",
+              "attempt-interrupted",
+              "attempt-main"
+            ],
+            "evidence_refs": [
+              [
+                "0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30",
+                "attempt-main",
+                "wsl/logs/execution_attempts/attempt-main/decision_FinRL.json",
+                "197524018cfc39bc6e392471c2fcccad90104298bd45d4e728794982068011f1"
+              ]
+            ],
+            "holds": [
+              "abandoned_attempt:attempt-abandoned",
+              "incomplete_external_evidence:0ca2af0def70e0ef42b51cc4b84a4854dc5a33bafc0fc3b455331969c15d6d30:attempt-interrupted"
+            ],
+            "execution_authorized": false
+          }
+        }
+      }
+    }
+  ]
+}

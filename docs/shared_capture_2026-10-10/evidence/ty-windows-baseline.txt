@@ -1,0 +1,61 @@
+error[unresolved-attribute]: Module `msvcrt` has no member `locking`
+   --> /mnt/c/Users/paxto/.codex/tmp/finrl-shared-capture-checks/backup_finrl.py:257:13
+    |
+257 |             msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    |             ^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `locking` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `LK_NBLCK`
+   --> /mnt/c/Users/paxto/.codex/tmp/finrl-shared-capture-checks/backup_finrl.py:257:43
+    |
+257 |             msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    |                                           ^^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `LK_NBLCK` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `locking`
+   --> /mnt/c/Users/paxto/.codex/tmp/finrl-shared-capture-checks/backup_finrl.py:264:13
+    |
+264 |             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    |             ^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `locking` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+error[unresolved-attribute]: Module `msvcrt` has no member `LK_UNLCK`
+   --> /mnt/c/Users/paxto/.codex/tmp/finrl-shared-capture-checks/backup_finrl.py:264:43
+    |
+264 |             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    |                                           ^^^^^^^^^^^^^^^
+    |
+info: The member may be available on other Python versions or platforms
+info: Python 3.11 was assumed when resolving the `LK_UNLCK` attribute because of your virtual environment
+ --> /home/paxto/stock-trading/FinRL-Trading/finrl-env/pyvenv.cfg:4:16
+  |
+4 | version_info = 3.11.15
+  |                ^^^^^^^ Virtual environment metadata
+  |
+info: No Python version was specified on the command line or in a configuration file
+
+Found 4 diagnostics

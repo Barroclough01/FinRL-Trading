@@ -1,0 +1,338 @@
+[
+  {
+    "name": "FinRL Paper Trading",
+    "xml": "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n  <RegistrationInfo>\r\n    <Date>2026-04-26T15:21:33.2518954</Date>\r\n    <Author>ACER-SWIFT-GO\\paxto</Author>\r\n    <URI>\\FinRL Paper Trading</URI>\r\n  </RegistrationInfo>\r\n  <Principals>\r\n    <Principal id=\"Author\">\r\n      <UserId>S-1-5-21-1664359207-2732735203-99216752-1001</UserId>\r\n      <LogonType>Password</LogonType>\r\n      <RunLevel>HighestAvailable</RunLevel>\r\n    </Principal>\r\n  </Principals>\r\n  <Settings>\r\n    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>\r\n    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n    <StartWhenAvailable>true</StartWhenAvailable>\r\n    <WakeToRun>true</WakeToRun>\r\n    <IdleSettings>\r\n      <StopOnIdleEnd>true</StopOnIdleEnd>\r\n      <RestartOnIdle>false</RestartOnIdle>\r\n    </IdleSettings>\r\n  </Settings>\r\n  <Triggers>\r\n    <CalendarTrigger>\r\n      <StartBoundary>2026-05-01T18:15:00</StartBoundary>\r\n      <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>\r\n      <ScheduleByWeek>\r\n        <WeeksInterval>1</WeeksInterval>\r\n        <DaysOfWeek>\r\n          <Friday />\r\n        </DaysOfWeek>\r\n      </ScheduleByWeek>\r\n    </CalendarTrigger>\r\n  </Triggers>\r\n  <Actions Context=\"Author\">\r\n    <Exec>\r\n      <Command>powershell.exe</Command>\r\n      <Arguments>-NonInteractive -ExecutionPolicy Bypass -File \"C:\\Users\\paxto\\stock-trading\\run_paper_trading.ps1</Arguments>\r\n    </Exec>\r\n  </Actions>\r\n</Task>",
+    "info": {
+      "CimClass": {
+        "CimSuperClassName": null,
+        "CimSuperClass": null,
+        "CimClassProperties": [
+          {
+            "Name": "LastRunTime",
+            "Value": null,
+            "CimType": 13,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "LastTaskResult",
+            "Value": null,
+            "CimType": 6,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "NextRunTime",
+            "Value": null,
+            "CimType": 13,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "NumberOfMissedRuns",
+            "Value": null,
+            "CimType": 6,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "TaskName",
+            "Value": null,
+            "CimType": 14,
+            "Flags": "Property, Key, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "key",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "DisableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "TaskPath",
+            "Value": null,
+            "CimType": 14,
+            "Flags": "Property, Key, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "key",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "DisableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          }
+        ],
+        "CimClassQualifiers": [],
+        "CimClassMethods": [],
+        "CimSystemProperties": {
+          "Namespace": "Root/Microsoft/Windows/TaskScheduler",
+          "ServerName": "ACER-SWIFT-GO",
+          "ClassName": "MSFT_TaskDynamicInfo",
+          "Path": null
+        }
+      },
+      "CimInstanceProperties": [
+        {
+          "Name": "LastRunTime",
+          "Value": "2026-10-10T08:57:23-04:00",
+          "CimType": 13,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "LastTaskResult",
+          "Value": 0,
+          "CimType": 6,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "NextRunTime",
+          "Value": "2026-10-16T18:15:00-04:00",
+          "CimType": 13,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "NumberOfMissedRuns",
+          "Value": 0,
+          "CimType": 6,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "TaskName",
+          "Value": "FinRL Paper Trading",
+          "CimType": 14,
+          "Flags": "Property, Key, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "TaskPath",
+          "Value": null,
+          "CimType": 14,
+          "Flags": "Property, Key, NotModified, NullValue",
+          "IsValueModified": false
+        }
+      ],
+      "CimSystemProperties": {
+        "Namespace": "Root/Microsoft/Windows/TaskScheduler",
+        "ServerName": "ACER-SWIFT-GO",
+        "ClassName": "MSFT_TaskDynamicInfo",
+        "Path": null
+      },
+      "LastRunTime": "2026-10-10T08:57:23-04:00",
+      "LastTaskResult": 0,
+      "NextRunTime": "2026-10-16T18:15:00-04:00",
+      "NumberOfMissedRuns": 0,
+      "TaskName": "FinRL Paper Trading",
+      "TaskPath": null,
+      "PSComputerName": null
+    },
+    "state": "Ready"
+  },
+  {
+    "name": "Paxton FinRL Local Backup",
+    "xml": "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n<Task version=\"1.3\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n  <RegistrationInfo>\r\n    <Description>Free local encrypted FinRL evidence backup; consistent read-only SQLite export; no broker or project runner.</Description>\r\n    <URI>\\Paxton FinRL Local Backup</URI>\r\n  </RegistrationInfo>\r\n  <Principals>\r\n    <Principal id=\"Author\">\r\n      <UserId>S-1-5-21-1664359207-2732735203-99216752-1001</UserId>\r\n      <LogonType>InteractiveToken</LogonType>\r\n    </Principal>\r\n  </Principals>\r\n  <Settings>\r\n    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n    <ExecutionTimeLimit>PT15M</ExecutionTimeLimit>\r\n    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n    <RestartOnFailure>\r\n      <Count>2</Count>\r\n      <Interval>PT10M</Interval>\r\n    </RestartOnFailure>\r\n    <StartWhenAvailable>true</StartWhenAvailable>\r\n    <IdleSettings>\r\n      <Duration>PT10M</Duration>\r\n      <WaitTimeout>PT1H</WaitTimeout>\r\n      <StopOnIdleEnd>true</StopOnIdleEnd>\r\n      <RestartOnIdle>false</RestartOnIdle>\r\n    </IdleSettings>\r\n    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>\r\n  </Settings>\r\n  <Triggers>\r\n    <CalendarTrigger>\r\n      <StartBoundary>2026-10-03T20:00:00-04:00</StartBoundary>\r\n      <ScheduleByDay>\r\n        <DaysInterval>1</DaysInterval>\r\n      </ScheduleByDay>\r\n    </CalendarTrigger>\r\n  </Triggers>\r\n  <Actions Context=\"Author\">\r\n    <Exec>\r\n      <Command>C:\\Python313\\pythonw.exe</Command>\r\n      <Arguments>\"C:\\Users\\paxto\\PaxtonBackups\\tools\\backup_finrl.py\"</Arguments>\r\n      <WorkingDirectory>C:\\Users\\paxto\\PaxtonBackups\\tools</WorkingDirectory>\r\n    </Exec>\r\n  </Actions>\r\n</Task>",
+    "info": {
+      "CimClass": {
+        "CimSuperClassName": null,
+        "CimSuperClass": null,
+        "CimClassProperties": [
+          {
+            "Name": "LastRunTime",
+            "Value": null,
+            "CimType": 13,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "LastTaskResult",
+            "Value": null,
+            "CimType": 6,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "NextRunTime",
+            "Value": null,
+            "CimType": 13,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "NumberOfMissedRuns",
+            "Value": null,
+            "CimType": 6,
+            "Flags": "Property, ReadOnly, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "read",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "EnableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "TaskName",
+            "Value": null,
+            "CimType": 14,
+            "Flags": "Property, Key, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "key",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "DisableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          },
+          {
+            "Name": "TaskPath",
+            "Value": null,
+            "CimType": 14,
+            "Flags": "Property, Key, NullValue",
+            "Qualifiers": [
+              {
+                "Name": "key",
+                "Value": true,
+                "CimType": 1,
+                "Flags": "DisableOverride, ToSubclass"
+              }
+            ],
+            "ReferenceClassName": null
+          }
+        ],
+        "CimClassQualifiers": [],
+        "CimClassMethods": [],
+        "CimSystemProperties": {
+          "Namespace": "Root/Microsoft/Windows/TaskScheduler",
+          "ServerName": "ACER-SWIFT-GO",
+          "ClassName": "MSFT_TaskDynamicInfo",
+          "Path": null
+        }
+      },
+      "CimInstanceProperties": [
+        {
+          "Name": "LastRunTime",
+          "Value": "2026-10-10T08:57:23-04:00",
+          "CimType": 13,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "LastTaskResult",
+          "Value": 0,
+          "CimType": 6,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "NextRunTime",
+          "Value": "2026-10-10T20:00:00-04:00",
+          "CimType": 13,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "NumberOfMissedRuns",
+          "Value": 0,
+          "CimType": 6,
+          "Flags": "Property, ReadOnly, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "TaskName",
+          "Value": "Paxton FinRL Local Backup",
+          "CimType": 14,
+          "Flags": "Property, Key, NotModified",
+          "IsValueModified": false
+        },
+        {
+          "Name": "TaskPath",
+          "Value": null,
+          "CimType": 14,
+          "Flags": "Property, Key, NotModified, NullValue",
+          "IsValueModified": false
+        }
+      ],
+      "CimSystemProperties": {
+        "Namespace": "Root/Microsoft/Windows/TaskScheduler",
+        "ServerName": "ACER-SWIFT-GO",
+        "ClassName": "MSFT_TaskDynamicInfo",
+        "Path": null
+      },
+      "LastRunTime": "2026-10-10T08:57:23-04:00",
+      "LastTaskResult": 0,
+      "NextRunTime": "2026-10-10T20:00:00-04:00",
+      "NumberOfMissedRuns": 0,
+      "TaskName": "Paxton FinRL Local Backup",
+      "TaskPath": null,
+      "PSComputerName": null
+    },
+    "state": "Ready"
+  }
+]

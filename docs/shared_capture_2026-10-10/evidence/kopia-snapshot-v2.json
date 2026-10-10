@@ -1,0 +1,26 @@
+{
+  "id": "0fcccce3f68df771e52e41338d04ecdb",
+  "source": {
+    "host": "acer-swift-go",
+    "userName": "paxto",
+    "path": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-20261010\\synthetic-runtime"
+  },
+  "description": "",
+  "startTime": "2026-10-10T17:02:26.6994993Z",
+  "endTime": "2026-10-10T17:02:26.7092857Z",
+  "rootEntry": {
+    "name": "synthetic-runtime",
+    "type": "d",
+    "mode": "0777",
+    "mtime": "2026-10-10T17:02:22.9568752Z",
+    "obj": "k8a154055928ca232a31b696781cbecd0",
+    "summ": {
+      "size": 51377,
+      "files": 6,
+      "symlinks": 0,
+      "dirs": 9,
+      "maxTime": "2026-10-10T17:02:22.9568752Z",
+      "numFailed": 0
+    }
+  }
+}

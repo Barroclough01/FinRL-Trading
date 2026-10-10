@@ -13,26 +13,27 @@ def recover_account(manager, account_name: str, run_date: str, root: Path) -> di
         raise ValueError("Recovery integration is disabled")
     if account_name.upper() == "RL":
         raise ValueError("RL remains offline")
-    manager._journal_transport = True
-    endpoint, broker_id = journal.identity(manager, account_name)
-    attempt = journal.new_attempt(root)
-    with journal.account_lock(root, endpoint, broker_id):
-        store = journal.ExecutionJournal(root, create=False)
-        try:
-            session = store.open_session(
-                endpoint=endpoint,
-                broker_id=broker_id,
-                alias=account_name,
-                day=run_date,
-                config_hash="",
-                targets={},
-                snapshot={},
-                attempt=attempt,
-                recovery=True,
-            )
-            return session.recover(manager, account_name)
-        finally:
-            store.close()
+    with journal.capture_writer(root):
+        manager._journal_transport = True
+        endpoint, broker_id = journal.identity(manager, account_name)
+        attempt = journal.new_attempt(root)
+        with journal.account_lock(root, endpoint, broker_id):
+            store = journal.ExecutionJournal(root, create=False)
+            try:
+                session = store.open_session(
+                    endpoint=endpoint,
+                    broker_id=broker_id,
+                    alias=account_name,
+                    day=run_date,
+                    config_hash="",
+                    targets={},
+                    snapshot={},
+                    attempt=attempt,
+                    recovery=True,
+                )
+                return session.recover(manager, account_name)
+            finally:
+                store.close()
 
 
 def main() -> None:

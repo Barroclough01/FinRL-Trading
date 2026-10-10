@@ -1,0 +1,99 @@
+{
+  "branch": "codex/paper-comparison-reliability",
+  "gate_process": null,
+  "head": "c2c9abd3d7ebe4f7f2dad0fe1a457c68061437c5",
+  "inventory": {
+    ".env": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data\\finrl_trading.db": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data\\paper_execution_journal.sqlite3": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data\\paper_execution_journal.sqlite3-journal": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data\\paper_execution_journal.sqlite3-shm": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "data\\paper_execution_journal.sqlite3-wal": {
+      "bytes": null,
+      "exists": false,
+      "sha256": null
+    },
+    "logs\\comparison_metrics_2026-09-27.json": {
+      "bytes": 433,
+      "exists": true,
+      "sha256": "170779cdff1c25544d15a2f24b9970024d111e5ac5b13fdcbdabc532c425b5d5"
+    },
+    "logs\\comparison_metrics_2026-09-29.json": {
+      "bytes": 433,
+      "exists": true,
+      "sha256": "143ae9d55f3b5de8b5e7c45efc0b8286e20f1656cf9c9e0e69339a5f26aea8f9"
+    },
+    "logs\\comparison_metrics_latest.csv": {
+      "bytes": 425,
+      "exists": true,
+      "sha256": "4df16cdae100ff1f46ab7b0c9e19962bb85d63e8f4c0b0db85b0ed3e791de288"
+    },
+    "logs\\dashboard.html": {
+      "bytes": 10532,
+      "exists": true,
+      "sha256": "5157f42868979247fb5623cb899bb850a4056360b763acac79f14e1ab0d913cf"
+    },
+    "logs\\execution_2026-06-06.json": {
+      "bytes": 201,
+      "exists": true,
+      "sha256": "74249b7e7861e9997773dba01254e4c8a6e93c1e0bc6eab1d2d758e736ade778"
+    },
+    "logs\\execution_2026-09-04.json": {
+      "bytes": 128,
+      "exists": true,
+      "sha256": "6beefd2fd2ca1b2a3a4d3aaabf76c031366d651cceab043648c269c9457291d2"
+    },
+    "logs\\paper_trading_2026-09-27.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs\\paper_trading_2026-09-29.log": {
+      "bytes": 0,
+      "exists": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "logs\\parity_check_2026-05-31.json": {
+      "bytes": 1057,
+      "exists": true,
+      "sha256": "e0e6ca1f9cf00dc6ce03e78f6b92e772dd6eaf717e4348b1a55ed0ae91a14298"
+    },
+    "logs\\rl_candidate_weights_drl_weight_2026-05-31.json": {
+      "bytes": 200,
+      "exists": true,
+      "sha256": "ca0463b5d77809d1d1e09453bec7af07809121d596bd149e3f1da7b528d1617f"
+    },
+    "logs\\target_weights_AdaptiveRotationConf_baseline_2026-06-06.json": {
+      "bytes": 200,
+      "exists": true,
+      "sha256": "fe7c14a48915c06525b566d61e0c3a9837f58db0ad855d13b64b1c834f179e38"
+    },
+    "logs\\target_weights_AdaptiveRotationConf_v1.2.2_2026-05-31.json": {
+      "bytes": 271,
+      "exists": true,
+      "sha256": "c12d33ae1273354612080bd7e057614cbb96a35388e93bfa2ad8bf966c2a3662"
+    }
+  },
+  "observed_utc": "2026-10-10T17:05:46.312173+00:00",
+  "root": "C:\\Users\\paxto\\FinRL-Trading"
+}

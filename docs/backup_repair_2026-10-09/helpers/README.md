@@ -7,27 +7,40 @@ does not protect laptop/disk loss. No subscription, cloud service or broker API.
 ## Included and held
 
 The daily helper exports the scheduled WSL comparison database with SQLite's
-read-only source/native backup and integrity check. It copies WSL logs (excluding
-execution_attempts), selected CSV/JSON/HTML/PNG results and root reports, and native
+read-only source/native backup and integrity check. It copies WSL ordinary logs,
+coordinated journal/attempt evidence when required, selected CSV/JSON/HTML/PNG
+results and root reports, and native
 Windows logs. Model files, bulk caches, credentials and other projects are excluded.
 Comparison DB export and other ordinary files are not one atomic project snapshot.
 
-**Production journal-era capture is held.** Any journal or sidecar, nonempty
-attempt/lock tree, unsafe journal/attempt/lock symlink, missing checkout, or existing
-`tools/journal-required.json` stops before publishing a snapshot. First observation
-creates a monotonic marker; later deletion of source artifacts does not clear it.
-Invalid/unreadable markers also fail closed. Never delete the marker to bypass a
-hold. Before any future activation, explicitly record this marker under the
-separately approved activation procedure; observation only at backup time cannot
-detect a journal created and deleted between runs. No helper supports automatic
-production journal capture yet. Existing account locks cannot cover the current
-pre-lock attempt creation and new-account race.
+**October 10 shared-lock integration supersedes the initial capture hold.** The
+scheduled WSL durable execution/recovery entry points now acquire shared ownership
+of `data/execution_capture.lock` before attempt or journal creation, inside the
+existing default-disabled gate. Account locks remain inside this global barrier.
+Backup acquires exclusive ownership in one WSL process through comparison/journal
+SQLite exports, immutable attempt copy/inventory and contract verification. New
+account aliases need no lock enumeration. Contention holds without creating an
+attempt/journal or publishing a snapshot; existing ordinary diagnostic logging
+can occur before the execution barrier. Never unlink lock files or automatically
+retry/resume a held run.
 
-`RECOVERY.json` labels new successful production snapshots `pre_journal`, with
-`execution_authorized:false`. Absence observations do not prove global quiescence.
-The journal-era guard deliberately stops automatic backups after activation until
-shared coordination is separately implemented and reviewed. Previous snapshots
-remain available. Check the dated `last-run.json` status and task result.
+The marker stays monotonic. Any journal or sidecar, nonempty
+attempt/lock tree, unsafe journal/attempt/lock symlink, missing checkout, or existing
+`tools/journal-required.json` requires a valid journal capture. First observation
+creates a monotonic marker; later deletion of source artifacts does not clear it.
+Invalid/unreadable markers and native journal-era state fail closed. Never delete
+the marker to bypass a hold. Before any future activation, explicitly record this marker under the
+separately approved activation procedure; observation only at backup time cannot
+detect a journal created and deleted between runs. A journal first observed inside
+the exclusive capture also records the marker before snapshot publication.
+
+`RECOVERY.json` labels snapshots `pre_journal` or `coordinated_wsl_journal`, always
+with `execution_authorized:false`. The guarantee is a journal/attempt cutoff among
+cooperating scheduled WSL durable writers; each database export is independently
+transaction-consistent. Standalone comparison/backfill/price-sync tools, manual
+edits, independent programs and other hosts are outside this protocol. It does
+not promise one cross-database cutoff against those writers or atomic ordinary
+logs/results. Previous snapshots remain available. Check dated receipts.
 
 ## Restore and evidence
 
@@ -38,17 +51,26 @@ without RECOVERY.json are labeled `legacy_pre_journal` and never authorize execu
 Journal artifacts without a contract, forged execution authority, unknown contracts,
 unsafe paths and mismatched hashes fail verification.
 
-The separate disposable proof uses `sealed_synthetic_journal`: both DBs, exact
-journal schema constraints/version/foreign keys, stable IDs/target hashes,
-receipt identity/payload/quantities, event/attempt references and immutable evidence
-hashes are validated. Unknown/interrupted intents, missing receipts, abandoned
+Coordinated snapshots and the retained earlier `sealed_synthetic_journal` proof
+validate both DBs, journal schema constraints/version/foreign keys, stable IDs/
+target hashes, receipt identity/payload/quantities, event/attempt references and
+immutable evidence hashes. Unknown/interrupted intents, missing receipts, abandoned
 attempts and incomplete per-attempt evidence remain explicit holds after restore.
 Restore success means preserved evidence, never execution approval or automatic
-resume. Synthetic capture uses a fixture-wide cooperating flock before any fixture
-writer creates an attempt, held through export/inventory. Landlock protects test
-processes against primary writes and seccomp denies sockets. These controlled
-fixture actors do not prove current production coordination or exclude unrelated
-same-user writers. Production journal capture remains refused.
+resume. Valid unknown/interrupted rows and legitimately incomplete evidence are
+preserved with explicit holds. Missing referenced attempts, corrupt databases,
+mismatched references and malformed/truncated required JSON refuse a complete
+snapshot and require manual review. Every mid-write crash is not guaranteed to
+produce a valid complete backup.
+
+Strategy/metrics/RL children inherit the parent's shared descriptor. The RL report
+descendant validates canonical inode identity, the actual shared lease and WSL
+host before passing it onward. Parent/child cleanup closes descriptors without
+unlocking the surviving descendant's open-file description. This transient
+descriptor transport grants no execution authority and changes no persistent
+environment or activation gate. Disposable tests prove parent/intermediate-child
+termination cannot let capture precede the surviving grandchild's final write.
+Kernel Landlock denies test-process primary writes; seccomp denies sockets.
 
 ## Existing operation and maintenance
 

@@ -1,0 +1,59 @@
+{
+  "identities": {
+    "src/trading/execution_journal.py": {
+      "native_sha256": "379581275edee4235a05dc58e52752a92d3e34e29fd475e8ace908c739d1d131",
+      "tested_copy_sha256": "379581275edee4235a05dc58e52752a92d3e34e29fd475e8ace908c739d1d131",
+      "canonical_lf_sha256": "da148a9873b2dcb803ac05ca23f642514abc7eafbb35f69b9f703af8950c2d92"
+    },
+    "run_paper_trading.py": {
+      "native_sha256": "cb67bf906f36fd9006a9e0376e065ad11acbfc93efdace4dc1c52a3ff1be8743",
+      "tested_copy_sha256": "cb67bf906f36fd9006a9e0376e065ad11acbfc93efdace4dc1c52a3ff1be8743",
+      "canonical_lf_sha256": "e75550c41171f1b3a4b10d6a0567bc3b224b8d6b897addf7f66886aef54f91c4"
+    },
+    "recover_paper_execution.py": {
+      "native_sha256": "31fb9d655e2d8281f46a060c9452cec05b43491e7f18eea072da382d5d6dea83",
+      "tested_copy_sha256": "31fb9d655e2d8281f46a060c9452cec05b43491e7f18eea072da382d5d6dea83",
+      "canonical_lf_sha256": "0e36c737e75c9a531bb38ff2cf5b19b4b72a024984bd47f0500126ca0c053a7f"
+    },
+    "track_rl_offline.py": {
+      "native_sha256": "994fdd3f14014aad8dea8ebed84cffb9213e103c8ab67fd4a666e75cbf70a0bd",
+      "tested_copy_sha256": "994fdd3f14014aad8dea8ebed84cffb9213e103c8ab67fd4a666e75cbf70a0bd",
+      "canonical_lf_sha256": "0bc2dee98460d89071945fd4d0667dbc4f5afd4a92e8384dda9c15fbf0cffa30"
+    },
+    "tests/test_capture_barrier.py": {
+      "native_sha256": "64ccc3262451baee55a60c1e91d8ee665cd026bebeaadb898d5ad81793aa8a9e",
+      "tested_copy_sha256": "64ccc3262451baee55a60c1e91d8ee665cd026bebeaadb898d5ad81793aa8a9e",
+      "canonical_lf_sha256": "5e33ae1997f0cf9a5a7b401931f81dc88eb088a846c18f15fd6ff3bc5d44de27"
+    },
+    "docs/backup_repair_2026-10-09/helpers/backup_finrl.py": {
+      "native_sha256": "daef0a91bc315aaf3e578860651f5109b19d452a23060820b26b6ceb99d33386",
+      "tested_copy_sha256": "daef0a91bc315aaf3e578860651f5109b19d452a23060820b26b6ceb99d33386",
+      "canonical_lf_sha256": "33ed44bc042651fefc22a26f7619435245154d93a21cc43d697a0f048c1bf608"
+    },
+    "docs/backup_repair_2026-10-09/helpers/capture_runtime.py": {
+      "native_sha256": "6f853bb0173044b49dbe39c648515bd537ed36729beb87b9ff8b0ab6ddda291b",
+      "tested_copy_sha256": "6f853bb0173044b49dbe39c648515bd537ed36729beb87b9ff8b0ab6ddda291b",
+      "canonical_lf_sha256": "7cef5e572cd825cc2faf11b2a01aaec22ddf00358158de9233f0fae7032033ea"
+    },
+    "docs/backup_repair_2026-10-09/helpers/recovery_contract.py": {
+      "native_sha256": "a73f3f051d55c09f70b2681ff66a1da43acc6892657828d22adedc8184995096",
+      "tested_copy_sha256": "a73f3f051d55c09f70b2681ff66a1da43acc6892657828d22adedc8184995096",
+      "canonical_lf_sha256": "9faa8be494d0e71b182687c9c73e31151ab8e1afa8568dc722a8b440dab16faf"
+    },
+    "docs/backup_repair_2026-10-09/helpers/restore_latest.py": {
+      "native_sha256": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea",
+      "tested_copy_sha256": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea",
+      "canonical_lf_sha256": "02c7ce18144734b133b7dc1bb5fda7003bab8016e654da971679f96c2517549e"
+    }
+  },
+  "helper_hashes": {
+    "backup_finrl.py": "daef0a91bc315aaf3e578860651f5109b19d452a23060820b26b6ceb99d33386",
+    "capture_runtime.py": "6f853bb0173044b49dbe39c648515bd537ed36729beb87b9ff8b0ab6ddda291b",
+    "README.md": "7bda74c69101234b7037fd2893df4cdee2be9dccf7f5e8e33f45055cbc648f57",
+    "recovery_contract.py": "a73f3f051d55c09f70b2681ff66a1da43acc6892657828d22adedc8184995096",
+    "restore_latest.py": "8fbb2c2f427dd1bdadd07dc0e8124e7925a8b3675b87d943c94da7dacf2acbea"
+  },
+  "kopia_code_helpers_identical": true,
+  "README_updated_after_proof_only": true,
+  "syntax_checked": 12
+}

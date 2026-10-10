@@ -1,0 +1,40 @@
+{
+  "files_verified": 5,
+  "database_integrity": "ok",
+  "recovery": {
+    "format_version": 1,
+    "execution_authorized": false,
+    "coverage": "coordinated_wsl_journal",
+    "cutoff_utc": "2026-10-10T17:02:05.259141+00:00",
+    "capture_barrier": "WSL execution_capture.lock exclusive flock",
+    "consistency": "journal/attempt cooperating-writer cutoff; each DB transaction-consistent; standalone/manual writers excluded",
+    "journal": {
+      "schema_version": 1,
+      "database_sha256": "086e711b7f728aca7c504656b95b658a48095e2e398eedc315f8e16ea402be5b",
+      "row_counts": {
+        "account_bindings": 1,
+        "execution_sessions": 1,
+        "order_intents": 1,
+        "execution_events": 4
+      },
+      "rows_sha256": "34f55c74683afb1099f6470bc8cfaadc4d8988fa4b22795d03345ad9f0704540",
+      "session_ids": [
+        "b8bfe15c15e4d147829d2512478b205b3c3fb0cd7dd78754f23293924d3e884d"
+      ],
+      "client_ids": [
+        "fr-dcac244c58058fd236378505c47253174031404d"
+      ],
+      "attempt_directories": [
+        "47450e3e72284e718c40869993d5113a"
+      ],
+      "evidence_refs": [],
+      "holds": [
+        "incomplete_external_evidence:b8bfe15c15e4d147829d2512478b205b3c3fb0cd7dd78754f23293924d3e884d:47450e3e72284e718c40869993d5113a",
+        "intent_attempted_unknown:fr-dcac244c58058fd236378505c47253174031404d",
+        "interrupted_session:b8bfe15c15e4d147829d2512478b205b3c3fb0cd7dd78754f23293924d3e884d",
+        "missing_receipt:fr-dcac244c58058fd236378505c47253174031404d"
+      ],
+      "execution_authorized": false
+    }
+  }
+}

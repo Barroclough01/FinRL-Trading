@@ -2,7 +2,7 @@
 
 Validation does not establish capture consistency. A caller must enforce an OS
 write barrier over its source through SQLite export and attempt inventory.
-The scheduled helper deliberately refuses journal-era production capture.
+The scheduled capture helper holds the same global lock as durable WSL writers.
 """
 
 import hashlib
@@ -285,15 +285,16 @@ def verify_restore(dest):
                 raise ValueError(
                     "Unexpected journal-era artifacts in pre-journal snapshot"
                 )
-        elif state.get("coverage") == "sealed_synthetic_journal":
+        elif state.get("coverage") in {
+            "sealed_synthetic_journal",
+            "coordinated_wsl_journal",
+        }:
             if journal_summary(dest) != state.get("journal"):
                 raise ValueError("Restored journal/reference summary mismatch")
             if state.get("execution_authorized") is not False:
                 raise ValueError("Synthetic snapshot cannot authorize execution")
         else:
-            raise ValueError(
-                "Unsupported recovery coverage; production journal capture remains held"
-            )
+            raise ValueError("Unsupported recovery coverage")
     return {
         "files_verified": len(actual),
         "database_integrity": "ok",

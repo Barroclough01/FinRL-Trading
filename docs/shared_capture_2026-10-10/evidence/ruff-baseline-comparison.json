@@ -1,0 +1,582 @@
+{
+  "baseline": [
+    {
+      "cell": null,
+      "code": "I001",
+      "end_location": {
+        "column": 20,
+        "row": 47
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": {
+        "applicability": "safe",
+        "edits": [
+          {
+            "content": "import argparse\nimport json\nimport logging\nimport math\nimport os\nimport sqlite3\nimport sys\nimport urllib.error\nimport urllib.request\nfrom datetime import date\nfrom pathlib import Path\n\nimport pandas as pd\n\n",
+            "end_location": {
+              "column": 1,
+              "row": 49
+            },
+            "location": {
+              "column": 1,
+              "row": 36
+            }
+          }
+        ],
+        "message": "Organize imports"
+      },
+      "location": {
+        "column": 1,
+        "row": 36
+      },
+      "message": "Import block is un-sorted or un-formatted",
+      "noqa_row": 36,
+      "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+    },
+    {
+      "cell": null,
+      "code": "E402",
+      "end_location": {
+        "column": 31,
+        "row": 57
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 1,
+        "row": 57
+      },
+      "message": "Module level import not at top of file",
+      "noqa_row": 57,
+      "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+    },
+    {
+      "cell": null,
+      "code": "I001",
+      "end_location": {
+        "column": 16,
+        "row": 105
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": {
+        "applicability": "safe",
+        "edits": [
+          {
+            "content": "    import json\n    import subprocess\n",
+            "end_location": {
+              "column": 1,
+              "row": 106
+            },
+            "location": {
+              "column": 1,
+              "row": 104
+            }
+          }
+        ],
+        "message": "Organize imports"
+      },
+      "location": {
+        "column": 5,
+        "row": 104
+      },
+      "message": "Import block is un-sorted or un-formatted",
+      "noqa_row": 104,
+      "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 132,
+        "row": 184
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 184
+      },
+      "message": "Line too long (131 > 88)",
+      "noqa_row": 184,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 99,
+        "row": 267
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 267
+      },
+      "message": "Line too long (98 > 88)",
+      "noqa_row": 267,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 99,
+        "row": 358
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 358
+      },
+      "message": "Line too long (98 > 88)",
+      "noqa_row": 358,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 105,
+        "row": 379
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 379
+      },
+      "message": "Line too long (104 > 88)",
+      "noqa_row": 379,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 92,
+        "row": 496
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 496
+      },
+      "message": "Line too long (91 > 88)",
+      "noqa_row": 496,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 93,
+        "row": 628
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 628
+      },
+      "message": "Line too long (92 > 88)",
+      "noqa_row": 628,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 102,
+        "row": 716
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 716
+      },
+      "message": "Line too long (101 > 88)",
+      "noqa_row": 716,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 93,
+        "row": 720
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 720
+      },
+      "message": "Line too long (92 > 88)",
+      "noqa_row": 720,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 92,
+        "row": 761
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 761
+      },
+      "message": "Line too long (91 > 88)",
+      "noqa_row": 761,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 109,
+        "row": 1491
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1491
+      },
+      "message": "Line too long (108 > 88)",
+      "noqa_row": 1491,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 96,
+        "row": 1623
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1623
+      },
+      "message": "Line too long (95 > 88)",
+      "noqa_row": 1623,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 131,
+        "row": 1659
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1659
+      },
+      "message": "Line too long (130 > 88)",
+      "noqa_row": 1659,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 110,
+        "row": 1848
+      },
+      "filename": "C:\\Users\\paxto\\.codex\\tmp\\finrl-shared-capture-checks\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1848
+      },
+      "message": "Line too long (109 > 88)",
+      "noqa_row": 1848,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    }
+  ],
+  "current": [
+    {
+      "cell": null,
+      "code": "I001",
+      "end_location": {
+        "column": 20,
+        "row": 47
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": {
+        "applicability": "safe",
+        "edits": [
+          {
+            "content": "import argparse\r\nimport json\r\nimport logging\r\nimport math\r\nimport os\r\nimport sqlite3\r\nimport sys\r\nimport urllib.error\r\nimport urllib.request\r\nfrom datetime import date\r\nfrom pathlib import Path\r\n\r\nimport pandas as pd\r\n\r\n",
+            "end_location": {
+              "column": 1,
+              "row": 49
+            },
+            "location": {
+              "column": 1,
+              "row": 36
+            }
+          }
+        ],
+        "message": "Organize imports"
+      },
+      "location": {
+        "column": 1,
+        "row": 36
+      },
+      "message": "Import block is un-sorted or un-formatted",
+      "noqa_row": 36,
+      "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+    },
+    {
+      "cell": null,
+      "code": "E402",
+      "end_location": {
+        "column": 31,
+        "row": 57
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 1,
+        "row": 57
+      },
+      "message": "Module level import not at top of file",
+      "noqa_row": 57,
+      "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 132,
+        "row": 195
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 195
+      },
+      "message": "Line too long (131 > 88)",
+      "noqa_row": 195,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 99,
+        "row": 277
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 277
+      },
+      "message": "Line too long (98 > 88)",
+      "noqa_row": 277,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 99,
+        "row": 368
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 368
+      },
+      "message": "Line too long (98 > 88)",
+      "noqa_row": 368,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 105,
+        "row": 389
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 389
+      },
+      "message": "Line too long (104 > 88)",
+      "noqa_row": 389,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 92,
+        "row": 506
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 506
+      },
+      "message": "Line too long (91 > 88)",
+      "noqa_row": 506,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 93,
+        "row": 638
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 638
+      },
+      "message": "Line too long (92 > 88)",
+      "noqa_row": 638,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 102,
+        "row": 726
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 726
+      },
+      "message": "Line too long (101 > 88)",
+      "noqa_row": 726,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 93,
+        "row": 730
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 730
+      },
+      "message": "Line too long (92 > 88)",
+      "noqa_row": 730,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 92,
+        "row": 771
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 771
+      },
+      "message": "Line too long (91 > 88)",
+      "noqa_row": 771,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 109,
+        "row": 1500
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1500
+      },
+      "message": "Line too long (108 > 88)",
+      "noqa_row": 1500,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 96,
+        "row": 1632
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1632
+      },
+      "message": "Line too long (95 > 88)",
+      "noqa_row": 1632,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 131,
+        "row": 1668
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1668
+      },
+      "message": "Line too long (130 > 88)",
+      "noqa_row": 1668,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    },
+    {
+      "cell": null,
+      "code": "E501",
+      "end_location": {
+        "column": 110,
+        "row": 1857
+      },
+      "filename": "C:\\Users\\paxto\\FinRL-Trading\\run_paper_trading.py",
+      "fix": null,
+      "location": {
+        "column": 89,
+        "row": 1857
+      },
+      "message": "Line too long (109 > 88)",
+      "noqa_row": 1857,
+      "url": "https://docs.astral.sh/ruff/rules/line-too-long"
+    }
+  ],
+  "introduced": []
+}

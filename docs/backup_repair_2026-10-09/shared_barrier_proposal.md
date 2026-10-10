@@ -1,7 +1,8 @@
 # Separate decision: production journal capture barrier
 
-This proposal has not been implemented. Paper activation remains off. Approve a
-minimal source integration plus isolated tests before approving a paper canary.
+Historical proposal, now superseded by the separately authorized October 10
+[shared capture implementation](../shared_capture_2026-10-10/report.md).
+Paper activation remains off; this does not authorize a paper canary.
 
 Add one WSL-wide OS flock at `data/execution_capture.lock` in the authoritative
 scheduled checkout. Durable execution and recovery acquire shared ownership,

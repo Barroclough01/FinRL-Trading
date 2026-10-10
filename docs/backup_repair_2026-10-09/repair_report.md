@@ -1,5 +1,10 @@
 # Backup-only repair: reviewed helpers installed, journal capture held
 
+This report records the earlier helper-only release. Its journal-capture hold is
+superseded by the separately authorized October 10
+[shared capture integration](../shared_capture_2026-10-10/report.md); historical
+proofs and original helper copies remain retained.
+
 Continued October 10 from the October 9 retained draft. This is a **partial recovery
 readiness repair**, not new operational journal coverage. Activation remains off.
 Only backup helper candidates, README, disposable tests/proofs and this proposal

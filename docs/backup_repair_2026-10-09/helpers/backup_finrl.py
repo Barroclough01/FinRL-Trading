@@ -1,6 +1,5 @@
 """Local FinRL evidence backup. Never invokes project runners or broker APIs."""
 
-import hashlib
 import json
 import msvcrt
 import os
@@ -11,8 +10,6 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from recovery_contract import CONTRACT
-
 ROOT = Path(__file__).resolve().parent
 KOPIA = ROOT / "kopia.exe"
 CONFIG = ROOT / "repository.config"
@@ -22,34 +19,16 @@ WSL_ROOT = Path(r"\\wsl.localhost\Ubuntu\home\paxto\stock-trading\FinRL-Trading"
 WINDOWS_ROOT = Path(r"C:\Users\paxto\FinRL-Trading")
 
 
-def require_pre_journal():
-    """Fail closed; account-lock enumeration cannot block new-account writers."""
+def capture_requirement():
+    """Monotonic marker; native journal writers are outside the WSL protocol."""
     marker = ROOT / "journal-required.json"
     if marker.is_symlink() or (marker.exists() and not marker.is_file()):
         raise RuntimeError("Unsafe journal-required marker; backup held")
-    if not WSL_ROOT.is_dir() or not WINDOWS_ROOT.is_dir():
-        raise RuntimeError("Required source checkout unavailable; backup held")
-    observed = False
     for source in (WSL_ROOT, WINDOWS_ROOT):
-        observed = observed or any(
-            (source / "data" / name).exists() or (source / "data" / name).is_symlink()
-            for name in (
-                "paper_execution_journal.sqlite3",
-                "paper_execution_journal.sqlite3-wal",
-                "paper_execution_journal.sqlite3-shm",
-                "paper_execution_journal.sqlite3-journal",
+        if not source.is_dir() or source.is_symlink():
+            raise RuntimeError(
+                "Required source checkout unavailable/unsafe; backup held"
             )
-        )
-        attempts = source / "logs/execution_attempts"
-        observed = (
-            observed
-            or attempts.is_symlink()
-            or (attempts.exists() and any(attempts.iterdir()))
-        )
-        locks = source / "data/execution_locks"
-        observed = (
-            observed or locks.is_symlink() or (locks.exists() and any(locks.iterdir()))
-        )
     if marker.exists():
         state = json.loads(marker.read_text(encoding="utf-8"))
         if (
@@ -57,12 +36,26 @@ def require_pre_journal():
             or state.get("format_version") != 1
         ):
             raise RuntimeError("Invalid journal-required marker; backup held")
-        raise RuntimeError(
-            "Journal-era production capture held: approved global writer "
-            "barrier required"
-        )
-    if observed:
-        # Monotonic local observation. Never clear this automatically after deletion.
+
+    def observed(source):
+        for rel in (
+            "data/paper_execution_journal.sqlite3",
+            "data/paper_execution_journal.sqlite3-wal",
+            "data/paper_execution_journal.sqlite3-shm",
+            "data/paper_execution_journal.sqlite3-journal",
+            "logs/execution_attempts",
+            "data/execution_locks",
+        ):
+            path = source / rel
+            if path.is_symlink() or (
+                path.exists() and (not path.is_dir() or any(path.iterdir()))
+            ):
+                return True
+        return False
+
+    native = observed(WINDOWS_ROOT)
+    seen = observed(WSL_ROOT) or native
+    if seen and not marker.exists():
         with marker.open("x", encoding="utf-8") as handle:
             json.dump(
                 {
@@ -74,17 +67,31 @@ def require_pre_journal():
             )
             handle.flush()
             os.fsync(handle.fileno())
+    if native:
         raise RuntimeError(
-            "Journal-era artifacts observed; production capture held pending "
-            "global writer barrier"
+            "Native journal-era state is outside WSL capture; backup held"
         )
-    return {
-        "format_version": 1,
-        "coverage": "pre_journal",
-        "absence_observed_utc": datetime.now(timezone.utc).isoformat(),
-        "execution_authorized": False,
-        "journal_capture_supported": False,
-    }
+    return marker.exists()
+
+
+def retain_capture_requirement(capture):
+    if capture["recovery"]["coverage"] != "coordinated_wsl_journal":
+        return
+    marker = ROOT / "journal-required.json"
+    if not marker.exists():
+        with marker.open("x", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "format_version": 1,
+                    "journal_required": True,
+                    "observed_utc": datetime.now(timezone.utc).isoformat(),
+                },
+                handle,
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+    # Validate existing markers again; never publish with an unsafe/invalid marker.
+    capture_requirement()
 
 
 def run(args, timeout=600, env=None):
@@ -140,21 +147,8 @@ def copy_files(src, dest, extensions=None, exclude_dirs=()):
             shutil.copy2(item, target)
 
 
-EXPORT_SQLITE = """import sqlite3, sys
-from pathlib import Path
-source = Path(sys.argv[1])
-with sqlite3.connect(source.as_uri() + '?mode=ro', uri=True, timeout=30) as src:
-    with sqlite3.connect(sys.argv[2]) as dst:
-        src.backup(dst, pages=4096, sleep=0.1)
-        result = dst.execute('PRAGMA integrity_check').fetchall()
-        if result != [('ok',)]:
-            raise RuntimeError('Exported database integrity check failed')
-print('SQLite export integrity: ok')
-"""
-
-
 def backup():
-    contract = require_pre_journal()
+    required = capture_requirement()
     if shutil.disk_usage(ROOT).free < 10 * 1024**3:
         raise RuntimeError(
             "Less than 10 GiB free; backup stopped before staging. Review "
@@ -163,53 +157,32 @@ def backup():
     STAGING.mkdir(exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix="run-", dir=STAGING))
     try:
-        copy_files(
-            WSL_ROOT / "logs", stage / "wsl/logs", exclude_dirs=("execution_attempts",)
-        )
-        copy_files(
-            WSL_ROOT / "results",
-            stage / "wsl/results",
-            {".csv", ".json", ".html", ".png"},
-        )
         copy_files(WINDOWS_ROOT / "logs", stage / "windows/logs")
-        for item in WSL_ROOT.iterdir():
-            if (
-                item.is_file()
-                and not item.is_symlink()
-                and item.suffix.lower() in {".csv", ".json", ".html"}
-            ):
-                target = stage / "wsl/root-reports" / item.name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, target)
-        db = stage / "wsl/database/finrl_trading.db"
-        db.parent.mkdir(parents=True)
-        linux_dest = "/mnt/c/" + db.as_posix()[3:]
-        run(
-            [
-                "wsl.exe",
-                "-d",
-                "Ubuntu",
-                "--exec",
-                "/home/paxto/stock-trading/FinRL-Trading/finrl-env/bin/python",
-                "-c",
-                EXPORT_SQLITE,
-                "/home/paxto/stock-trading/FinRL-Trading/data/finrl_trading.db",
-                linux_dest,
-            ]
+        # One WSL process owns the exclusive FD through exports, attempt copy,
+        # inventory and reference verification. No operational project imports.
+        linux_stage = "/mnt/c/" + stage.as_posix()[3:]
+        helper = ROOT / "capture_runtime.py"
+        contract_helper = ROOT / "recovery_contract.py"
+        capture = json.loads(
+            run(
+                [
+                    "wsl.exe",
+                    "-d",
+                    "Ubuntu",
+                    "--exec",
+                    "/home/paxto/stock-trading/FinRL-Trading/finrl-env/bin/python",
+                    "-B",
+                    "-c",
+                    helper.read_text(encoding="utf-8"),
+                    "/home/paxto/stock-trading/FinRL-Trading",
+                    linux_stage,
+                    "/mnt/c/" + contract_helper.as_posix()[3:],
+                    "true" if required else "false",
+                ]
+            )
         )
-        require_pre_journal()
-        (stage / CONTRACT).write_text(json.dumps(contract, indent=2), encoding="utf-8")
+        retain_capture_requirement(capture)
         files = sorted(p for p in stage.rglob("*") if p.is_file())
-        manifest = {}
-        for p in files:
-            with p.open("rb") as handle:
-                manifest[p.relative_to(stage).as_posix()] = hashlib.file_digest(
-                    handle, "sha256"
-                ).hexdigest()
-        # Pre-journal only; absence observations do not establish an all-writer cutoff.
-        (stage / "SHA256.json").write_text(
-            json.dumps(manifest, indent=2), encoding="utf-8"
-        )
         if SOURCE.exists():
             remove_stage(SOURCE)
         stage.rename(SOURCE)
