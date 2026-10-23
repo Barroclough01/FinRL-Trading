@@ -1035,16 +1035,16 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         # Hit Rate
         hit_rate = float(sum(1 for r in ret_series if r > 0) / n) if n > 0 else 0.0
 
-        # Beta to SPY and QQQ
+        # Beta to SPY and QQQ: covariance and variance use the same normalization.
         beta_spy = 0.0
         if ref_spy_series and len(ref_spy_series) == n:
-            cov = np.cov(ret_series, ref_spy_series)
+            cov = np.cov(ret_series, ref_spy_series, ddof=0)
             var_spy = np.var(ref_spy_series)
             beta_spy = float(cov[0, 1] / var_spy) if var_spy > 0 else 0.0
 
         beta_qqq = 0.0
         if ref_qqq_series and len(ref_qqq_series) == n:
-            cov = np.cov(ret_series, ref_qqq_series)
+            cov = np.cov(ret_series, ref_qqq_series, ddof=0)
             var_qqq = np.var(ref_qqq_series)
             beta_qqq = float(cov[0, 1] / var_qqq) if var_qqq > 0 else 0.0
 
@@ -1112,7 +1112,10 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
                 continue
             variance = float(np.var(benchmark_matched))
             stats[f"beta_{symbol}"] = (
-                float(np.cov(account_matched, benchmark_matched)[0, 1] / variance)
+                # Match np.var's population normalization (ddof=0).
+                float(
+                    np.cov(account_matched, benchmark_matched, ddof=0)[0, 1] / variance
+                )
                 if variance > 0 else 0.0
             )
             stats[f"tracking_error_{symbol}"] = float(
