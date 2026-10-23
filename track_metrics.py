@@ -19,6 +19,8 @@ Usage:
 """
 
 import argparse
+import csv
+import io
 import json
 import logging
 import math
@@ -916,6 +918,32 @@ Object.entries(latestData).forEach(([acct, d], i) => {{
 # ---------------------------------------------------------------------------
 
 
+def _validate_metric_input(value, context: str, *, allow_none=False) -> None:
+    """Reject unusable numeric evidence without replacing or discarding it."""
+    if value is None and allow_none:
+        return
+    try:
+        valid = value is not None and math.isfinite(value)
+    except (TypeError, ValueError, OverflowError):
+        valid = False
+    if not valid:
+        raise ValueError(
+            f"Invalid metric input: {context}={value!r}; expected finite number"
+        )
+
+
+def _validate_finite_metrics(value, context: str) -> None:
+    """Check the complete report, including fields not represented in CSV."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _validate_finite_metrics(item, f"{context}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _validate_finite_metrics(item, f"{context}[{index}]")
+    elif isinstance(value, float):
+        _validate_metric_input(value, context)
+
+
 def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dict:
     """
     Calculate comprehensive performance and risk metrics for all accounts and benchmarks.
@@ -948,6 +976,11 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
 
     for row in snapshots:
         snap_date, account, val, cash, wkly, cum, spy_wkly, spy_cum = row
+        context = f"account={account} date={snap_date}"
+        for field, value in (("portfolio_value", val), ("cash", cash)):
+            _validate_metric_input(value, f"{context} {field}")
+        for field, value in (("weekly_return", wkly), ("cumulative_return", cum)):
+            _validate_metric_input(value, f"{context} {field}", allow_none=True)
         if account not in account_series:
             account_series[account] = []
         account_series[account].append(
@@ -959,7 +992,7 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
                 "cumulative_return": cum if cum is not None else 0.0,
             }
         )
-        if wkly is not None and math.isfinite(wkly):
+        if wkly is not None:
             account_returns.setdefault(account, {})[snap_date] = wkly
 
     # Use actual price dates. A missing close never becomes a zero return or
@@ -975,11 +1008,16 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
     previous_prices = {"SPY": None, "QQQ": None}
     for price_date, spy_close, qqq_close in benchmark_prices:
         for symbol, close in (("SPY", spy_close), ("QQQ", qqq_close)):
-            if close is None or not math.isfinite(close) or close <= 0:
+            context = f"benchmark={symbol} date={price_date}"
+            _validate_metric_input(close, f"{context} close", allow_none=True)
+            if close is None or close <= 0:
                 continue
             previous = previous_prices[symbol]
             if previous is not None:
                 benchmark_returns[symbol][price_date] = close / previous - 1
+                _validate_metric_input(
+                    benchmark_returns[symbol][price_date], f"{context} weekly_return"
+                )
             previous_prices[symbol] = close
 
     results = {"date": run_date, "accounts": {}, "benchmarks": {}}
@@ -1078,8 +1116,25 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             "tracking_error_qqq": te_qqq,
         }
 
+    def finite_stats(context, *args, **kwargs):
+        try:
+            with np.errstate(over="raise", invalid="raise", divide="raise"):
+                stats = compute_stats(*args, **kwargs)
+        except FloatingPointError as exc:
+            raise ValueError(
+                f"Unrepresentable metric calculation: {context}: {exc}"
+            ) from exc
+        _validate_finite_metrics(stats, context)
+        return stats
+
     # 2. Calculate stats for each account
     for account, series in account_series.items():
+        if series[0]["value"] == 0:
+            raise ValueError(
+                "Undefined cumulative_return: "
+                f"account={account} date={series[0]['date']} portfolio_value=0; "
+                "initial return basis must be nonzero. Raw snapshot is retained."
+            )
         ret_list = [s["weekly_return"] for s in series]
         val_list = [s["value"] for s in series]
         series_dates = [s["date"] for s in series]
@@ -1092,7 +1147,9 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             cash_val = s["cash"]
             cash_weights.append(cash_val / val if val > 0 else 0.0)
 
-        stats = compute_stats(
+        context = f"account={account} date={series_dates[-1]}"
+        stats = finite_stats(
+            context,
             ret_list,
             values_series=val_list,
             cash_series=cash_weights,
@@ -1111,17 +1168,26 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
             ]
             if len(account_matched) < 2:
                 continue
-            variance = float(np.var(benchmark_matched))
-            stats[f"beta_{symbol}"] = (
-                # Match np.var's population normalization (ddof=0).
-                float(
-                    np.cov(account_matched, benchmark_matched, ddof=0)[0, 1] / variance
-                )
-                if variance > 0 else 0.0
-            )
-            stats[f"tracking_error_{symbol}"] = float(
-                np.std(np.subtract(account_matched, benchmark_matched)) * np.sqrt(52)
-            )
+            try:
+                with np.errstate(over="raise", invalid="raise", divide="raise"):
+                    variance = float(np.var(benchmark_matched))
+                    stats[f"beta_{symbol}"] = (
+                        # Match np.var's population normalization (ddof=0).
+                        float(
+                            np.cov(account_matched, benchmark_matched, ddof=0)[0, 1]
+                            / variance
+                        )
+                        if variance > 0 else 0.0
+                    )
+                    stats[f"tracking_error_{symbol}"] = float(
+                        np.std(np.subtract(account_matched, benchmark_matched))
+                        * np.sqrt(52)
+                    )
+            except FloatingPointError as exc:
+                raise ValueError(
+                    f"Unrepresentable metric calculation: {context} "
+                    f"benchmark={symbol.upper()}: {exc}"
+                ) from exc
 
         # Calculate Turnover and Drift
         weights_data = conn.execute(
@@ -1138,6 +1204,11 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         target_weights_by_date = {}
         for row in weights_data:
             d, sym, act_w, tgt_w = row
+            for field, value in (("actual_weight", act_w), ("target_weight", tgt_w)):
+                _validate_metric_input(
+                    value, f"account={account} date={d} symbol={sym} {field}",
+                    allow_none=True,
+                )
             if d not in weights_by_date:
                 weights_by_date[d] = {}
                 target_weights_by_date[d] = {}
@@ -1191,12 +1262,17 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         stats["weight_drift"] = avg_drift
         stats["weeks_in_fallback"] = fallback_count
 
+        _validate_finite_metrics(stats, context)
         results["accounts"][account] = stats
 
     # 3. Calculate stats for benchmarks
     for symbol, dated_returns in benchmark_returns.items():
-        stats = compute_stats(list(dated_returns.values()))
-        stats["as_of_date"] = max(dated_returns) if dated_returns else None
+        as_of = max(dated_returns) if dated_returns else None
+        stats = finite_stats(
+            f"benchmark={symbol} date={as_of or run_date}",
+            list(dated_returns.values()),
+        )
+        stats["as_of_date"] = as_of
         stats["turnover"] = "N/A"
         stats["weight_drift"] = "N/A"
         stats["weeks_in_fallback"] = "N/A"
@@ -1230,26 +1306,17 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
 
 
 def save_comparison_metrics(metrics: dict, run_date: str) -> None:
-    """Save the comparison metrics to JSON and CSV files."""
+    """Validate and serialize both reports before opening either destination."""
     if not metrics:
         return
 
-    # 1. Save JSON
+    _validate_finite_metrics(metrics, f"report date={run_date}")
+    json_text = json.dumps(metrics, indent=2, allow_nan=False)
     json_path = Path(f"logs/comparison_metrics_{run_date}.json")
-    try:
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(json_path, "w") as f:
-            json.dump(metrics, f, indent=2)
-        logger.info(f"Saved comparison metrics JSON to {json_path}")
-    except Exception as e:
-        logger.error(f"Failed to save comparison metrics JSON: {e}", exc_info=True)
-        raise
 
-    # 2. Save CSV
+    # Build CSV before publishing JSON: invalid structure must leave both intact.
     csv_path = Path("logs/comparison_metrics_latest.csv")
     try:
-        csv_path.parent.mkdir(parents=True, exist_ok=True)
-
         rows = []
         headers = [
             "account",
@@ -1300,16 +1367,20 @@ def save_comparison_metrics(metrics: dict, run_date: str) -> None:
                 row[h] = stats.get(h, "N/A")
             rows.append(row)
 
-        # Write CSV
-        import csv
+        csv_buffer = io.StringIO(newline="")
+        writer = csv.DictWriter(csv_buffer, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(rows)
+        csv_text = csv_buffer.getvalue()
 
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json_text)
+        logger.info(f"Saved comparison metrics JSON to {json_path}")
         with open(csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            writer.writerows(rows)
+            f.write(csv_text)
         logger.info(f"Saved comparison metrics CSV to {csv_path}")
     except Exception as e:
-        logger.error(f"Failed to save comparison metrics CSV: {e}", exc_info=True)
+        logger.error(f"Failed to save comparison metrics: {e}", exc_info=True)
         raise
 
 
@@ -1400,14 +1471,13 @@ def main():
                 )
                 failed_accounts.append((account["name"], str(e)))
 
-    print_cli_report(conn)
-    generate_html_dashboard(conn, DASHBOARD_PATH)
-
     # Calculate and save weekly comparison metrics side-by-side
     comparison_error = None
     try:
         logger.info("Calculating weekly comparison metrics...")
         metrics = calculate_comparison_metrics(conn, args.date)
+        print_cli_report(conn)
+        generate_html_dashboard(conn, DASHBOARD_PATH)
         save_comparison_metrics(metrics, args.date)
     except Exception as e:
         comparison_error = str(e)
