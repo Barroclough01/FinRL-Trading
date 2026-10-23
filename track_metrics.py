@@ -1100,11 +1100,12 @@ def calculate_comparison_metrics(conn: sqlite3.Connection, run_date: str) -> dic
         stats["as_of_date"] = series_dates[-1]
         # Pair each account observation with benchmark returns on the same date.
         # Unmatched dates do not enter beta or tracking error.
+        dated_returns = account_returns.get(account, {})
         for symbol, matched_dates in (("spy", spy_dates), ("qqq", qqq_dates)):
             if len(matched_dates) < 2:
                 continue
-            valid_dates = [d for d in matched_dates if d in account_returns[account]]
-            account_matched = [account_returns[account][d] for d in valid_dates]
+            valid_dates = [d for d in matched_dates if d in dated_returns]
+            account_matched = [dated_returns[d] for d in valid_dates]
             benchmark_matched = [
                 benchmark_returns[symbol.upper()][d] for d in valid_dates
             ]

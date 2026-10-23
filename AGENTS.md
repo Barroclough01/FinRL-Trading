@@ -8,14 +8,19 @@ before adding strategies, retraining models, or changing execution behavior.
 
 1. Read `CONTEXT.md` for the local system boundary and `docs/README.md` for the
    documentation map.
-2. Inspect `git status --short --branch` with Git inside WSL. The checkout is
-   WSL-owned; Windows Git can report misleading ownership errors.
+2. Verify the checkout before using Git. The development repository is
+   `C:\Users\paxto\FinRL-Trading`; use native Git there. The separate WSL runtime
+   repository is `/home/paxto/stock-trading/FinRL-Trading`; use WSL Git there.
+   Do not treat development validation as runtime deployment or current health.
 3. For an operational status request, inspect the current scheduler state,
    wrapper and logs, SQLite records, generated metrics, cached market data, and
    broker state as needed. Dated documentation is historical evidence, not a
    health check.
-4. Use `finrl-env/bin/python` or activate `finrl-env`; do not assume bare
-   `python` points to the project environment.
+4. Use the checkout's configured Python environment; do not assume bare
+   `python` points to it. The WSL runtime uses `finrl-env/bin/python`. If native
+   dependencies are absent, that existing interpreter may validate native
+   development sources only with verified import paths, disposable outputs and
+   dotenv disabled. This does not authorize runtime source synchronization.
 
 ## Non-negotiable boundaries
 
@@ -41,6 +46,9 @@ before adding strategies, retraining models, or changing execution behavior.
 
 ## Runtime topology and authority
 
+- Native development and WSL runtime are distinct repositories. Verify the
+  runtime revision and artifacts separately before making operational claims;
+  older checkout paths in dated documentation are not current routing authority.
 - `run_paper_trading.py` is the weekly orchestrator. A live run can refresh
   metrics, invoke offline RL tracking, write audit artifacts, and submit paper
   orders. `--dry-run` suppresses order submission and does not run the complete
